@@ -154,8 +154,28 @@ def find_activity(bw_db_name: str, activity_name: str, calliope_location: str,
 
 
 ##### eliminate infrastructure #####
-def eliminate_infrastructure(electricity_act):
-    pass
+def eliminate_infrastructure(electricity_heat_act):
+    # test that it is an electricity activity
+    if electricity_heat_act._data['unit'] not in ['megajoule', 'kilowatt hour']:
+        print(f'The activity {electricity_heat_act} does neither produce heat nor electricity.')
+        sys.exit()
+    # create a copy in a new database
+    if 'electricity_and_heat_db' not in bd.databases:
+        ea_db = bd.Database('electricity_and_heat_db')
+        ea_db.register()
+    act_copy = electricity_heat_act.copy(database='electricity_and_heat_db')
+
+    # find the infrastructure and eliminate it from the foreground
+    infrastructure_acts = [e for e in act_copy.technosphere() if e.input._data['unit'] == 'unit']
+    if len(infrastructure_acts) > 1:
+        # TODO: create a new activity with the two/three of them. OR better do it manually?
+        #  -> case of heat and power co-generation, wood chips
+        pass
+    for e in infrastructure_acts:
+        e.delete()
+
+    return infrastructure_acts
+
 
 ##### individual changes #####
 
@@ -175,3 +195,6 @@ def eliminate_infrastructure(electricity_act):
 ##### land use as indicator #####
 # 1. foreground
 # 2. all value chain
+
+
+##### get the emissions of the biosphere only ####
