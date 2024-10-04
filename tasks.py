@@ -131,13 +131,16 @@ def find_activity(bw_db_name: str, activity_name: str, calliope_location: str,
             return act.key[0], act.key[1]  # database and code
 
     # Check 'RoW' or 'GLO'
-    for loc in ['RoW', 'GLO']:
-        act = activity_filter_check(bw_db_name=bw_db_name, activity_name=activity_name,
-                                    location=loc, unit=unit)
-        if act:
-            print(f'name: {activity_name}, location: {act._data["location"]}, '
-                  f'code: {act.key[1]}, database: {act.key[0]}')
-            return act.key[0], act.key[1]  # database and code
+    # Skip this step if the activity is 'electricity production, hydro, run-of-river', as we want CA-QC because
+    # it is clearer the power capacity (MW) of the dataset
+    if activity_name != 'electricity production, hydro, run-of-river':
+        for loc in ['RoW', 'GLO']:
+            act = activity_filter_check(bw_db_name=bw_db_name, activity_name=activity_name,
+                                        location=loc, unit=unit)
+            if act:
+                print(f'name: {activity_name}, location: {act._data["location"]}, '
+                      f'code: {act.key[1]}, database: {act.key[0]}')
+                return act.key[0], act.key[1]  # database and code
 
     # Check everything else
     activity_filter = ws.get_many(bw_db_name,
@@ -188,9 +191,26 @@ def eliminate_infrastructure(electricity_heat_act):
 # power co-generation unit, organic Rankine cycle, 1000kW electrical. This will be the infrastructure activity.
 # Remove all technosphere.
 # 2. biofuel_to_methane: increase efficiency from 50% to 70% (HOW!!??!)
+# 3. biofuel_to_methanol: 'methanol distillation, from wood, with CCS'. Change the input
+# 'hydrogen production, gaseous, 25 bar, from gasification of woody biomass in entrained flow gasifier, with CCS, at gasification plant'
+# for 'hydrogen production, gaseous, 25 bar, from gasification of woody biomass in entrained flow gasifier, at gasification plant' (WEU)
+# 4. 'medium duty truck, fuel cell electric, 26t gross weight, long haul' keep 'power distribution', 'converter',
+# 'inverter', 'fuel tank', 'power electronics', 'other components', 'electric motor', 'fuel cell system',
+# 'electricity storage capacity'.
+# 5. 'light duty truck, fuel cell electric, 3.5t gross weight, long haul', 'converter', 'inverter', 'fuel tank',
+# 'power electronics', 'other components', 'electric motor', 'fuel cell system', 'electricity storage capacity'.
+# 6. 'transport, passenger car, battery electric, Medium' (in km). Remove all inputs with 'glider' in the name.
+# 7. 'gas-to-liquid plant construction'. Add 1250000 kg of cobalt as input (catalyst).
 
+# TODO: biosphere 1 kg CO2 removal does not count as negative emissions. Ask Samantha how to deal with it.
 
 ##### create fleets #####
+# wind_onshore
+# wind_offshore
+# solar_pv
+# batteries
+# electrolysis
+
 
 
 ##### substitute and unlink #####
