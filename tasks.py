@@ -155,7 +155,12 @@ def find_activity(bw_db_name: str, activity_name: str, calliope_location: str,
 
 ##### eliminate infrastructure #####
 def eliminate_infrastructure(electricity_heat_act):
-    # test that it is an electricity activity
+    """
+    :return: given an activity it checks if it is an electricity or heat production activity, it creates a copy
+    in a new database 'electricity_and_heat_db' and it deletes its infrastructure exchanges (inputs).
+    It returns the infrastructure input activity.
+    """
+    # test that it is an electricity or heat production activity
     if electricity_heat_act._data['unit'] not in ['megajoule', 'kilowatt hour']:
         print(f'The activity {electricity_heat_act} does neither produce heat nor electricity.')
         sys.exit()
@@ -169,7 +174,7 @@ def eliminate_infrastructure(electricity_heat_act):
     infrastructure_acts = [e for e in act_copy.technosphere() if e.input._data['unit'] == 'unit']
     if len(infrastructure_acts) > 1:
         # TODO: create a new activity with the two/three of them. OR better do it manually?
-        #  -> case of heat and power co-generation, wood chips
+        #  -> case of: 1. heat and power co-generation, wood chips; 2. chp_wte_back_pressure
         pass
     for e in infrastructure_acts:
         e.delete()
@@ -178,12 +183,19 @@ def eliminate_infrastructure(electricity_heat_act):
 
 
 ##### individual changes #####
+# 1. chp_wte_back_pressure: use APOS in this case (comment with Joan!). Create an activity that includes dust collector,
+# electrostatic precipitator, for industrial use plus heat and
+# power co-generation unit, organic Rankine cycle, 1000kW electrical. This will be the infrastructure activity.
+# Remove all technosphere.
+# 2. biofuel_to_methane: increase efficiency from 50% to 70% (HOW!!??!)
 
 
 ##### create fleets #####
 
 
 ##### substitute and unlink #####
+# Note: eliminate downstream connections of all hydrogen activities (not only those from electrolysers
+# (biofuel_to_liquids).
 # Note: maybe relink_technosphere_exchanges() from wurst?
 
 
