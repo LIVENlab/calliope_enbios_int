@@ -1,3 +1,4 @@
+import pandas as pd
 from premise.geomap import Geomap
 import wurst.searching as ws
 import sys
@@ -212,21 +213,91 @@ def eliminate_infrastructure(electricity_heat_act):
 # electrolysis
 
 
-
 ##### substitute and unlink #####
 # Note: eliminate downstream connections of all hydrogen activities (not only those from electrolysers
 # (biofuel_to_liquids).
 # Note: maybe relink_technosphere_exchanges() from wurst?
 
 
-##### metals as indicator #####
+##### materials as indicator #####
 # 1. foreground
+def foreground_materials():
+    # TODO
+    pass
 # 2. all value chain
+def solve_lci(activity):
+    """
+    :return: a list of tuples, where each tuple is (activity name, amount, unit, category)
+    """
+    lca = activity.lca(amount=1)
+    lca.lci()
+    array = lca.inventory.sum(axis=1)
+    if hasattr(lca, 'dicts'):
+        mapping = lca.dicts.biosphere
+    else:
+        mapping = lca.biosphere_dict
+    data = []
+    for key, row in mapping.items():
+        data.append((bd.get_activity(key).get('name'), array[row, 0], bd.get_activity(key).get('unit'),
+                     bd.get_activity(key).get('categories')))
+    df = pd.DataFrame([{
+        'name': name,
+        'amount': amount,
+        'unit': unit,
+        'categories': categories,
+    } for name, amount, unit, categories in data
+    ])
+    return df
+
+
+def natural_resources(activity):
+    """
+    :return: filters solved activities so it only includes the corresponding categories to natural resources
+    """
+    df = solve_lci(activity=activity)
+    nat_res = df.loc[df['categories'].apply(lambda x: x[3] == 'natural resource')]
+    return nat_res
+
+
+def total_materials(activity):
+    """
+    :return: all material extraction amounts through the entire life-cycle (solved inventory).
+    """
+    df = solve_lci(activity=activity)
+    total_mat = df.loc[
+        df['categories'].apply(lambda x: x[3] == 'natural resource, in ground' and x[2] == 'kilogram')]
+    return total_mat['amount'].sum()
 
 
 ##### land use as indicator #####
 # 1. foreground
+def foreground_land(activity):
+    """
+    :return: square meters of transformation in the foreground
+    """
+    biosphere_exchanges = [ex.amount for ex in activity.biosphere() if 'Transformation, from' in ex._data['name']]
+    return sum(biosphere_exchanges)
+
+
 # 2. all value chain
+def total_land(activity):
+    """
+    :return: returns the total amount of square meters of an activity through its life-cycle
+    """
+    nat_res = natural_resources(activity=activity)
+    total_squared_meters = nat_res.loc[nat_res['name'].apply(lambda x: x[1] == 'Transformation, from')]
+    return total_squared_meters['amount'].sum()
 
 
 ##### get the emissions of the biosphere only ####
+def direct_emissions(activity, method=('EF v3.1', 'climate change', 'global warming potential (GWP100)')):
+    """
+    :return: gwp EF v3.1 direct emissions of an activity
+    """
+    direct_emissions_db = bd.Database('direct_emissions_db')
+    if 'direct_emissions_db' not in bd.databases:
+        direct_emissions_db.register()
+    new_act = activity.copy(database='direct_emissions_db')
+    new_act.technosphere().delete()
+    lca = new_act.lca(amount=1, method=method)
+    return lca.score
