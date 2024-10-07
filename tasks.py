@@ -187,6 +187,12 @@ def eliminate_infrastructure(electricity_heat_act):
 
 
 ##### individual changes #####
+def create_additional_acts_db():
+    if 'additional_acts_db' not in bd.databases:
+        ea_db = bd.Database('additional_acts')
+        ea_db.register()
+
+
 # 1. chp_wte_back_pressure: use APOS in this case (comment with Joan!). Create an activity that includes dust collector,
 # electrostatic precipitator, for industrial use plus heat and
 # power co-generation unit, organic Rankine cycle, 1000kW electrical. This will be the infrastructure activity.
@@ -195,13 +201,121 @@ def eliminate_infrastructure(electricity_heat_act):
 # 3. biofuel_to_methanol: 'methanol distillation, from wood, with CCS'. Change the input
 # 'hydrogen production, gaseous, 25 bar, from gasification of woody biomass in entrained flow gasifier, with CCS, at gasification plant'
 # for 'hydrogen production, gaseous, 25 bar, from gasification of woody biomass in entrained flow gasifier, at gasification plant' (WEU)
+def biofuel_to_methanol_update(db_methanol_name: str):
+    """
+    In the background of the methanol production, the function substitutes H2 production with CCS
+    for H2 production without CCS.
+    """
+    # Change name of the methanol distillation activity
+    methanol_distillation_original = list(ws.get_many(bd.Database(db_methanol_name),
+                                                      ws.equals('name',
+                                                                'methanol distillation, from wood, with CCS'),
+                                                      ))[0]
+    create_additional_acts_db()
+    methanol_distillation_act = methanol_distillation_original.copy(database='additional_acts')
+    methanol_distillation_act['name'] = 'methanol distillation, from wood, without CCS'
+    methanol_distillation_act.save()
+    # Change name of the methanol synthesis activity
+    methanol_synthesis_original = [ex.input for ex in methanol_distillation_act.technosphere() if
+                                   'methanol synthesis, from wood, with CCS' in ex.input._data['name']][0]
+    methanol_synthesis_act = methanol_synthesis_original.copy(database='additional_acts')
+    methanol_synthesis_act['name'] = 'methanol synthesis, from wood, without CCS'
+    methanol_synthesis_act.save()
+    # Re-link methanol synthesis act to methanol distillation act
+    methanol_synthesis_input_to_distillation = [ex for ex in methanol_distillation_act.technosphere() if
+                                                'methanol synthesis, from wood, with CCS' in ex.input._data['name']][0]
+    methanol_synthesis_input_to_distillation.input = methanol_synthesis_act.key
+    methanol_synthesis_input_to_distillation.save()
+    # Substitute CCS for gasification withot CCS
+    h2_exchange = [ex for ex in methanol_distillation_act.technosphere() if
+                   ex.input._data[
+                       'name'] == ('hydrogen production, gaseous, 25 bar, from gasification of woody biomass'
+                                   ' in entrained flow gasifier, with CCS, at gasification plant')][0]
+    h2_new_act = list(ws.get_many(bd.Database(h2_exchange.input.key[0]),
+                                  ws.equals('name',
+                                            'methanol distillation, from wood, with CCS'),
+                                  ))[0]
+    h2_exchange.input = h2_new_act.key
+    h2_exchange.save()
+
+
+
 # 4. 'medium duty truck, fuel cell electric, 26t gross weight, long haul' keep 'power distribution', 'converter',
 # 'inverter', 'fuel tank', 'power electronics', 'other components', 'electric motor', 'fuel cell system',
 # 'electricity storage capacity'.
 # 5. 'light duty truck, fuel cell electric, 3.5t gross weight, long haul', 'converter', 'inverter', 'fuel tank',
 # 'power electronics', 'other components', 'electric motor', 'fuel cell system', 'electricity storage capacity'.
+def trucks_update(db_truck_name: str):
+    """
+    Creates a copy of 'light duty truck, fuel cell electric, 3.5t gross weight, long haul' and
+    'medium duty truck, fuel cell electric, 26t gross weight, long haul' in the database 'additional_acts_db' and
+    deletes all inputs that are not in the keep_inputs list. The idea is to model the truck as ONLY those inputs that
+    make the vehicle electric instead of using an internal combustion engine.
+    """
+    # light truck
+    light_truck_original = list(ws.get_many(bd.Database(db_truck_name),
+                                            ws.equals('name',
+                                                      'light duty truck, fuel cell electric, 3.5t gross weight, '
+                                                      'long haul'),
+                                            ))[0]
+    create_additional_acts_db()
+    light_truck_act = light_truck_original.copy(database='additional_acts')
+    light_truck_technosphere = list(light_truck_act.technosphere())
+    keep_inputs = ['converter', 'inverter', 'fuel tank', 'power electronics', 'other components', 'electric motor',
+                   'fuel cell system', 'electricity storage capacity']
+    for ex in light_truck_technosphere:
+        if not any(input_name in ex.input.name for input_name in keep_inputs):
+            ex.delete()
+
+    # medium truck
+    medium_truck_original = list(ws.get_many(bd.Database(db_truck_name),
+                                             ws.equals('name',
+                                                       'medium duty truck, fuel cell electric, 26t gross weight, '
+                                                       'long haul'),
+                                             ))[0]
+    medium_truck_act = medium_truck_original.copy(database='additional_acts')
+    medium_truck_technosphere = list(medium_truck_act.technosphere())
+    keep_inputs = ['power distribution', 'converter', 'inverter', 'fuel tank', 'power electronics', 'other components',
+                   'electric motor', 'fuel cell system', 'electricity storage capacity']
+    for ex in medium_truck_technosphere:
+        if not any(input_name in ex.input.name for input_name in keep_inputs):
+            ex.delete()
+
+
 # 6. 'transport, passenger car, battery electric, Medium' (in km). Remove all inputs with 'glider' in the name.
+def passenger_car_update(db_passenger_name: str):
+    """
+    Creates a copy of 'transport, passenger car, battery electric, Medium' in the database 'additional_acts_db' and
+    deletes glider inputs.
+    """
+    car_original = list(ws.get_many(bd.Database(db_passenger_name),
+                                    ws.equals('name', 'transport, passenger car, battery electric, Medium'),
+                                    ))[0]
+    create_additional_acts_db()
+    car_act = car_original.copy(database='additional_acts')
+    car_technosphere = list(car_act.technosphere())
+    for ex in car_technosphere:
+        if 'glider' in ex.input.name:
+            ex.delete()
+
+
 # 7. 'gas-to-liquid plant construction'. Add 1250000 kg of cobalt as input (catalyst).
+def gas_to_liquid_update(db_cobalt_name: str, db_gas_to_liquid_name: str):
+    """
+    Creates a copy of 'gas-to-liquid plant construction' in 'additional_acts_db' and adds 1250000 kg of cobalt
+    as input (catalyst).
+    """
+    gas_to_liquid_original_act = list(ws.get_many(bd.Database(db_gas_to_liquid_name),
+                                                  ws.equals('name', 'gas-to-liquid plant construction'),
+                                                  ))[0]
+    create_additional_acts_db()
+    gas_to_liquid_act = gas_to_liquid_original_act.copy(database='additional_acts_db')
+    cobalt_act = list(ws.get_many(bd.Database(db_cobalt_name), ws.equals('name', 'market for cobalt'),
+                                  ws.equals('reference product', 'cobalt'),
+                                  ))[0]
+    new_ex = gas_to_liquid_act.new_exchange(input=cobalt_act, type='technosphere', amount=1250000)
+    new_ex.save()
+
 
 # TODO: biosphere 1 kg CO2 removal does not count as negative emissions. Ask Samantha how to deal with it.
 
@@ -214,7 +328,7 @@ def eliminate_infrastructure(electricity_heat_act):
 
 
 ##### substitute and unlink #####
-# Note: eliminate downstream connections of all hydrogen activities (not only those from electrolysers
+# Note: eliminate downstream connections of all hydrogen activities (not only those from electrolysers)
 # (biofuel_to_liquids).
 # Note: maybe relink_technosphere_exchanges() from wurst?
 
@@ -222,8 +336,12 @@ def eliminate_infrastructure(electricity_heat_act):
 ##### materials as indicator #####
 # 1. foreground
 def foreground_materials():
-    # TODO
+    # TODO:
+    # 1. CRMs; 2. list of heavily used materials: steel, iron, copper, aluminium, cement, concrete, water, plastics;
+    # 3. group materials per ISIC classification.
     pass
+
+
 # 2. all value chain
 def solve_lci(activity):
     """
@@ -252,7 +370,7 @@ def solve_lci(activity):
 
 def natural_resources(activity):
     """
-    :return: filters solved activities so it only includes the corresponding categories to natural resources
+    :return: filters solved activities, so it only includes the corresponding categories to natural resources
     """
     df = solve_lci(activity=activity)
     nat_res = df.loc[df['categories'].apply(lambda x: x[3] == 'natural resource')]
@@ -273,20 +391,22 @@ def total_materials(activity):
 # 1. foreground
 def foreground_land(activity):
     """
-    :return: square meters of transformation in the foreground
+    :return: square meters of transformation, and square meters per year of occupation in the foreground
     """
-    biosphere_exchanges = [ex.amount for ex in activity.biosphere() if 'Transformation, from' in ex._data['name']]
-    return sum(biosphere_exchanges)
+    transformation = [ex.amount for ex in activity.biosphere() if 'Transformation, from' in ex._data['name']]  # in m2
+    occupation = [ex.amount for ex in activity.biosphere() if 'Occupation,' in ex._data['name']]  # in m2*year
+    return sum(transformation), sum(occupation)
 
 
 # 2. all value chain
 def total_land(activity):
     """
-    :return: returns the total amount of square meters of an activity through its life-cycle
+    :return: returns the total amount of square meters, and occupation (m2*year) of an activity through its life-cycle
     """
     nat_res = natural_resources(activity=activity)
     total_squared_meters = nat_res.loc[nat_res['name'].apply(lambda x: x[1] == 'Transformation, from')]
-    return total_squared_meters['amount'].sum()
+    total_occupation = nat_res.loc[nat_res['name'].apply(lambda x: x[1] == 'Occupation,')]
+    return total_squared_meters['amount'].sum(), total_occupation['amount'].sum()
 
 
 ##### get the emissions of the biosphere only ####
@@ -301,3 +421,11 @@ def direct_emissions(activity, method=('EF v3.1', 'climate change', 'global warm
     new_act.technosphere().delete()
     lca = new_act.lca(amount=1, method=method)
     return lca.score
+
+
+def get_co2_emissions_only(activity):
+    """
+    :return: CO2 emissions (not CO2-eq) in kg of an activity. Needed to get DAC carbon intake capacity.
+    """
+    co2 = [ex.amount for ex in activity.biosphere() if 'Carbon dioxide' in ex._data['name']]
+    return sum(co2)
