@@ -1,3 +1,4 @@
+from typing import Literal, Optional, Dict
 import pandas as pd
 from premise.geomap import Geomap
 import wurst.searching as ws
@@ -40,7 +41,7 @@ def activity_filter_check(bw_db_name: str, activity_name: str, location: str, un
     if len(bw_db) == 0:
         print(f'empty database! You wrote {bw_db_name}, check the spelling')
     activity_filter = ws.get_many(bw_db,
-                                  ws.equals('name', activity_name),
+                                  ws.contains('name', activity_name),
                                   ws.equals('location', location),
                                   ws.equals('unit', unit))
     activity_list = list(activity_filter)
@@ -185,7 +186,7 @@ def eliminate_infrastructure(electricity_heat_act):
 ##### individual changes #####
 def create_additional_acts_db():
     if 'additional_acts_db' not in bd.databases:
-        ea_db = bd.Database('additional_acts')
+        ea_db = bd.Database('additional_acts_db')
         ea_db.register()
 
 
@@ -204,16 +205,20 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
                                     ws.equals('location', location),
                                     ws.contains('reference product', 'electricity')
                                     )
-        waste_act = waste_original.copy(database='additional_acts')
+        waste_act = waste_original.copy(database='additional_acts_db')
         waste_act.technosphere().delete()
 
     # create municipal solid waste incinerator
     incinerator_parts = ['furnace, wood chips, with silo, 5000kW',
                          'heat and power co-generation unit, organic Rankine cycle, 1000kW electrical',
                          'dust collector, electrostatic precipitator, for industrial use']
-    new_act = bd.Database('additional_acts').new_activity(name='municipal solid waste incinerator',
-                                                          code='municipal solid waste incinerator')
+    new_act = bd.Database('additional_acts_db').new_activity(name='municipal solid waste incinerator',
+                                                             code='municipal solid waste incinerator',
+                                                             location='RER',
+                                                             unit='unit')
     new_act.save()
+    production_ex = new_act.new_exchange(input=new_act.key, type='production', amount=1)
+    production_ex.save()
     for part in incinerator_parts:
         acts = ws.get_many(bd.Database(db_original_name), ws.contains('name', part),
                            ws.exclude(ws.contains('name', 'market')))
@@ -233,13 +238,13 @@ def biofuel_to_methanol_update(db_methanol_name: str):
                                                           'methanol distillation, from wood, with CCS'),
                                                 )
     create_additional_acts_db()
-    methanol_distillation_act = methanol_distillation_original.copy(database='additional_acts')
+    methanol_distillation_act = methanol_distillation_original.copy(database='additional_acts_db')
     methanol_distillation_act['name'] = 'methanol distillation, from wood, without CCS'
     methanol_distillation_act.save()
     # Change name of the methanol synthesis activity
     methanol_synthesis_original = [ex.input for ex in methanol_distillation_act.technosphere() if
                                    'methanol synthesis, from wood, with CCS' in ex.input._data['name']][0]
-    methanol_synthesis_act = methanol_synthesis_original.copy(database='additional_acts')
+    methanol_synthesis_act = methanol_synthesis_original.copy(database='additional_acts_db')
     methanol_synthesis_act['name'] = 'methanol synthesis, from wood, without CCS'
     methanol_synthesis_act.save()
     # Re-link methanol synthesis act to methanol distillation act
@@ -276,7 +281,7 @@ def trucks_update(db_truck_name: str):
                                                 'long haul'),
                                       )
     create_additional_acts_db()
-    light_truck_act = light_truck_original.copy(database='additional_acts')
+    light_truck_act = light_truck_original.copy(database='additional_acts_db')
     light_truck_technosphere = list(light_truck_act.technosphere())
     keep_inputs = ['converter', 'inverter', 'fuel tank', 'power electronics', 'other components', 'electric motor',
                    'fuel cell system', 'electricity storage capacity']
@@ -290,7 +295,7 @@ def trucks_update(db_truck_name: str):
                                                  'medium duty truck, fuel cell electric, 26t gross weight, '
                                                  'long haul'),
                                        )
-    medium_truck_act = medium_truck_original.copy(database='additional_acts')
+    medium_truck_act = medium_truck_original.copy(database='additional_acts_db')
     medium_truck_technosphere = list(medium_truck_act.technosphere())
     keep_inputs = ['power distribution', 'converter', 'inverter', 'fuel tank', 'power electronics', 'other components',
                    'electric motor', 'fuel cell system', 'electricity storage capacity']
@@ -308,7 +313,7 @@ def passenger_car_update(db_passenger_name: str):
                               ws.equals('name', 'transport, passenger car, battery electric, Medium'),
                               )
     create_additional_acts_db()
-    car_act = car_original.copy(database='additional_acts')
+    car_act = car_original.copy(database='additional_acts_db')
     car_technosphere = list(car_act.technosphere())
     for ex in car_technosphere:
         if 'glider' in ex.input.name:
@@ -328,6 +333,8 @@ def gas_to_liquid_update(db_cobalt_name: str, db_gas_to_liquid_name: str):
     cobalt_act = list(ws.get_many(bd.Database(db_cobalt_name), ws.equals('name', 'market for cobalt'),
                                   ws.equals('reference product', 'cobalt'),
                                   ))[0]
+    production_ex = gas_to_liquid_act.new_exchange(input=gas_to_liquid_act.key, type='production', amount=1)
+    production_ex.save()
     new_ex = gas_to_liquid_act.new_exchange(input=cobalt_act, type='technosphere', amount=1250000)
     new_ex.save()
 
@@ -336,10 +343,98 @@ def gas_to_liquid_update(db_cobalt_name: str, db_gas_to_liquid_name: str):
 
 ##### create fleets #####
 # wind_onshore
+# TODO: have windtrace code as a package in the project
 # wind_offshore
 # solar_pv
+
 # batteries
+def batteries_fleet(db_batteries_name: str, scenario: Optional[Literal['cont', 'tc']],
+                    technology_share: Optional[Dict[str, float]] = None):
+    """
+    :return: returns the appropriate battery fleet activity. Either CONT, TC or manual scenario.
+    """
+    if scenario == 'cont':
+        battery_fleet = ws.get_one(bd.Database(db_batteries_name),
+                                   ws.equals('name', 'market for battery capacity, stationary (CONT scenario)'))
+    elif scenario == 'tc':
+        battery_fleet = ws.get_one(bd.Database(db_batteries_name),
+                                   ws.equals('name', 'market for battery capacity, stationary (TC scenario)'))
+    else:
+        print(f'Manual battery scenario with the following technology shares: {technology_share}')
+        # Runtime check to enforce battery types as keys
+        expected_keys = {'LFP', 'NMC111', 'NMC523', 'NMC622', 'NMC811', 'NMC955', 'SiB',
+                         'Vanadium', 'Lead', 'Sodium-Nickel'}
+        if set(technology_share.keys()) != expected_keys:
+            raise ValueError(f"'technology_share' must contain exactly the keys {expected_keys}")
+        if sum(technology_share.values()) != 1:
+            raise ValueError(f"'technology_share' shares must sum 1")
+
+        # create manual battery scenario
+        battery_original = ws.get_one(bd.Database(db_batteries_name),
+                                      ws.equals('name', 'market for battery capacity, stationary (TC scenario)'))
+        battery_fleet = battery_original.copy(database='additional_acts_db')
+        battery_fleet['name'] = 'market for battery capacity, stationary (manual scenario), for enbios'
+        battery_fleet.save()
+
+        for battery_type, share in technology_share.items():
+            for ex in battery_fleet.technosphere():
+                if battery_type in ex.input.name:
+                    ex.amount = share
+                    ex.save()
+        # check that the total amount is 1
+        if sum([ex.amount for ex in battery_fleet.technosphere()]) != 1:
+            raise ValueError(f"something went wrong. The input amounts sum more than 1")
+
+    return battery_fleet
+
+
 # electrolysis
+def hydrogen_from_electrolysis_market(db_hydrogen_name: str, soec_share: float, aec_share: float, pem_share: float):
+    """
+    ´´soec_share´´, ´´aec_share´´´and ´´pem_share´´ need to be shares between 0 and 1, summing 1 in total.
+    The function creates a market activity in 'additional_acts' with the shares of hydrogen production from
+    soec, aec and pem technologies named 'hydrogen production, gaseous, for enbios'.
+    """
+    if (soec_share + aec_share + pem_share) != 1:
+        print(f'your inputs for soc ({soec_share}), aec ({aec_share}) and pem ({pem_share}) do not sum 1. '
+              f'They sum {soec_share + aec_share + pem_share}. Try a combination that sums 1)')
+        sys.exit()
+
+    create_additional_acts_db()
+
+    soec_act = ws.get_one(bd.Database(db_hydrogen_name),
+                          ws.equals('name', 'hydrogen production, gaseous, 1 bar, '
+                                            'from SOEC electrolysis, from grid electricity'),
+                          ws.equals('location', 'CH')
+                          )
+    aec_act = ws.get_one(bd.Database(db_hydrogen_name),
+                         ws.equals('name', 'hydrogen production, gaseous, 20 bar, '
+                                           'from AEC electrolysis, from grid electricity'),
+                         ws.equals('location', 'CH')
+                         )
+    pem_act = ws.get_one(bd.Database(db_hydrogen_name),
+                         ws.equals('name', 'hydrogen production, gaseous, 30 bar, '
+                                           'from PEM electrolysis, from grid electricity'),
+                         ws.equals('location', 'RER')
+                         )
+    market_act = bd.Database('additional_acts_db').new_activity(name='hydrogen production, gaseous, for enbios',
+                                                                code='hydrogen production, gaseous, for enbios',
+                                                                location='RER',
+                                                                unit='kilogram',
+                                                                comment=f'aec: {aec_share * 100}%, '
+                                                                        f'pem: {pem_share * 100}%,'
+                                                                        f'soec: {soec_share * 100}%')
+    market_act.save()
+    production_exchange = market_act.new_exchange(input=market_act.key, type='production', amount=1)
+    production_exchange.save()
+    for act, share in {soec_act: soec_share, aec_act: aec_share, pem_act: pem_share}.items():
+        new_ex = market_act.new_exchange(input=act, type='technosphere', amount=share)
+        new_ex.save()
+
+
+def hydrogen_relink():
+    # TODO: do I need to relink the market for hydrogen???
+    pass
 
 
 ##### substitute and unlink #####
