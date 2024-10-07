@@ -176,10 +176,6 @@ def eliminate_infrastructure(electricity_heat_act):
 
     # find the infrastructure and eliminate it from the foreground
     infrastructure_acts = [e for e in act_copy.technosphere() if e.input._data['unit'] == 'unit']
-    if len(infrastructure_acts) > 1:
-        # TODO: create a new activity with the two/three of them. OR better do it manually?
-        #  -> case of: 1. heat and power co-generation, wood chips; 2. chp_wte_back_pressure
-        pass
     for e in infrastructure_acts:
         e.delete()
 
