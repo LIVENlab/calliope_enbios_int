@@ -40,9 +40,9 @@ def activity_filter_check(bw_db_name: str, activity_name: str, location: str, un
     if len(bw_db) == 0:
         print(f'empty database! You wrote {bw_db_name}, check the spelling')
     activity_filter = ws.get_many(bw_db,
-                                  ws.contains('name', activity_name),
-                                  ws.contains('location', location),
-                                  ws.contains('unit', unit))
+                                  ws.equals('name', activity_name),
+                                  ws.equals('location', location),
+                                  ws.equals('unit', unit))
     activity_list = list(activity_filter)
     if len(activity_list) > 1:
         print(f'More than one {activity_name}, {location}, {unit} found')
@@ -145,8 +145,8 @@ def find_activity(bw_db_name: str, activity_name: str, calliope_location: str,
 
     # Check everything else
     activity_filter = ws.get_many(bw_db_name,
-                                  ws.contains('name', activity_name),
-                                  ws.contains('unit', unit))
+                                  ws.equals('name', activity_name),
+                                  ws.equals('unit', unit))
     act = next(activity_filter, None)
     if act:
         print(f'name: {activity_name}, location: {act._data["location"]}, '
@@ -193,24 +193,49 @@ def create_additional_acts_db():
         ea_db.register()
 
 
-# 1. chp_wte_back_pressure: use APOS in this case (comment with Joan!). Create an activity that includes dust collector,
-# electrostatic precipitator, for industrial use plus heat and
-# power co-generation unit, organic Rankine cycle, 1000kW electrical. This will be the infrastructure activity.
-# Remove all technosphere.
-# 2. biofuel_to_methane: increase efficiency from 50% to 70% (HOW!!??!)
-# 3. biofuel_to_methanol: 'methanol distillation, from wood, with CCS'. Change the input
-# 'hydrogen production, gaseous, 25 bar, from gasification of woody biomass in entrained flow gasifier, with CCS, at gasification plant'
-# for 'hydrogen production, gaseous, 25 bar, from gasification of woody biomass in entrained flow gasifier, at gasification plant' (WEU)
+def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list):
+    """
+    Creates a copy of the activity 'treatment of municipal solid waste, incineration' for all locations given in the
+    variable ``locations``.
+    Creates an activity for the municipal solid waste incinerator.
+    """
+    # delete technosphere
+    create_additional_acts_db()
+    for location in locations:
+        waste_original = ws.get_one(bd.Database(db_waste_name),
+                                    ws.equals('name',
+                                              'treatment of municipal solid waste, incineration'),
+                                    ws.equals('location', location),
+                                    ws.contains('reference product', 'electricity')
+                                    )
+        waste_act = waste_original.copy(database='additional_acts')
+        waste_act.technosphere().delete()
+
+    # create municipal solid waste incinerator
+    incinerator_parts = ['furnace, wood chips, with silo, 5000kW',
+                         'heat and power co-generation unit, organic Rankine cycle, 1000kW electrical',
+                         'dust collector, electrostatic precipitator, for industrial use']
+    new_act = bd.Database('additional_acts').new_activity(name='municipal solid waste incinerator',
+                                                          code='municipal solid waste incinerator')
+    new_act.save()
+    for part in incinerator_parts:
+        acts = ws.get_many(bd.Database(db_original_name), ws.contains('name', part),
+                           ws.exclude(ws.contains('name', 'market')))
+        part_act = ws.best_geo_match(acts, ['CH'])
+        new_ex = new_act.new_exchange(input=part_act, type='technosphere', amount=1)
+        new_ex.save()
+
+
 def biofuel_to_methanol_update(db_methanol_name: str):
     """
     In the background of the methanol production, the function substitutes H2 production with CCS
     for H2 production without CCS.
     """
     # Change name of the methanol distillation activity
-    methanol_distillation_original = list(ws.get_many(bd.Database(db_methanol_name),
-                                                      ws.equals('name',
-                                                                'methanol distillation, from wood, with CCS'),
-                                                      ))[0]
+    methanol_distillation_original = ws.get_one(bd.Database(db_methanol_name),
+                                                ws.equals('name',
+                                                          'methanol distillation, from wood, with CCS'),
+                                                )
     create_additional_acts_db()
     methanol_distillation_act = methanol_distillation_original.copy(database='additional_acts')
     methanol_distillation_act['name'] = 'methanol distillation, from wood, without CCS'
@@ -231,20 +256,16 @@ def biofuel_to_methanol_update(db_methanol_name: str):
                    ex.input._data[
                        'name'] == ('hydrogen production, gaseous, 25 bar, from gasification of woody biomass'
                                    ' in entrained flow gasifier, with CCS, at gasification plant')][0]
-    h2_new_act = list(ws.get_many(bd.Database(h2_exchange.input.key[0]),
-                                  ws.equals('name',
-                                            'methanol distillation, from wood, with CCS'),
-                                  ))[0]
+    h2_new_act = ws.get_one(bd.Database(h2_exchange.input.key[0]),
+                            ws.equals('name',
+                                      'hydrogen production, gaseous, 25 bar, from gasification of woody biomass '
+                                      'in entrained flow gasifier, at gasification plant'),
+                            ws.equals('location', 'RER')
+                            )
     h2_exchange.input = h2_new_act.key
     h2_exchange.save()
 
 
-
-# 4. 'medium duty truck, fuel cell electric, 26t gross weight, long haul' keep 'power distribution', 'converter',
-# 'inverter', 'fuel tank', 'power electronics', 'other components', 'electric motor', 'fuel cell system',
-# 'electricity storage capacity'.
-# 5. 'light duty truck, fuel cell electric, 3.5t gross weight, long haul', 'converter', 'inverter', 'fuel tank',
-# 'power electronics', 'other components', 'electric motor', 'fuel cell system', 'electricity storage capacity'.
 def trucks_update(db_truck_name: str):
     """
     Creates a copy of 'light duty truck, fuel cell electric, 3.5t gross weight, long haul' and
@@ -253,11 +274,11 @@ def trucks_update(db_truck_name: str):
     make the vehicle electric instead of using an internal combustion engine.
     """
     # light truck
-    light_truck_original = list(ws.get_many(bd.Database(db_truck_name),
-                                            ws.equals('name',
-                                                      'light duty truck, fuel cell electric, 3.5t gross weight, '
-                                                      'long haul'),
-                                            ))[0]
+    light_truck_original = ws.get_one(bd.Database(db_truck_name),
+                                      ws.equals('name',
+                                                'light duty truck, fuel cell electric, 3.5t gross weight, '
+                                                'long haul'),
+                                      )
     create_additional_acts_db()
     light_truck_act = light_truck_original.copy(database='additional_acts')
     light_truck_technosphere = list(light_truck_act.technosphere())
@@ -268,11 +289,11 @@ def trucks_update(db_truck_name: str):
             ex.delete()
 
     # medium truck
-    medium_truck_original = list(ws.get_many(bd.Database(db_truck_name),
-                                             ws.equals('name',
-                                                       'medium duty truck, fuel cell electric, 26t gross weight, '
-                                                       'long haul'),
-                                             ))[0]
+    medium_truck_original = ws.get_one(bd.Database(db_truck_name),
+                                       ws.equals('name',
+                                                 'medium duty truck, fuel cell electric, 26t gross weight, '
+                                                 'long haul'),
+                                       )
     medium_truck_act = medium_truck_original.copy(database='additional_acts')
     medium_truck_technosphere = list(medium_truck_act.technosphere())
     keep_inputs = ['power distribution', 'converter', 'inverter', 'fuel tank', 'power electronics', 'other components',
@@ -282,15 +303,14 @@ def trucks_update(db_truck_name: str):
             ex.delete()
 
 
-# 6. 'transport, passenger car, battery electric, Medium' (in km). Remove all inputs with 'glider' in the name.
 def passenger_car_update(db_passenger_name: str):
     """
     Creates a copy of 'transport, passenger car, battery electric, Medium' in the database 'additional_acts_db' and
     deletes glider inputs.
     """
-    car_original = list(ws.get_many(bd.Database(db_passenger_name),
-                                    ws.equals('name', 'transport, passenger car, battery electric, Medium'),
-                                    ))[0]
+    car_original = ws.get_one(bd.Database(db_passenger_name),
+                              ws.equals('name', 'transport, passenger car, battery electric, Medium'),
+                              )
     create_additional_acts_db()
     car_act = car_original.copy(database='additional_acts')
     car_technosphere = list(car_act.technosphere())
@@ -299,15 +319,14 @@ def passenger_car_update(db_passenger_name: str):
             ex.delete()
 
 
-# 7. 'gas-to-liquid plant construction'. Add 1250000 kg of cobalt as input (catalyst).
 def gas_to_liquid_update(db_cobalt_name: str, db_gas_to_liquid_name: str):
     """
     Creates a copy of 'gas-to-liquid plant construction' in 'additional_acts_db' and adds 1250000 kg of cobalt
     as input (catalyst).
     """
-    gas_to_liquid_original_act = list(ws.get_many(bd.Database(db_gas_to_liquid_name),
-                                                  ws.equals('name', 'gas-to-liquid plant construction'),
-                                                  ))[0]
+    gas_to_liquid_original_act = ws.get_one(bd.Database(db_gas_to_liquid_name),
+                                            ws.equals('name', 'gas-to-liquid plant construction'),
+                                            )
     create_additional_acts_db()
     gas_to_liquid_act = gas_to_liquid_original_act.copy(database='additional_acts_db')
     cobalt_act = list(ws.get_many(bd.Database(db_cobalt_name), ws.equals('name', 'market for cobalt'),
