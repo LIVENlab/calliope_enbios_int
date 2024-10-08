@@ -4,6 +4,17 @@ from premise.geomap import Geomap
 import wurst.searching as ws
 import sys
 import bw2data as bd
+import WindTrace.WindTrace_onshore
+
+
+# TODO:
+#  1. re-do photovoltaics fleets
+#  2. Wind fleets with WindTrace
+#  3. methane_from_biomass_factory
+#  4. methanol_from_biomass_factory
+#  5. Revise hydrogen
+#  6. Setup databases and tests the functions (with workflow for foreground)
+#  7. Formalise general workflow
 
 ##### assign location #####
 
@@ -231,7 +242,9 @@ def biofuel_to_methanol_update(db_methanol_name: str):
     """
     In the background of the methanol production, the function substitutes H2 production with CCS
     for H2 production without CCS.
+    To execute only if we don't want CCS!!!
     """
+
     # Change name of the methanol distillation activity
     methanol_distillation_original = ws.get_one(bd.Database(db_methanol_name),
                                                 ws.equals('name',
@@ -339,16 +352,39 @@ def gas_to_liquid_update(db_cobalt_name: str, db_gas_to_liquid_name: str):
     new_ex.save()
 
 
+def methane_from_biomass_factory():
+    # Need from 'biomethane production, high pressure from synthetic gas, wood, fluidised technology' (CH)
+    #  synthetic gas factory construction and industrial furnace production, natural gas
+    # TODO: do it.
+    pass
+
+
+def methanol_from_biomass_factory():
+    # Need from 'methanol distillation, from wood, with CCS'
+    # synthetic gas factory construction AND methanol production facility, construction (twice)
+    # TODO: do it.
+    pass
+
 # TODO: biosphere 1 kg CO2 removal does not count as negative emissions. Ask Samantha how to deal with it.
 
 ##### create fleets #####
 # wind_onshore
-# TODO: have windtrace code as a package in the project
+def wind_onshore_fleet():
+    create_additional_acts_db()
+    new_db = bd.Database('additional_acts_db')
+    WindTrace.WindTrace_onshore.lci_wind_turbine()
+    pass
+
+
 # wind_offshore
+def wind_offshore_fleet():
+    pass
+
+
 # solar_pv
 def solar_pv_fleet(db_solar_name: str, open_technology_share: Dict[str, float],
                    roof_technology_share: Dict[str, float],
-                   roof_3kw_share: Dict[str, float], roof_93kw_share: Dict[str, float],):
+                   roof_3kw_share: Dict[str, float], roof_93kw_share: Dict[str, float]):
     """
     For open-ground, it creates a fleet of 570 kWp with the following technologies
     ('CdTe', 'CIS', 'micro-Si', 'multi-Si', 'single-Si').
@@ -368,6 +404,8 @@ def solar_pv_fleet(db_solar_name: str, open_technology_share: Dict[str, float],
     Note: it deliberately avoids 1.3 MWp inventories and technologies stored in a different format
     (i.e., perovskite-on-silicon and GaAs).
     """
+    # TODO: add 156 kWp and 280 kWp flat-roof
+    # TODO: add maintenance (tap water, wastewater and water to air)
     create_additional_acts_db()
     # test technology shares
     # Runtime check to enforce battery types as keys
@@ -376,8 +414,8 @@ def solar_pv_fleet(db_solar_name: str, open_technology_share: Dict[str, float],
     roof_93kw_expected_keys = {'multi-Si', 'single-Si'}
     roof_technology_keys = {'93kWp', '3kWp'}
     if ((set(open_technology_share.keys()) != open_expected_keys or
-            set(roof_3kw_share.keys()) != roof_3kw_expected_keys or
-        set(roof_93kw_share.keys()) != roof_93kw_expected_keys) or
+         set(roof_3kw_share.keys()) != roof_3kw_expected_keys or
+         set(roof_93kw_share.keys()) != roof_93kw_expected_keys) or
             set(roof_technology_share.keys()) != roof_technology_keys):
         raise ValueError(f"technology shares must contain exactly the keys {open_expected_keys} (open-ground), "
                          f" {roof_3kw_expected_keys} (roof, 3kWp), {roof_93kw_expected_keys} (roof, 93kWp), and "
@@ -438,13 +476,15 @@ def solar_pv_fleet(db_solar_name: str, open_technology_share: Dict[str, float],
     )
     act_93kw_fleet.save()
     # add inputs to 3 KWp and 93 kWp activities
-    tech_to_3kw_activity = {tech: act for act in roof_pv_3kw for tech in roof_3kw_share.keys() if tech in act.input.name}
+    tech_to_3kw_activity = {tech: act for act in roof_pv_3kw for tech in roof_3kw_share.keys() if
+                            tech in act.input.name}
     for tech, share in roof_3kw_share.items():
         act = tech_to_3kw_activity.get(tech)
         if act:
             new_ex = open_fleet_activity.new_exchange(input=act, type='technosphere', amount=share)
             new_ex.save()
-    tech_to_93kw_activity = {tech: act for act in roof_pv_93kw for tech in roof_93kw_share.keys() if tech in act.input.name}
+    tech_to_93kw_activity = {tech: act for act in roof_pv_93kw for tech in roof_93kw_share.keys() if
+                             tech in act.input.name}
     for tech, share in roof_93kw_share.items():
         act = tech_to_93kw_activity.get(tech)
         if act:
@@ -463,11 +503,11 @@ def solar_pv_fleet(db_solar_name: str, open_technology_share: Dict[str, float],
     act_roof_fleet.save()
     # add inputs from 93kWp and 3kWp fleets
     new_ex = act_roof_fleet.new_exchange(
-        input=act_3kw_fleet, type='technosphere', amount=roof_technology_share['3kWp']*1000/3
+        input=act_3kw_fleet, type='technosphere', amount=roof_technology_share['3kWp'] * 1000 / 3
     )
     new_ex.save()
     new_ex = act_roof_fleet.new_exchange(
-        input=act_93kw_fleet, type='technosphere', amount=roof_technology_share['93kWp']*1000/93
+        input=act_93kw_fleet, type='technosphere', amount=roof_technology_share['93kWp'] * 1000 / 93
     )
     new_ex.save()
 
@@ -526,6 +566,7 @@ def hydrogen_from_electrolysis_market(db_hydrogen_name: str, soec_share: float, 
     The function creates a market activity in 'additional_acts' with the shares of hydrogen production from
     soec, aec and pem technologies named 'hydrogen production, gaseous, for enbios'.
     """
+    # TODO: revise. Should it be a market for electrolysers instead o a market for hydrogen production?
     if (soec_share + aec_share + pem_share) != 1:
         print(f'your inputs for soc ({soec_share}), aec ({aec_share}) and pem ({pem_share}) do not sum 1. '
               f'They sum {soec_share + aec_share + pem_share}. Try a combination that sums 1)')
