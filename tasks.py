@@ -5,10 +5,9 @@ import wurst.searching as ws
 import sys
 import bw2data as bd
 import WindTrace.WindTrace_onshore
-
+import consts
 
 # TODO:
-#  1. re-do photovoltaics fleets
 #  2. Wind fleets with WindTrace
 #  3. methane_from_biomass_factory
 #  4. methanol_from_biomass_factory
@@ -365,6 +364,7 @@ def methanol_from_biomass_factory():
     # TODO: do it.
     pass
 
+
 # TODO: biosphere 1 kg CO2 removal does not count as negative emissions. Ask Samantha how to deal with it.
 
 ##### create fleets #####
@@ -382,9 +382,13 @@ def wind_offshore_fleet():
 
 
 # solar_pv
-def solar_pv_fleet(db_solar_name: str, open_technology_share: Dict[str, float],
-                   roof_technology_share: Dict[str, float],
-                   roof_3kw_share: Dict[str, float], roof_93kw_share: Dict[str, float]):
+def solar_pv_fleet(db_solar_name: str,
+                   open_technology_share: Dict[str, float] = consts.OPEN_TECHNOLOGY_SHARE,
+                   roof_technology_share: Dict[str, float] = consts.ROOF_TECHNOLOGY_SHARE,
+                   roof_3kw_share: Dict[str, float] = consts.ROOF_3KW_SHARE,
+                   roof_93kw_share: Dict[str, float] = consts.ROOF_93KW_SHARE,
+                   roof_156kw_share: Dict[str, float] = consts.ROOF_156KW_SHARE,
+                   roof_280kw_share: Dict[str, float] = consts.ROOF_280KW_SHARE):
     """
     For open-ground, it creates a fleet of 570 kWp with the following technologies
     ('CdTe', 'CIS', 'micro-Si', 'multi-Si', 'single-Si').
@@ -392,19 +396,23 @@ def solar_pv_fleet(db_solar_name: str, open_technology_share: Dict[str, float],
     It creates a fleet of 3kWp with the following technologies
     ('single-Si', 'CIS', 'a-Si', 'multi-Si', 'CdTe', 'ribbon-Si').
     It creates a fleet of 93kWp with the following technologies ('multi-Si', 'single-Si').
-    Finally, it creates a 1MW fleet with 3kWp and 93kWp. This is the inventory we will use in enbios.
+    It creates a fleet of 156kWp with the following technologies ('multi-Si', 'single-Si').
+    It creates a fleet of 280kWp with the following technologies ('multi-Si', 'single-Si').
+    Finally, it creates a 1MW fleet with 3kWp, 93kWp, 156kWp, and 280kWp. This is the inventory we will use in enbios.
     Dictionaries:
     ´´open_technology_share´´ -> share of open-ground technologies, with the following keys ('CdTe', 'CIS', 'micro-Si', 'multi-Si', 'single-Si')
     ´´roof_3kw_share´´ -> share of 3kWp technologies with the following keys ('single-Si', 'CIS', 'a-Si', 'multi-Si', 'CdTe', 'ribbon-Si')
     ´´roof_93kw_share´´ -> share of 93kWp technologies with the following keys ('multi-Si', 'single-Si')
-    ´´roof_technology_share´´ -> share of rooftop powers with the following keys ('3kWp', '93kWp')
+    ´´roof_156kw_share´´ -> share of 156kWp technologies with the following keys ('multi-Si', 'single-Si')
+    ´´roof_280kw_share´´ -> share of 280kWp technologies with the following keys ('multi-Si', 'single-Si')
+    ´´roof_technology_share´´ -> share of rooftop powers with the following keys ('3kWp', '93kWp', '156kWp', '280kWp')
 
+    Default scenario defined in consts.py based on BaU taking data from Photovoltaics Report (2024) Fraunhofer Institute
     It returns the open-ground activity and the rooftop activity.
 
     Note: it deliberately avoids 1.3 MWp inventories and technologies stored in a different format
-    (i.e., perovskite-on-silicon and GaAs).
+    (i.e., perovskite-on-silicon and GaAs). It also avoids laminated installations (all integrated).
     """
-    # TODO: add 156 kWp and 280 kWp flat-roof
     # TODO: add maintenance (tap water, wastewater and water to air)
     create_additional_acts_db()
     # test technology shares
@@ -412,16 +420,24 @@ def solar_pv_fleet(db_solar_name: str, open_technology_share: Dict[str, float],
     open_expected_keys = {'CdTe', 'CIS', 'micro-Si', 'multi-Si', 'single-Si'}
     roof_3kw_expected_keys = {'single-Si', 'CIS', 'a-Si', 'multi-Si', 'CdTe', 'ribbon-Si'}
     roof_93kw_expected_keys = {'multi-Si', 'single-Si'}
-    roof_technology_keys = {'93kWp', '3kWp'}
-    if ((set(open_technology_share.keys()) != open_expected_keys or
-         set(roof_3kw_share.keys()) != roof_3kw_expected_keys or
-         set(roof_93kw_share.keys()) != roof_93kw_expected_keys) or
-            set(roof_technology_share.keys()) != roof_technology_keys):
+    roof_156kw_expected_keys = {'multi-Si', 'single-Si'}
+    roof_280kw_expected_keys = {'multi-Si', 'single-Si'}
+    roof_technology_keys = {'93kWp', '3kWp', '156kWp', '280kWp'}
+    if (
+            (set(open_technology_share.keys()) != open_expected_keys or
+             set(roof_3kw_share.keys()) != roof_3kw_expected_keys or
+             set(roof_93kw_share.keys()) != roof_93kw_expected_keys or
+             set(roof_156kw_share.keys()) != roof_156kw_expected_keys or
+             set(roof_280kw_share.keys()) != roof_280kw_expected_keys or
+             set(roof_technology_share.keys()) != roof_technology_keys)
+    ):
         raise ValueError(f"technology shares must contain exactly the keys {open_expected_keys} (open-ground), "
-                         f" {roof_3kw_expected_keys} (roof, 3kWp), {roof_93kw_expected_keys} (roof, 93kWp), and "
-                         f"{roof_technology_keys} (share between 93kWp and 3kWp)")
+                         f" {roof_3kw_expected_keys} (roof, 3kWp), {roof_93kw_expected_keys} (roof, 93kWp), "
+                         f" {roof_156kw_expected_keys} (roof, 156kWp), {roof_280kw_expected_keys} (roof, 280kWp),and "
+                         f"{roof_technology_keys} (share between 3kWp, 93kWp, 156kWp, and 280kWp)")
     if (sum(open_technology_share.values()) != 1 or sum(roof_technology_share.values()) != 1 or
-            sum(roof_93kw_share.values()) != 1 or sum(roof_3kw_share.values()) != 1):
+            sum(roof_93kw_share.values()) != 1 or sum(roof_3kw_share.values()) != 1 or
+            sum(roof_156kw_share.values()) != 1 or sum(roof_280kw_share.values()) != 1):
         raise ValueError(f"each technology share must sum 1")
 
     # open ground
@@ -449,16 +465,23 @@ def solar_pv_fleet(db_solar_name: str, open_technology_share: Dict[str, float],
             new_ex.save()
 
     # roof
-    roof_pv_3kw = ws.get_many(bd.Database('premise_base'), ws.contains('name', 'photovoltaic'),
+    # slanted-roof
+    roof_pv_3kw = ws.get_many(bd.Database(db_solar_name), ws.contains('name', 'photovoltaic'),
                               ws.contains('name', 'panel, mounted, on roof'),
                               ws.exclude(ws.contains('name', '1.3 MWp')),
                               ws.contains('name', '3kWp'),
                               ws.equals('location', 'CH'))
-    roof_pv_93kw = ws.get_many(bd.Database('premise_base'), ws.contains('name', 'photovoltaic'),
+    roof_pv_93kw = ws.get_many(bd.Database(db_solar_name), ws.contains('name', 'photovoltaic'),
                                ws.contains('name', 'panel, mounted, on roof'),
                                ws.contains('name', '93 kWp'),
                                ws.equals('location', 'CH'))
-    # create 3 kWp and 93 kWp activities
+    # flat roof
+    roof_pv_156kw = ws.get_many(bd.Database(db_solar_name), ws.contains('name', '156'),
+                                ws.contains('name', 'on roof'), ws.equals('location', 'CH'))
+    roof_pv_280kw = ws.get_many(bd.Database(db_solar_name), ws.contains('name', '280'),
+                                ws.contains('name', 'on roof'), ws.equals('location', 'CH'))
+
+    # create 3 kWp, 93 kWp, 156 kWp, and 280 kWp activities
     act_3kw_fleet = bd.Database('additional_acts_db').new_activity(
         name='photovoltaic slanted-roof installation, 3kWp, fleet',
         code='photovoltaic slanted-roof installation, 3kWp, fleet',
@@ -475,7 +498,24 @@ def solar_pv_fleet(db_solar_name: str, open_technology_share: Dict[str, float],
         comment=f'technology share: {roof_93kw_share}'
     )
     act_93kw_fleet.save()
-    # add inputs to 3 KWp and 93 kWp activities
+    act_156kw_fleet = bd.Database('additional_acts_db').new_activity(
+        name='photovoltaic slanted-roof installation, 156kWp, fleet',
+        code='photovoltaic slanted-roof installation, 156kWp, fleet',
+        location='RER',
+        unit='unit',
+        comment=f'technology share: {roof_156kw_share}'
+    )
+    act_156kw_fleet.save()
+    act_280kw_fleet = bd.Database('additional_acts_db').new_activity(
+        name='photovoltaic slanted-roof installation, 280kWp, fleet',
+        code='photovoltaic slanted-roof installation, 280kWp, fleet',
+        location='RER',
+        unit='unit',
+        comment=f'technology share: {roof_280kw_share}'
+    )
+    act_280kw_fleet.save()
+
+    # add inputs to 3 KWp, 93 kWp, 156 kWp, and 280 kWp activities
     tech_to_3kw_activity = {tech: act for act in roof_pv_3kw for tech in roof_3kw_share.keys() if
                             tech in act.input.name}
     for tech, share in roof_3kw_share.items():
@@ -490,18 +530,33 @@ def solar_pv_fleet(db_solar_name: str, open_technology_share: Dict[str, float],
         if act:
             new_ex = open_fleet_activity.new_exchange(input=act, type='technosphere', amount=share)
             new_ex.save()
+    tech_to_156kw_activity = {tech: act for act in roof_pv_156kw for tech in roof_156kw_share.keys() if
+                              tech in act.input.name}
+    for tech, share in roof_156kw_share.items():
+        act = tech_to_156kw_activity.get(tech)
+        if act:
+            new_ex = open_fleet_activity.new_exchange(input=act, type='technosphere', amount=share)
+            new_ex.save()
+    tech_to_280kw_activity = {tech: act for act in roof_pv_280kw for tech in roof_280kw_share.keys() if
+                              tech in act.input.name}
+    for tech, share in roof_280kw_share.items():
+        act = tech_to_280kw_activity.get(tech)
+        if act:
+            new_ex = open_fleet_activity.new_exchange(input=act, type='technosphere', amount=share)
+            new_ex.save()
 
-    # create roof activity (which contains 3kWp and 93kWp)
+    # create roof activity (which contains 3kWp, 93kWp, 156kWp, and 280kWp)
     act_roof_fleet = bd.Database('additional_acts_db').new_activity(
         name='photovoltaic slanted-roof installation, 1MW, fleet, for enbios',
         code='photovoltaic slanted-roof installation, 1MW, fleet, for enbios',
         location='RER',
         unit='unit',
         comment=f'Equivalent to 1MW. Technology share: {roof_technology_share}. '
-                f'93kWp: {roof_93kw_share}, 3kWp: {roof_3kw_share}'
+                f'93kWp: {roof_93kw_share}, 3kWp: {roof_3kw_share}, 156kWp: {roof_156kw_share}, '
+                f'280kWp: {roof_280kw_share}'
     )
     act_roof_fleet.save()
-    # add inputs from 93kWp and 3kWp fleets
+    # add inputs from 3kWp, 93kWp, 156kWp, and 280kWp fleets
     new_ex = act_roof_fleet.new_exchange(
         input=act_3kw_fleet, type='technosphere', amount=roof_technology_share['3kWp'] * 1000 / 3
     )
@@ -510,7 +565,14 @@ def solar_pv_fleet(db_solar_name: str, open_technology_share: Dict[str, float],
         input=act_93kw_fleet, type='technosphere', amount=roof_technology_share['93kWp'] * 1000 / 93
     )
     new_ex.save()
-
+    new_ex = act_roof_fleet.new_exchange(
+        input=act_156kw_fleet, type='technosphere', amount=roof_technology_share['156kWp'] * 1000 / 156
+    )
+    new_ex.save()
+    new_ex = act_roof_fleet.new_exchange(
+        input=act_280kw_fleet, type='technosphere', amount=roof_technology_share['280kWp'] * 1000 / 280
+    )
+    new_ex.save()
     return open_fleet_activity, act_roof_fleet
 
 
