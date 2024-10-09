@@ -1,4 +1,4 @@
-from typing import Literal, Optional, Dict
+from typing import Literal, Optional, Dict, Any
 import pandas as pd
 from premise.geomap import Geomap
 import wurst.searching as ws
@@ -9,8 +9,6 @@ import consts
 
 # TODO:
 #  2. Wind fleets with WindTrace
-#  3. methane_from_biomass_factory
-#  4. methanol_from_biomass_factory
 #  5. Revise hydrogen
 #  6. Setup databases and tests the functions (with workflow for foreground)
 #  7. Formalise general workflow
@@ -353,15 +351,19 @@ def gas_to_liquid_update(db_cobalt_name: str, db_gas_to_liquid_name: str):
 
 def methane_from_biomass_factory():
     # Need from 'biomethane production, high pressure from synthetic gas, wood, fluidised technology' (CH)
-    #  synthetic gas factory construction and industrial furnace production, natural gas
-    # TODO: do it.
+    #  synthetic gas factory construction (0.14 units) and industrial furnace production, natural gas (1 unit)
+    # TODO: wait for conversation with Jann. We would only need it if we do something similar as
+    #  with the electricity and heat. Otherwise, we use the electricity_output and not the capacity,
+    #  so do not remove the infrastructure.
     pass
 
 
 def methanol_from_biomass_factory():
     # Need from 'methanol distillation, from wood, with CCS'
-    # synthetic gas factory construction AND methanol production facility, construction (twice)
-    # TODO: do it.
+    # methanol production facility, construction (12.457+12.89 units per 1 kg of distilled methanol)
+    # TODO: wait for conversation with Jann. We would only need it if we do something similar as
+    #  with the electricity and heat. Otherwise, we use the electricity_output and not the capacity,
+    #  so do not remove the infrastructure.
     pass
 
 
@@ -369,11 +371,53 @@ def methanol_from_biomass_factory():
 
 ##### create fleets #####
 # wind_onshore
-def wind_onshore_fleet():
+def wind_onshore_fleet(db_wind_name: str, fleet_turbines_definition: Dict[str, Dict[str, Any]]):
+    """
+    ´´fleet_turbines_definition´´ structure:
+    {'turbine_1': {
+    'power': , 'location': , 'manufacturer': , 'rotor_diameter': , 'hub_height': , 'commissioning_year': ,
+    'generator_type': , 'recycled_share_steel': , 'lifetime': , 'eol_scenario': },
+    'turbine_2': {
+    'power': , 'location': , 'manufacturer': , 'rotor_diameter': , 'hub_height': , 'commissioning_year': ,
+    'generator_type': , 'recycled_share_steel': , 'lifetime': , 'eol_scenario': },
+    }
+    """
     create_additional_acts_db()
     new_db = bd.Database('additional_acts_db')
-    WindTrace.WindTrace_onshore.lci_wind_turbine()
-    pass
+
+    expected_keys = {'power', 'location', 'manufacturer', 'rotor_diameter', 'hub_height', 'commissioning_year',
+                     'generator_type', 'recycled_share_steel', 'lifetime', 'eol_scenario'}
+    park_names = []
+    for turbine, characteristics in fleet_turbines_definition.items():
+        park_name = f'{turbine}_{characteristics["power"]}_{characteristics["location"]}'
+        park_names.append(park_name)
+        if characteristics.keys() != expected_keys:
+            raise ValueError(f'The keys introduced {characteristics.keys()} do not match '
+                             f'the expected keys {expected_keys}')
+    try:
+        # Check if lengths match, meaning no duplicates
+        if len(park_names) == len(list(set(park_names))):
+            print("No duplicates found in park names")
+        else:
+            print("Park name duplicates found. Try other names")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        sys.exit()
+
+    # create individual turbines
+    for turbine, characteristics in fleet_turbines_definition.items():
+        park_name = f'{turbine}_{characteristics["power"]}_{characteristics["location"]}'
+        WindTrace.WindTrace_onshore.lci_wind_turbine(
+            park_name=park_name, park_power=characteristics['power'], number_of_turbines=1,
+            park_location=characteristics['location'], park_coordinates='51.181, 13.655',
+            manufacturer=characteristics['manufacturer'], rotor_diameter=characteristics['rotor_diameter'],
+            turbine_power=characteristics['power'], hub_height=characteristics['hub_height'],
+            commissioning_year=characteristics['commissioning_year'], generator_type=characteristics['generator_type'],
+            recycled_share_steel=characteristics['recycled_share_steel'],
+            lifetime=characteristics['lifetime'], eol_scenario=characteristics['eol_scenario']
+        )
+    # TODO: create fleet
+    return park_names
 
 
 # wind_offshore
