@@ -383,7 +383,6 @@ def wind_onshore_fleet(db_wind_name: str, fleet_turbines_definition: Dict[str, D
     }
     """
     create_additional_acts_db()
-    new_db = bd.Database('additional_acts_db')
 
     expected_keys = {'power', 'location', 'manufacturer', 'rotor_diameter', 'hub_height', 'commissioning_year',
                      'generator_type', 'recycled_share_steel', 'lifetime', 'eol_scenario'}
@@ -408,14 +407,16 @@ def wind_onshore_fleet(db_wind_name: str, fleet_turbines_definition: Dict[str, D
     for turbine, characteristics in fleet_turbines_definition.items():
         park_name = f'{turbine}_{characteristics["power"]}_{characteristics["location"]}'
         WindTrace.WindTrace_onshore.lci_wind_turbine(
+            new_db=bd.Database('additional_acts_db'), cutoff391=bd.Database(db_wind_name),
             park_name=park_name, park_power=characteristics['power'], number_of_turbines=1,
-            park_location=characteristics['location'], park_coordinates='51.181, 13.655',
+            park_location=characteristics['location'], park_coordinates=(51.181, 13.655),
             manufacturer=characteristics['manufacturer'], rotor_diameter=characteristics['rotor_diameter'],
             turbine_power=characteristics['power'], hub_height=characteristics['hub_height'],
             commissioning_year=characteristics['commissioning_year'], generator_type=characteristics['generator_type'],
             recycled_share_steel=characteristics['recycled_share_steel'],
             lifetime=characteristics['lifetime'], eol_scenario=characteristics['eol_scenario']
         )
+        # TODO: avoid maintenance and create the same activity only with the maintenance (take inventory per kWh)
     # TODO: create fleet
     return park_names
 
