@@ -1,4 +1,4 @@
-from typing import Literal, Optional, Dict, Any
+from typing import Literal, Optional, Dict, Any, List
 import pandas as pd
 from premise.geomap import Geomap
 import wurst.searching as ws
@@ -8,21 +8,11 @@ import WindTrace.WindTrace_onshore
 import consts
 
 # TODO:
-#  2. Wind fleets with WindTrace
-#  5. Revise hydrogen
 #  6. Setup databases and tests the functions (with workflow for foreground)
 #  7. Formalise general workflow
 
+
 ##### assign location #####
-
-LOCATION_EQUIVALENCE = {
-    'ALB': 'AL', 'FRA': 'FR', 'SWE': 'SE', 'DNK': 'DK', 'POL': 'PL', 'IRL': 'IE', 'EST': 'EE', 'HRV': 'HR', 'PRT': 'PT',
-    'BIH': 'BA', 'LVA': 'LV', 'SVN': 'SI', 'AUT': 'AT', 'GBR': 'GB', 'DEU': 'DE', 'MNE': 'ME', 'NOR': 'NO', 'BGR': 'BG',
-    'NLD': 'NL', 'HUN': 'HU', 'BEL': 'BE', 'CHE': 'CH', 'CZE': 'CZ', 'ROU': 'RO', 'CYP': 'CY', 'ESP': 'ES', 'GRC': 'GR',
-    'MKD': 'MK', 'ISL': 'IS', 'ITA': 'IT', 'LTU': 'LT', 'FIN': 'FI', 'SVK': 'SK', 'SRB': 'RS', 'LUX': 'LU'
-}
-
-
 def iam_location_equivalence():
     """
     :return: dictionary with location equivalence. IAM locations (keys) and locations included in
@@ -83,7 +73,7 @@ def find_activity(bw_db_name: str, activity_name: str, calliope_location: str,
             return act.key[0], act.key[1]  # database and code
 
     # Check exact location
-    location_alpha = LOCATION_EQUIVALENCE[calliope_location]
+    location_alpha = consts.LOCATION_EQUIVALENCE[calliope_location]
     act = activity_filter_check(bw_db_name=bw_db_name, activity_name=activity_name, location=location_alpha, unit=unit)
     if act:
         print(f'name: {activity_name}, location: {act._data["location"]}, '
@@ -131,7 +121,7 @@ def find_activity(bw_db_name: str, activity_name: str, calliope_location: str,
         return act.key[0], act.key[1]  # database and code
 
     # Check any country in Europe
-    european_countries = list(LOCATION_EQUIVALENCE.values())
+    european_countries = list(consts.LOCATION_EQUIVALENCE.values())
     for country in european_countries:
         act = activity_filter_check(bw_db_name=bw_db_name, activity_name=activity_name,
                                     location=country, unit=unit)
@@ -371,27 +361,35 @@ def methanol_from_biomass_factory():
 
 ##### create fleets #####
 # wind_onshore
-def wind_onshore_fleet(db_wind_name: str, fleet_turbines_definition: Dict[str, Dict[str, Any]]):
+def wind_onshore_fleet(db_wind_name: str, location: str,
+                       fleet_turbines_definition: Dict[str, List[Dict[str, Any], float]],
+                       ):
     """
     ´´fleet_turbines_definition´´ structure:
-    {'turbine_1': {
+    {'turbine_1': [
+    {
     'power': , 'location': , 'manufacturer': , 'rotor_diameter': , 'hub_height': , 'commissioning_year': ,
-    'generator_type': , 'recycled_share_steel': , 'lifetime': , 'eol_scenario': },
-    'turbine_2': {
+    'generator_type': , 'recycled_share_steel': , 'lifetime': , 'eol_scenario':
+    },
+    0.5], # where this 0.5 is the share of turbine_1
+    'turbine_2': [
+    {
     'power': , 'location': , 'manufacturer': , 'rotor_diameter': , 'hub_height': , 'commissioning_year': ,
-    'generator_type': , 'recycled_share_steel': , 'lifetime': , 'eol_scenario': },
-    }
+    'generator_type': , 'recycled_share_steel': , 'lifetime': , 'eol_scenario':
+    },
+    0.5], # where this 0.5 is the share of turbine_2
     """
     create_additional_acts_db()
 
     expected_keys = {'power', 'location', 'manufacturer', 'rotor_diameter', 'hub_height', 'commissioning_year',
                      'generator_type', 'recycled_share_steel', 'lifetime', 'eol_scenario'}
     park_names = []
-    for turbine, characteristics in fleet_turbines_definition.items():
-        park_name = f'{turbine}_{characteristics["power"]}_{characteristics["location"]}'
+    for turbine, info in fleet_turbines_definition.items():
+        turbine_parameters = info[0]
+        park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["location"]}'
         park_names.append(park_name)
-        if characteristics.keys() != expected_keys:
-            raise ValueError(f'The keys introduced {characteristics.keys()} do not match '
+        if turbine_parameters.keys() != expected_keys:
+            raise ValueError(f'The keys introduced {turbine_parameters.keys()} do not match '
                              f'the expected keys {expected_keys}')
     try:
         # Check if lengths match, meaning no duplicates
@@ -404,20 +402,41 @@ def wind_onshore_fleet(db_wind_name: str, fleet_turbines_definition: Dict[str, D
         sys.exit()
 
     # create individual turbines
-    for turbine, characteristics in fleet_turbines_definition.items():
-        park_name = f'{turbine}_{characteristics["power"]}_{characteristics["location"]}'
+    for turbine, info in fleet_turbines_definition.items():
+        turbine_parameters = info[0]
+        park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["location"]}'
         WindTrace.WindTrace_onshore.lci_wind_turbine(
             new_db=bd.Database('additional_acts_db'), cutoff391=bd.Database(db_wind_name),
-            park_name=park_name, park_power=characteristics['power'], number_of_turbines=1,
-            park_location=characteristics['location'], park_coordinates=(51.181, 13.655),
-            manufacturer=characteristics['manufacturer'], rotor_diameter=characteristics['rotor_diameter'],
-            turbine_power=characteristics['power'], hub_height=characteristics['hub_height'],
-            commissioning_year=characteristics['commissioning_year'], generator_type=characteristics['generator_type'],
-            recycled_share_steel=characteristics['recycled_share_steel'],
-            lifetime=characteristics['lifetime'], eol_scenario=characteristics['eol_scenario']
+            park_name=park_name, park_power=turbine_parameters['power'], number_of_turbines=1,
+            park_location=turbine_parameters['location'], park_coordinates=(51.181, 13.655),
+            manufacturer=turbine_parameters['manufacturer'], rotor_diameter=turbine_parameters['rotor_diameter'],
+            turbine_power=turbine_parameters['power'], hub_height=turbine_parameters['hub_height'],
+            commissioning_year=turbine_parameters['commissioning_year'], generator_type=turbine_parameters['generator_type'],
+            recycled_share_steel=turbine_parameters['recycled_share_steel'],
+            lifetime=turbine_parameters['lifetime'], eol_scenario=turbine_parameters['eol_scenario'],
+            use_and_maintenance=False
         )
-        # TODO: avoid maintenance and create the same activity only with the maintenance (take inventory per kWh)
-    # TODO: create fleet
+
+    # create fleet activity
+    fleet_activity = bd.Database('additional_acts_db').new_activity(
+        name='wind turbine fleet, 1 MW, for enbios',
+        code='wind turbine fleet, 1 MW, for enbios',
+        unit='unit',
+        location=location
+                                                                    )
+    fleet_activity.save()
+    new_ex = fleet_activity.new_exchange(input=fleet_activity.key, type='production', amount=1)
+    new_ex.save()
+    # add inputs
+    for turbine, info in fleet_turbines_definition.items():
+        share = info[1]
+        turbine_parameters = info[0]
+        park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["location"]}'
+        single_turbine_activity = bd.Database('additional_acts_db').get(park_name + '_single_turbine')
+        # to fleet activity (infrastructure)
+        new_ex = fleet_activity.new_exchange(input=single_turbine_activity, type='technosphere',
+                                             amount=share*turbine_parameters["power"])
+        new_ex.save()
     return park_names
 
 
@@ -674,6 +693,7 @@ def hydrogen_from_electrolysis_market(db_hydrogen_name: str, soec_share: float, 
     soec, aec and pem technologies named 'hydrogen production, gaseous, for enbios'.
     """
     # TODO: revise. Should it be a market for electrolysers instead o a market for hydrogen production?
+    #  It depends on what is Calliope refering to. So far, I think we are doing good.
     if (soec_share + aec_share + pem_share) != 1:
         print(f'your inputs for soc ({soec_share}), aec ({aec_share}) and pem ({pem_share}) do not sum 1. '
               f'They sum {soec_share + aec_share + pem_share}. Try a combination that sums 1)')
