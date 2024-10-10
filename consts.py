@@ -1,6 +1,13 @@
 import os
 
-# scenario 1. Follow today's trend
+LOCATION_EQUIVALENCE = {
+    'ALB': 'AL', 'FRA': 'FR', 'SWE': 'SE', 'DNK': 'DK', 'POL': 'PL', 'IRL': 'IE', 'EST': 'EE', 'HRV': 'HR', 'PRT': 'PT',
+    'BIH': 'BA', 'LVA': 'LV', 'SVN': 'SI', 'AUT': 'AT', 'GBR': 'GB', 'DEU': 'DE', 'MNE': 'ME', 'NOR': 'NO', 'BGR': 'BG',
+    'NLD': 'NL', 'HUN': 'HU', 'BEL': 'BE', 'CHE': 'CH', 'CZE': 'CZ', 'ROU': 'RO', 'CYP': 'CY', 'ESP': 'ES', 'GRC': 'GR',
+    'MKD': 'MK', 'ISL': 'IS', 'ITA': 'IT', 'LTU': 'LT', 'FIN': 'FI', 'SVK': 'SK', 'SRB': 'RS', 'LUX': 'LU'
+}
+
+# solar_pv scenario 1. Follow today's trend
 # data from Photovoltaics Report (2024) - Fraunhofer Institute
 OPEN_TECHNOLOGY_SHARE = {'CdTe': 0.02, 'CIS': 0, 'micro-Si': 0, 'multi-Si': 0.01, 'single-Si': 0.97}
 
@@ -249,7 +256,8 @@ REPLACEMENT_BASELINE = {'steel': 0.84, 'c_steel': 0.84, 'iron': 1, 'aluminium': 
 
 # vestas_file path
 cwd = os.getcwd()
-VESTAS_FILE = os.path.join(cwd, 'clean_data.xlsx')
+windtrace_folder = os.path.join(cwd, 'WindTrace')
+VESTAS_FILE = os.path.join(windtrace_folder, 'clean_data.xlsx')
 
 # variables to be set by the user
 PROJECT_NAME = 'repowering'
