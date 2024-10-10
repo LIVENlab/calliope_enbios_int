@@ -1,4 +1,4 @@
-from typing import Literal, Optional, Dict, Any, List
+from typing import Literal, Optional, Dict, Any, List, Union
 import pandas as pd
 from premise.geomap import Geomap
 import wurst.searching as ws
@@ -6,6 +6,8 @@ import sys
 import bw2data as bd
 import WindTrace.WindTrace_onshore
 import consts
+import wurst
+
 
 # TODO:
 #  6. Setup databases and tests the functions (with workflow for foreground)
@@ -183,8 +185,8 @@ def eliminate_infrastructure(electricity_heat_act):
 
 ##### individual changes #####
 def create_additional_acts_db():
-    if 'additional_acts_db' not in bd.databases:
-        ea_db = bd.Database('additional_acts_db')
+    if 'additional_acts' not in bd.databases:
+        ea_db = bd.Database('additional_acts')
         ea_db.register()
 
 
@@ -197,30 +199,56 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
     # delete technosphere
     create_additional_acts_db()
     for location in locations:
-        waste_original = ws.get_one(bd.Database(db_waste_name),
-                                    ws.equals('name',
-                                              'treatment of municipal solid waste, incineration'),
-                                    ws.equals('location', location),
-                                    ws.contains('reference product', 'electricity')
-                                    )
-        waste_act = waste_original.copy(database='additional_acts_db')
-        waste_act.technosphere().delete()
+        try:
+            waste_original = ws.get_one(bd.Database(db_waste_name),
+                                        ws.equals('name',
+                                                  'treatment of municipal solid waste, incineration'),
+                                        ws.equals('location', location),
+                                        ws.contains('reference product', 'electricity')
+                                        )
+            print(f'original_location: {location}, assigned location: {location}')
+            waste_act = waste_original.copy(database='additional_acts')
+            print(f'creating copy of {waste_act._data["name"]}')
+            waste_act.technosphere().delete()
+            print(f'deleting technosphere')
+        # if we do not find the location, Germany is chosen by default.
+        except wurst.errors.NoResults:
+            waste_original = ws.get_one(bd.Database(db_waste_name),
+                                        ws.equals('name',
+                                                  'treatment of municipal solid waste, incineration'),
+                                        ws.equals('location', 'CH'),
+                                        ws.contains('reference product', 'electricity')
+                                        )
+            print(f'original_location: {location}, assigned location: CH')
+            waste_act = waste_original.copy(database='additional_acts')
+            print(f'copy of {waste_act._data["name"]} created in "additional_acts"')
+            print('changing location')
+            waste_act['location'] = location
+            waste_act['comment'] = waste_act['comment'] + '\n' + 'Taken dataset from CH'
+            waste_act.save()
+            waste_act.technosphere().delete()
+            print(f'deleting technosphere')
 
     # create municipal solid waste incinerator
-    incinerator_parts = ['furnace, wood chips, with silo, 5000kW',
-                         'heat and power co-generation unit, organic Rankine cycle, 1000kW electrical',
-                         'dust collector, electrostatic precipitator, for industrial use']
-    new_act = bd.Database('additional_acts_db').new_activity(name='municipal solid waste incinerator',
-                                                             code='municipal solid waste incinerator',
-                                                             location='RER',
-                                                             unit='unit')
+    incinerator_parts = ['furnace production, wood chips, with silo, 5000kW',
+                         'heat and power co-generation unit construction, organic Rankine cycle, 1000kW electrical',
+                         'dust collector production, electrostatic precipitator, for industrial use']
+    new_act = bd.Database('additional_acts').new_activity(name='municipal solid waste incinerator',
+                                                                 code='municipal solid waste incinerator',
+                                                                 location='RER',
+                                                                 unit='unit')
     new_act.save()
     production_ex = new_act.new_exchange(input=new_act.key, type='production', amount=1)
     production_ex.save()
     for part in incinerator_parts:
         acts = ws.get_many(bd.Database(db_original_name), ws.contains('name', part),
                            ws.exclude(ws.contains('name', 'market')))
-        part_act = ws.best_geo_match(acts, ['CH'])
+        list_acts = list(acts)
+        if len(list_acts) > 1:
+            part_act = [a for a in list_acts if a._data['location'] == 'CH'][0]
+        else:
+            part_act = list_acts[0]
+        print(part_act._data['name'], part_act._data['location'])
         new_ex = new_act.new_exchange(input=part_act, type='technosphere', amount=1)
         new_ex.save()
 
@@ -238,13 +266,13 @@ def biofuel_to_methanol_update(db_methanol_name: str):
                                                           'methanol distillation, from wood, with CCS'),
                                                 )
     create_additional_acts_db()
-    methanol_distillation_act = methanol_distillation_original.copy(database='additional_acts_db')
+    methanol_distillation_act = methanol_distillation_original.copy(database='additional_acts')
     methanol_distillation_act['name'] = 'methanol distillation, from wood, without CCS'
     methanol_distillation_act.save()
     # Change name of the methanol synthesis activity
     methanol_synthesis_original = [ex.input for ex in methanol_distillation_act.technosphere() if
                                    'methanol synthesis, from wood, with CCS' in ex.input._data['name']][0]
-    methanol_synthesis_act = methanol_synthesis_original.copy(database='additional_acts_db')
+    methanol_synthesis_act = methanol_synthesis_original.copy(database='additional_acts')
     methanol_synthesis_act['name'] = 'methanol synthesis, from wood, without CCS'
     methanol_synthesis_act.save()
     # Re-link methanol synthesis act to methanol distillation act
@@ -281,7 +309,7 @@ def trucks_update(db_truck_name: str):
                                                 'long haul'),
                                       )
     create_additional_acts_db()
-    light_truck_act = light_truck_original.copy(database='additional_acts_db')
+    light_truck_act = light_truck_original.copy(database='additional_acts')
     light_truck_technosphere = list(light_truck_act.technosphere())
     keep_inputs = ['converter', 'inverter', 'fuel tank', 'power electronics', 'other components', 'electric motor',
                    'fuel cell system', 'electricity storage capacity']
@@ -295,7 +323,7 @@ def trucks_update(db_truck_name: str):
                                                  'medium duty truck, fuel cell electric, 26t gross weight, '
                                                  'long haul'),
                                        )
-    medium_truck_act = medium_truck_original.copy(database='additional_acts_db')
+    medium_truck_act = medium_truck_original.copy(database='additional_acts')
     medium_truck_technosphere = list(medium_truck_act.technosphere())
     keep_inputs = ['power distribution', 'converter', 'inverter', 'fuel tank', 'power electronics', 'other components',
                    'electric motor', 'fuel cell system', 'electricity storage capacity']
@@ -313,7 +341,7 @@ def passenger_car_update(db_passenger_name: str):
                               ws.equals('name', 'transport, passenger car, battery electric, Medium'),
                               )
     create_additional_acts_db()
-    car_act = car_original.copy(database='additional_acts_db')
+    car_act = car_original.copy(database='additional_acts')
     car_technosphere = list(car_act.technosphere())
     for ex in car_technosphere:
         if 'glider' in ex.input.name:
@@ -329,7 +357,7 @@ def gas_to_liquid_update(db_cobalt_name: str, db_gas_to_liquid_name: str):
                                             ws.equals('name', 'gas-to-liquid plant construction'),
                                             )
     create_additional_acts_db()
-    gas_to_liquid_act = gas_to_liquid_original_act.copy(database='additional_acts_db')
+    gas_to_liquid_act = gas_to_liquid_original_act.copy(database='additional_acts')
     cobalt_act = list(ws.get_many(bd.Database(db_cobalt_name), ws.equals('name', 'market for cobalt'),
                                   ws.equals('reference product', 'cobalt'),
                                   ))[0]
@@ -362,7 +390,7 @@ def methanol_from_biomass_factory():
 ##### create fleets #####
 # wind_onshore
 def wind_onshore_fleet(db_wind_name: str, location: str,
-                       fleet_turbines_definition: Dict[str, List[Dict[str, Any], float]],
+                       fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]],
                        ):
     """
     ´´fleet_turbines_definition´´ structure:
@@ -406,24 +434,25 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
         turbine_parameters = info[0]
         park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["location"]}'
         WindTrace.WindTrace_onshore.lci_wind_turbine(
-            new_db=bd.Database('additional_acts_db'), cutoff391=bd.Database(db_wind_name),
+            new_db=bd.Database('additional_acts'), cutoff391=bd.Database(db_wind_name),
             park_name=park_name, park_power=turbine_parameters['power'], number_of_turbines=1,
             park_location=turbine_parameters['location'], park_coordinates=(51.181, 13.655),
             manufacturer=turbine_parameters['manufacturer'], rotor_diameter=turbine_parameters['rotor_diameter'],
             turbine_power=turbine_parameters['power'], hub_height=turbine_parameters['hub_height'],
-            commissioning_year=turbine_parameters['commissioning_year'], generator_type=turbine_parameters['generator_type'],
+            commissioning_year=turbine_parameters['commissioning_year'],
+            generator_type=turbine_parameters['generator_type'],
             recycled_share_steel=turbine_parameters['recycled_share_steel'],
             lifetime=turbine_parameters['lifetime'], eol_scenario=turbine_parameters['eol_scenario'],
             use_and_maintenance=False
         )
 
     # create fleet activity
-    fleet_activity = bd.Database('additional_acts_db').new_activity(
+    fleet_activity = bd.Database('additional_acts').new_activity(
         name='wind turbine fleet, 1 MW, for enbios',
         code='wind turbine fleet, 1 MW, for enbios',
         unit='unit',
         location=location
-                                                                    )
+    )
     fleet_activity.save()
     new_ex = fleet_activity.new_exchange(input=fleet_activity.key, type='production', amount=1)
     new_ex.save()
@@ -432,10 +461,10 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
         share = info[1]
         turbine_parameters = info[0]
         park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["location"]}'
-        single_turbine_activity = bd.Database('additional_acts_db').get(park_name + '_single_turbine')
+        single_turbine_activity = bd.Database('additional_acts').get(park_name + '_single_turbine')
         # to fleet activity (infrastructure)
         new_ex = fleet_activity.new_exchange(input=single_turbine_activity, type='technosphere',
-                                             amount=share*turbine_parameters["power"])
+                                             amount=share * turbine_parameters["power"])
         new_ex.save()
     return park_names
 
@@ -505,7 +534,7 @@ def solar_pv_fleet(db_solar_name: str,
         raise ValueError(f"each technology share must sum 1")
 
     # open ground
-    open_fleet_activity = bd.Database('additional_acts_db').new_activity(
+    open_fleet_activity = bd.Database('additional_acts').new_activity(
         name='photovoltaic, open ground, 570 kWp, for enbios',
         code='photovoltaic, open ground, 570 kWp, for enbios',
         location='RER',
@@ -546,7 +575,7 @@ def solar_pv_fleet(db_solar_name: str,
                                 ws.contains('name', 'on roof'), ws.equals('location', 'CH'))
 
     # create 3 kWp, 93 kWp, 156 kWp, and 280 kWp activities
-    act_3kw_fleet = bd.Database('additional_acts_db').new_activity(
+    act_3kw_fleet = bd.Database('additional_acts').new_activity(
         name='photovoltaic slanted-roof installation, 3kWp, fleet',
         code='photovoltaic slanted-roof installation, 3kWp, fleet',
         location='RER',
@@ -554,7 +583,7 @@ def solar_pv_fleet(db_solar_name: str,
         comment=f'technology share: {roof_3kw_share}'
     )
     act_3kw_fleet.save()
-    act_93kw_fleet = bd.Database('additional_acts_db').new_activity(
+    act_93kw_fleet = bd.Database('additional_acts').new_activity(
         name='photovoltaic slanted-roof installation, 93kWp, fleet',
         code='photovoltaic slanted-roof installation, 93kWp, fleet',
         location='RER',
@@ -562,7 +591,7 @@ def solar_pv_fleet(db_solar_name: str,
         comment=f'technology share: {roof_93kw_share}'
     )
     act_93kw_fleet.save()
-    act_156kw_fleet = bd.Database('additional_acts_db').new_activity(
+    act_156kw_fleet = bd.Database('additional_acts').new_activity(
         name='photovoltaic slanted-roof installation, 156kWp, fleet',
         code='photovoltaic slanted-roof installation, 156kWp, fleet',
         location='RER',
@@ -570,7 +599,7 @@ def solar_pv_fleet(db_solar_name: str,
         comment=f'technology share: {roof_156kw_share}'
     )
     act_156kw_fleet.save()
-    act_280kw_fleet = bd.Database('additional_acts_db').new_activity(
+    act_280kw_fleet = bd.Database('additional_acts').new_activity(
         name='photovoltaic slanted-roof installation, 280kWp, fleet',
         code='photovoltaic slanted-roof installation, 280kWp, fleet',
         location='RER',
@@ -610,7 +639,7 @@ def solar_pv_fleet(db_solar_name: str,
             new_ex.save()
 
     # create roof activity (which contains 3kWp, 93kWp, 156kWp, and 280kWp)
-    act_roof_fleet = bd.Database('additional_acts_db').new_activity(
+    act_roof_fleet = bd.Database('additional_acts').new_activity(
         name='photovoltaic slanted-roof installation, 1MW, fleet, for enbios',
         code='photovoltaic slanted-roof installation, 1MW, fleet, for enbios',
         location='RER',
@@ -665,7 +694,7 @@ def batteries_fleet(db_batteries_name: str, scenario: Optional[Literal['cont', '
         # create manual battery scenario
         battery_original = ws.get_one(bd.Database(db_batteries_name),
                                       ws.equals('name', 'market for battery capacity, stationary (TC scenario)'))
-        battery_fleet = battery_original.copy(database='additional_acts_db')
+        battery_fleet = battery_original.copy(database='additional_acts')
         battery_fleet['name'] = 'market for battery capacity, stationary (manual scenario), for enbios'
         battery_fleet.save()
 
@@ -716,7 +745,7 @@ def hydrogen_from_electrolysis_market(db_hydrogen_name: str, soec_share: float, 
                                            'from PEM electrolysis, from grid electricity'),
                          ws.equals('location', 'RER')
                          )
-    market_act = bd.Database('additional_acts_db').new_activity(name='hydrogen production, gaseous, for enbios',
+    market_act = bd.Database('additional_acts').new_activity(name='hydrogen production, gaseous, for enbios',
                                                                 code='hydrogen production, gaseous, for enbios',
                                                                 location='RER',
                                                                 unit='kilogram',
