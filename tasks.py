@@ -543,6 +543,7 @@ def solar_pv_fleet(db_solar_name: str,
         unit='unit',
         comment=f'technology share: {open_technology_share}'
     )
+    open_fleet_activity['reference product'] = 'photovoltaic, open ground, 570 kWp'
     open_fleet_activity.save()
     production_ex = open_fleet_activity.new_exchange(input=open_fleet_activity.key, type='production', amount=1)
     production_ex.save()
@@ -552,7 +553,7 @@ def solar_pv_fleet(db_solar_name: str,
                                ws.contains('location',
                                            'RER')))  # CdTe, CIS, micro-Si, multi-Si, single-Si (all 570 kWp)
 
-    tech_to_activity = {tech: act for act in open_pv for tech in open_technology_share.keys() if tech in act.input.name}
+    tech_to_activity = {tech: act for act in open_pv for tech in open_technology_share.keys() if tech in act['name']}
     for tech, share in open_technology_share.items():
         act = tech_to_activity.get(tech)
         if act:
@@ -564,7 +565,7 @@ def solar_pv_fleet(db_solar_name: str,
     roof_pv_3kw = ws.get_many(bd.Database(db_solar_name), ws.contains('name', 'photovoltaic'),
                               ws.contains('name', 'panel, mounted, on roof'),
                               ws.exclude(ws.contains('name', '1.3 MWp')),
-                              ws.contains('name', '3kWp'),
+                              ws.exclude(ws.contains('name', '93')),
                               ws.equals('location', 'CH'))
     roof_pv_93kw = ws.get_many(bd.Database(db_solar_name), ws.contains('name', 'photovoltaic'),
                                ws.contains('name', 'panel, mounted, on roof'),
@@ -584,6 +585,7 @@ def solar_pv_fleet(db_solar_name: str,
         unit='unit',
         comment=f'technology share: {roof_3kw_share}'
     )
+    act_3kw_fleet['reference product'] = 'photovoltaic slanted-roof installation, 3kWp, fleet'
     act_3kw_fleet.save()
     act_93kw_fleet = bd.Database('additional_acts').new_activity(
         name='photovoltaic slanted-roof installation, 93kWp, fleet',
@@ -592,6 +594,7 @@ def solar_pv_fleet(db_solar_name: str,
         unit='unit',
         comment=f'technology share: {roof_93kw_share}'
     )
+    act_93kw_fleet['reference product'] = 'photovoltaic slanted-roof installation, 93kWp, fleet'
     act_93kw_fleet.save()
     act_156kw_fleet = bd.Database('additional_acts').new_activity(
         name='photovoltaic slanted-roof installation, 156kWp, fleet',
@@ -600,6 +603,7 @@ def solar_pv_fleet(db_solar_name: str,
         unit='unit',
         comment=f'technology share: {roof_156kw_share}'
     )
+    act_156kw_fleet['reference product'] = 'photovoltaic slanted-roof installation, 156kWp, fleet'
     act_156kw_fleet.save()
     act_280kw_fleet = bd.Database('additional_acts').new_activity(
         name='photovoltaic slanted-roof installation, 280kWp, fleet',
@@ -608,36 +612,37 @@ def solar_pv_fleet(db_solar_name: str,
         unit='unit',
         comment=f'technology share: {roof_280kw_share}'
     )
+    act_280kw_fleet['reference product'] = 'photovoltaic slanted-roof installation, 280kWp, fleet'
     act_280kw_fleet.save()
 
     # add inputs to 3 KWp, 93 kWp, 156 kWp, and 280 kWp activities
     tech_to_3kw_activity = {tech: act for act in roof_pv_3kw for tech in roof_3kw_share.keys() if
-                            tech in act.input.name}
+                            tech in act['name']}
     for tech, share in roof_3kw_share.items():
         act = tech_to_3kw_activity.get(tech)
         if act:
-            new_ex = open_fleet_activity.new_exchange(input=act, type='technosphere', amount=share)
+            new_ex = act_3kw_fleet.new_exchange(input=act, type='technosphere', amount=share)
             new_ex.save()
     tech_to_93kw_activity = {tech: act for act in roof_pv_93kw for tech in roof_93kw_share.keys() if
-                             tech in act.input.name}
+                             tech in act['name']}
     for tech, share in roof_93kw_share.items():
         act = tech_to_93kw_activity.get(tech)
         if act:
-            new_ex = open_fleet_activity.new_exchange(input=act, type='technosphere', amount=share)
+            new_ex = act_93kw_fleet.new_exchange(input=act, type='technosphere', amount=share)
             new_ex.save()
     tech_to_156kw_activity = {tech: act for act in roof_pv_156kw for tech in roof_156kw_share.keys() if
-                              tech in act.input.name}
+                              tech in act['name']}
     for tech, share in roof_156kw_share.items():
         act = tech_to_156kw_activity.get(tech)
         if act:
-            new_ex = open_fleet_activity.new_exchange(input=act, type='technosphere', amount=share)
+            new_ex = act_156kw_fleet.new_exchange(input=act, type='technosphere', amount=share)
             new_ex.save()
     tech_to_280kw_activity = {tech: act for act in roof_pv_280kw for tech in roof_280kw_share.keys() if
-                              tech in act.input.name}
+                              tech in act['name']}
     for tech, share in roof_280kw_share.items():
         act = tech_to_280kw_activity.get(tech)
         if act:
-            new_ex = open_fleet_activity.new_exchange(input=act, type='technosphere', amount=share)
+            new_ex = act_280kw_fleet.new_exchange(input=act, type='technosphere', amount=share)
             new_ex.save()
 
     # create roof activity (which contains 3kWp, 93kWp, 156kWp, and 280kWp)
@@ -650,6 +655,7 @@ def solar_pv_fleet(db_solar_name: str,
                 f'93kWp: {roof_93kw_share}, 3kWp: {roof_3kw_share}, 156kWp: {roof_156kw_share}, '
                 f'280kWp: {roof_280kw_share}'
     )
+    act_roof_fleet['reference product'] = 'photovoltaic slanted-roof installation, 1MW, fleet'
     act_roof_fleet.save()
     # add inputs from 3kWp, 93kWp, 156kWp, and 280kWp fleets
     new_ex = act_roof_fleet.new_exchange(
