@@ -234,9 +234,11 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
                          'heat and power co-generation unit construction, organic Rankine cycle, 1000kW electrical',
                          'dust collector production, electrostatic precipitator, for industrial use']
     new_act = bd.Database('additional_acts').new_activity(name='municipal solid waste incinerator',
-                                                                 code='municipal solid waste incinerator',
-                                                                 location='RER',
-                                                                 unit='unit')
+                                                          code='municipal solid waste incinerator',
+                                                          location='RER',
+                                                          unit='unit',
+                                                          )
+    new_act['reference product'] = 'municipal solid waste incinerator'
     new_act.save()
     production_ex = new_act.new_exchange(input=new_act.key, type='production', amount=1)
     production_ex.save()
@@ -280,8 +282,8 @@ def biofuel_to_methanol_update(db_methanol_name: str):
                                                 'methanol synthesis, from wood, with CCS' in ex.input._data['name']][0]
     methanol_synthesis_input_to_distillation.input = methanol_synthesis_act.key
     methanol_synthesis_input_to_distillation.save()
-    # Substitute CCS for gasification withot CCS
-    h2_exchange = [ex for ex in methanol_distillation_act.technosphere() if
+    # Substitute CCS for gasification without CCS
+    h2_exchange = [ex for ex in methanol_synthesis_act.technosphere() if
                    ex.input._data[
                        'name'] == ('hydrogen production, gaseous, 25 bar, from gasification of woody biomass'
                                    ' in entrained flow gasifier, with CCS, at gasification plant')][0]
@@ -746,12 +748,12 @@ def hydrogen_from_electrolysis_market(db_hydrogen_name: str, soec_share: float, 
                          ws.equals('location', 'RER')
                          )
     market_act = bd.Database('additional_acts').new_activity(name='hydrogen production, gaseous, for enbios',
-                                                                code='hydrogen production, gaseous, for enbios',
-                                                                location='RER',
-                                                                unit='kilogram',
-                                                                comment=f'aec: {aec_share * 100}%, '
-                                                                        f'pem: {pem_share * 100}%,'
-                                                                        f'soec: {soec_share * 100}%')
+                                                             code='hydrogen production, gaseous, for enbios',
+                                                             location='RER',
+                                                             unit='kilogram',
+                                                             comment=f'aec: {aec_share * 100}%, '
+                                                                     f'pem: {pem_share * 100}%,'
+                                                                     f'soec: {soec_share * 100}%')
     market_act.save()
     production_exchange = market_act.new_exchange(input=market_act.key, type='production', amount=1)
     production_exchange.save()
