@@ -340,7 +340,7 @@ def passenger_car_update(db_passenger_name: str):
     deletes glider inputs.
     """
     car_original = ws.get_one(bd.Database(db_passenger_name),
-                              ws.equals('name', 'transport, passenger car, battery electric, Medium'),
+                              ws.equals('name', 'passenger car, battery electric, Medium'),
                               )
     create_additional_acts_db()
     car_act = car_original.copy(database='additional_acts')
@@ -352,7 +352,7 @@ def passenger_car_update(db_passenger_name: str):
 
 def gas_to_liquid_update(db_cobalt_name: str, db_gas_to_liquid_name: str):
     """
-    Creates a copy of 'gas-to-liquid plant construction' in 'additional_acts_db' and adds 1250000 kg of cobalt
+    Creates a copy of 'gas-to-liquid plant construction' in 'additional_acts' and adds 1250000 kg of cobalt
     as input (catalyst).
     """
     gas_to_liquid_original_act = ws.get_one(bd.Database(db_gas_to_liquid_name),
