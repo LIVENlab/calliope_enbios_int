@@ -316,7 +316,7 @@ def trucks_update(db_truck_name: str):
     keep_inputs = ['converter', 'inverter', 'fuel tank', 'power electronics', 'other components', 'electric motor',
                    'fuel cell system', 'electricity storage capacity']
     for ex in light_truck_technosphere:
-        if not any(input_name in ex.input.name for input_name in keep_inputs):
+        if not any(input_name in ex.input['name'] for input_name in keep_inputs):
             ex.delete()
 
     # medium truck
@@ -328,9 +328,9 @@ def trucks_update(db_truck_name: str):
     medium_truck_act = medium_truck_original.copy(database='additional_acts')
     medium_truck_technosphere = list(medium_truck_act.technosphere())
     keep_inputs = ['power distribution', 'converter', 'inverter', 'fuel tank', 'power electronics', 'other components',
-                   'electric motor', 'fuel cell system', 'electricity storage capacity']
+                   'electric motor', 'fuel cell system', 'battery capacity']
     for ex in medium_truck_technosphere:
-        if not any(input_name in ex.input.name for input_name in keep_inputs):
+        if not any(input_name in ex.input['name'] for input_name in keep_inputs):
             ex.delete()
 
 
@@ -346,7 +346,7 @@ def passenger_car_update(db_passenger_name: str):
     car_act = car_original.copy(database='additional_acts')
     car_technosphere = list(car_act.technosphere())
     for ex in car_technosphere:
-        if 'glider' in ex.input.name:
+        if 'glider' in ex.input['name']:
             ex.delete()
 
 
