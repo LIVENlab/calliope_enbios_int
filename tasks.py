@@ -13,6 +13,8 @@ import wurst
 #  1. Tests on battery, hydrogen and wind fleets
 #  2. Change electricity production hydro dataset!! (land use to infrastructure and keep operation)
 #  3. Check acts producing electricity with storage. The infrastructure should not be eliminated for them!!
+#  4. Change hydrogen fleet! Each plant has a different production rate according to the documentation:
+#       AEC: 3085961 kg/ 20 years (8000h/y); PEM: 2964315 kg/ 20 years (8000h/y); SOEC: 3779894.18 kg/ 20 years (8000h/y)
 #  6. Setup databases and tests the functions (with workflow for foreground)
 #  7. Formalise general workflow
 
