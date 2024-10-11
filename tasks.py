@@ -10,6 +10,8 @@ import wurst
 
 
 # TODO:
+#  1. Tests on battery, hydrogen and wind fleets
+#  2. Change electricity production hydro dataset!! (land use to infrastructure and keep operation)
 #  6. Setup databases and tests the functions (with workflow for foreground)
 #  7. Formalise general workflow
 
