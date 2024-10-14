@@ -56,5 +56,5 @@ gas_to_liquid_update(db_cobalt_name='cutoff391', db_gas_to_liquid_name='premise_
 
 # 1.2 create fleets
 solar_pv_fleet(db_solar_name='premise_base')
-
-
+hydrogen_from_electrolysis_market(db_hydrogen_name='premise_base',
+                                  soec_share=0.5, aec_share=0.3, pem_share=0.2)  # TODO: propose relevant fleets
