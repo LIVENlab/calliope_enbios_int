@@ -10,13 +10,14 @@ import wurst
 
 
 # TODO:
-#  1. Tests on battery, hydrogen and wind fleets
+#  1. Tests on battery, and wind fleets
 #  2. Change electricity production hydro dataset!! (land use to infrastructure and keep operation)
 #  3. Check acts producing electricity with storage. The infrastructure should not be eliminated for them!!
-#  4. Change hydrogen fleet! Each plant has a different production rate according to the documentation:
-#       AEC: 3085961 kg/ 20 years (8000h/y); PEM: 2964315 kg/ 20 years (8000h/y); SOEC: 3779894.18 kg/ 20 years (8000h/y)
 #  6. Setup databases and tests the functions (with workflow for foreground)
 #  7. Formalise general workflow
+
+#### BACKGROUND #####
+# 1. Change rail market so it is only electric
 
 
 ##### assign location #####
@@ -735,8 +736,6 @@ def hydrogen_from_electrolysis_market(db_hydrogen_name: str, soec_share: float, 
     The function creates a market activity in 'additional_acts' with the shares of hydrogen production from
     soec, aec and pem technologies named 'hydrogen production, gaseous, for enbios'.
     """
-    # TODO: revise. Should it be a market for electrolysers instead o a market for hydrogen production?
-    #  It depends on what is Calliope refering to. So far, I think we are doing good.
     if (soec_share + aec_share + pem_share) != 1:
         print(f'your inputs for soc ({soec_share}), aec ({aec_share}) and pem ({pem_share}) do not sum 1. '
               f'They sum {soec_share + aec_share + pem_share}. Try a combination that sums 1)')
@@ -744,34 +743,99 @@ def hydrogen_from_electrolysis_market(db_hydrogen_name: str, soec_share: float, 
 
     create_additional_acts_db()
 
-    soec_act = ws.get_one(bd.Database(db_hydrogen_name),
-                          ws.equals('name', 'hydrogen production, gaseous, 1 bar, '
-                                            'from SOEC electrolysis, from grid electricity'),
-                          ws.equals('location', 'CH')
-                          )
-    aec_act = ws.get_one(bd.Database(db_hydrogen_name),
-                         ws.equals('name', 'hydrogen production, gaseous, 20 bar, '
-                                           'from AEC electrolysis, from grid electricity'),
-                         ws.equals('location', 'CH')
-                         )
-    pem_act = ws.get_one(bd.Database(db_hydrogen_name),
-                         ws.equals('name', 'hydrogen production, gaseous, 30 bar, '
-                                           'from PEM electrolysis, from grid electricity'),
-                         ws.equals('location', 'RER')
-                         )
-    market_act = bd.Database('additional_acts').new_activity(name='hydrogen production, gaseous, for enbios',
-                                                             code='hydrogen production, gaseous, for enbios',
-                                                             location='RER',
-                                                             unit='kilogram',
-                                                             comment=f'aec: {aec_share * 100}%, '
-                                                                     f'pem: {pem_share * 100}%,'
-                                                                     f'soec: {soec_share * 100}%')
-    market_act.save()
-    production_exchange = market_act.new_exchange(input=market_act.key, type='production', amount=1)
+    # create market
+    electrolysers_market_act = bd.Database('additional_acts').new_activity(
+        name='electrolyser, fleet, 1 MWh/h, for enbios',
+        code='electrolyser, fleet, 1 MWh/h, for enbios',
+        location='RER',
+        unit='kilowatt',
+        comment=f'aec: {aec_share * 100}%, '
+                f'pem: {pem_share * 100}%,'
+                f'soec: {soec_share * 100}%'
+    )
+    electrolysers_market_act.save()
+    production_exchange = electrolysers_market_act.new_exchange(input=electrolysers_market_act.key, type='production',
+                                                                amount=1)
     production_exchange.save()
-    for act, share in {soec_act: soec_share, aec_act: aec_share, pem_act: pem_share}.items():
-        new_ex = market_act.new_exchange(input=act, type='technosphere', amount=share)
+    for electrolyser_type in ['AEC', 'SOEC', 'PEM']:
+        # create individual hydrogen production activities per MWh/h of H2
+        electrolyser_act = hydrogen_production_act_in_mwh_per_hour(electrolyser_name=electrolyser_type,
+                                                                   db_hydrogen_name=db_hydrogen_name)
+        if electrolyser_type == 'AEC':
+            share = aec_share
+        elif electrolyser_type == 'SOEC':
+            share = soec_share
+        else:
+            share = pem_share
+        new_ex = electrolysers_market_act.new_exchange(input=electrolyser_act, type='technosphere', amount=share)
         new_ex.save()
+
+
+def hydrogen_production_act_in_mwh_per_hour(electrolyser_name: str, db_hydrogen_name: str):
+    """
+    :return: it creates individual hydrogen production activities per MWh/h of H2 instead of per kg of H2, using LHV
+    """
+    electrolyser_act = bd.Database('additional_acts').new_activity(
+        name=f'hydrogen, gaseous, 1MWe {electrolyser_name}, in kWh/h',
+        code=f'hydrogen, gaseous, 1MWe {electrolyser_name}, in kWh/h',
+        location='RER',
+        unit='kilowatt',
+    )
+    electrolyser_act.save()
+    production_exchange = electrolyser_act.new_exchange(input=electrolyser_act.key, type='production',
+                                                        amount=1)
+    production_exchange.save()
+
+    # add technosphere exchanges
+    electrolysers_acts = ws.get_many(bd.Database(db_hydrogen_name),
+                                     ws.contains('name', electrolyser_name),
+                                     ws.contains('name', '1MWe'),
+                                     ws.equals('location', 'RER')
+                                     )
+    lifetime_production = {'AEC': 3085961, 'SOEC': 3779894, 'PEM': 2964315}  # in kg, through the 20 years lifetime
+    for act in electrolysers_acts:
+        if 'treatment' not in act._data['name']:
+            if 'Stack' in act._data['name']:
+                new_ex = electrolyser_act.new_exchange(
+                    input=act, type='technosphere',
+                    amount=1 / ((33.3 / 8000 / 1000) * lifetime_production[electrolyser_name])  # in MWh/h
+                )
+                new_ex.save()
+            else:
+                new_ex = electrolyser_act.new_exchange(
+                    input=act, type='technosphere',
+                    amount=1 / ((33.3 / 8000 / 1000) * lifetime_production[electrolyser_name]) * 4
+                )  # because BoP's lifetime is 4 times shorter than the total lifetime of the system
+                new_ex.save()
+        else:
+            if 'stack' in act._data['name']:
+                new_ex = electrolyser_act.new_exchange(
+                    input=act, type='technosphere',
+                    amount=-1 / ((33.3 / 8000 / 1000) * lifetime_production[electrolyser_name])
+                )
+                new_ex.save()
+            else:
+                new_ex = electrolyser_act.new_exchange(
+                    input=act, type='technosphere',
+                    amount=-1 / ((33.3 / 8000 / 1000) * lifetime_production[electrolyser_name]) * 4
+                )
+                new_ex.save()
+    # add biosphere exchanges
+    transformation_acts = ws.get_many(bd.Database('biosphere3'),
+                                      ws.contains('name', 'Transformation,'),
+                                      ws.contains('name', 'industrial area')
+                                      )
+    occupation_act = ws.get_one(bd.Database('biosphere3'),
+                                ws.equals('name', 'Occupation, industrial area'))
+    for act in transformation_acts:
+        new_ex = electrolyser_act.new_exchange(input=act, type='biosphere', amount=1 / 120)
+        new_ex.save()
+    new_ex = electrolyser_act.new_exchange(
+        input=occupation_act, type='biosphere',
+        amount=1 / (120 * 27.5))  # although the original dataset assumes 20 years, PREMISE assumes 27.5
+    new_ex.save()
+
+    return electrolyser_act
 
 
 def hydrogen_relink():
