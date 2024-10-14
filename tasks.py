@@ -743,7 +743,7 @@ def hydrogen_from_electrolysis_market(db_hydrogen_name: str, soec_share: float, 
 
     create_additional_acts_db()
 
-    # create market
+    # create markets
     electrolysers_market_act = bd.Database('additional_acts').new_activity(
         name='electrolyser, fleet, 1 MWh/h, for enbios',
         code='electrolyser, fleet, 1 MWh/h, for enbios',
@@ -753,14 +753,29 @@ def hydrogen_from_electrolysis_market(db_hydrogen_name: str, soec_share: float, 
                 f'pem: {pem_share * 100}%,'
                 f'soec: {soec_share * 100}%'
     )
+    electrolysers_market_act['reference product'] = 'electrolyser, fleet, 1 MWh/h'
     electrolysers_market_act.save()
     production_exchange = electrolysers_market_act.new_exchange(input=electrolysers_market_act.key, type='production',
                                                                 amount=1)
     production_exchange.save()
+    hydrogen_market_act = bd.Database('additional_acts').new_activity(
+        name='hydrogen production, from fleet 1 MWh/h, for enbios',
+        code='hydrogen production, from fleet 1 MWh/h, for enbios',
+        location='RER',
+        unit='kilowatt',
+        comment=f'aec: {aec_share * 100}%, '
+                f'pem: {pem_share * 100}%,'
+                f'soec: {soec_share * 100}%'
+    )
+    hydrogen_market_act['reference product'] = 'hydrogen production, from fleet 1 MWh/h'
+    hydrogen_market_act.save()
+    production_exchange = hydrogen_market_act.new_exchange(input=hydrogen_market_act.key, type='production',
+                                                                amount=1)
+    production_exchange.save()
     for electrolyser_type in ['AEC', 'SOEC', 'PEM']:
         # create individual hydrogen production activities per MWh/h of H2
-        electrolyser_act = hydrogen_production_act_in_mwh_per_hour(electrolyser_name=electrolyser_type,
-                                                                   db_hydrogen_name=db_hydrogen_name)
+        electrolyser_act, hydrogen_act = hydrogen_production_act_in_mwh_per_hour(electrolyser_name=electrolyser_type,
+                                                                                 db_hydrogen_name=db_hydrogen_name)
         if electrolyser_type == 'AEC':
             share = aec_share
         elif electrolyser_type == 'SOEC':
@@ -769,18 +784,22 @@ def hydrogen_from_electrolysis_market(db_hydrogen_name: str, soec_share: float, 
             share = pem_share
         new_ex = electrolysers_market_act.new_exchange(input=electrolyser_act, type='technosphere', amount=share)
         new_ex.save()
+        new_ex = hydrogen_market_act.new_exchange(input=hydrogen_act, type='technosphere', amount=share)
+        new_ex.save()
 
 
 def hydrogen_production_act_in_mwh_per_hour(electrolyser_name: str, db_hydrogen_name: str):
     """
     :return: it creates individual hydrogen production activities per MWh/h of H2 instead of per kg of H2, using LHV
     """
+    # electrolysers (infrastructure)
     electrolyser_act = bd.Database('additional_acts').new_activity(
-        name=f'hydrogen, gaseous, 1MWe {electrolyser_name}, in kWh/h',
-        code=f'hydrogen, gaseous, 1MWe {electrolyser_name}, in kWh/h',
+        name=f'{electrolyser_name} electrolyser, production capacity 1 MWh/h',
+        code=f'{electrolyser_name} electrolyser, production capacity 1 MWh/h',
         location='RER',
         unit='kilowatt',
     )
+    electrolyser_act['reference product'] = f'{electrolyser_name} electrolyser, production capacity 1 MWh/h'
     electrolyser_act.save()
     production_exchange = electrolyser_act.new_exchange(input=electrolyser_act.key, type='production',
                                                         amount=1)
@@ -835,7 +854,51 @@ def hydrogen_production_act_in_mwh_per_hour(electrolyser_name: str, db_hydrogen_
         amount=1 / (120 * 27.5))  # although the original dataset assumes 20 years, PREMISE assumes 27.5
     new_ex.save()
 
-    return electrolyser_act
+    # hydrogen production (electrolysers operation)
+    hydrogen_act = bd.Database('additional_acts').new_activity(
+        name=f'hydrogen, gaseous, 1 MWe {electrolyser_name} electrolyser, production capacity 1 MWh/h',
+        code=f'hydrogen, gaseous, 1 MWe {electrolyser_name} electrolyser, production capacity 1 MWh/h',
+        location='RER',
+        unit='kilowatt',
+    )
+    hydrogen_act['reference product'] = 'hydrogen, gaseous, from electrolysis'
+    hydrogen_act.save()
+    production_exchange = hydrogen_act.new_exchange(input=hydrogen_act.key, type='production',
+                                                    amount=1)
+    production_exchange.save()
+
+    # add exchanges
+    potassium_act = ws.get_one(bd.Database(db_hydrogen_name),
+                               ws.equals('name', 'market for potassium hydroxide'),
+                               )
+    water_act = ws.get_one(bd.Database(db_hydrogen_name),
+                           ws.equals('name', 'market for water, deionised'),
+                           ws.equals('location', 'Europe without Switzerland'))
+    oxygen_act = ws.get_one(bd.Database('biosphere3'),
+                            ws.equals('name', 'Oxygen'),
+                            ws.equals('categories', ('air',)))
+    for act, intensity in {potassium_act: 0.0037, water_act: 14, oxygen_act: 8}.items():  # intensity in kg/kgH2
+        if act == potassium_act:
+            if electrolyser_name == 'AEC':
+                new_ex = hydrogen_act.new_exchange(
+                    input=act, type='technosphere',
+                    amount=1 / ((33.3 / 8000 / 1000) * lifetime_production[electrolyser_name]) * intensity  # in MWh/h
+                )
+                new_ex.save()
+        if act == oxygen_act:
+            new_ex = hydrogen_act.new_exchange(
+                input=act, type='biosphere',
+                amount=1 / ((33.3 / 8000 / 1000) * lifetime_production[electrolyser_name]) * intensity  # in MWh/h
+            )
+            new_ex.save()
+        if act == water_act:
+            new_ex = hydrogen_act.new_exchange(
+                input=act, type='technosphere',
+                amount=1 / ((33.3 / 8000 / 1000) * lifetime_production[electrolyser_name]) * intensity  # in MWh/h
+            )
+            new_ex.save()
+
+    return electrolyser_act, hydrogen_act
 
 
 def hydrogen_relink():
