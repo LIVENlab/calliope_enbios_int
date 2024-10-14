@@ -13,6 +13,7 @@ import wurst
 #  1. Tests on battery, and wind fleets
 #  2. Change electricity production hydro dataset!! (land use to infrastructure and keep operation)
 #  3. Check acts producing electricity with storage. The infrastructure should not be eliminated for them!!
+#  4. Check with Jann if H2 operation is in MW or MWh (LHV throughout its lifetime)
 #  6. Setup databases and tests the functions (with workflow for foreground)
 #  7. Formalise general workflow
 
@@ -791,6 +792,7 @@ def hydrogen_from_electrolysis_market(db_hydrogen_name: str, soec_share: float, 
 def hydrogen_production_act_in_mwh_per_hour(electrolyser_name: str, db_hydrogen_name: str):
     """
     :return: it creates individual hydrogen production activities per MWh/h of H2 instead of per kg of H2, using LHV
+    it also creates a fleet for hydrogen production per MWh/h
     """
     # electrolysers (infrastructure)
     electrolyser_act = bd.Database('additional_acts').new_activity(
