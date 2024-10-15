@@ -377,6 +377,37 @@ def gas_to_liquid_update(db_cobalt_name: str, db_gas_to_liquid_name: str):
     new_ex.save()
 
 
+def hydro_update(location: str, db_hydro_name: str):
+    # find hydropower activity
+    electricity_hydro = ws.get_many(bd.Database(db_hydro_name),
+                                    ws.contains('name', 'electricity production, hydro'),
+                                    ws.equals('location', location))
+    create_additional_acts_db()
+    # TODO: redo it
+    for act in electricity_hydro:
+        new_elec_act = act.copy(database='additional_acts')
+        infrastructure_act = [e.input for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
+        new_infrastructure_act = infrastructure_act.copy(database='additional_acts')
+        infrastructure_amount = [e.amount for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
+        land = [e for e in new_elec_act.biosphere() if
+                any(keyword in e.input._data['name'] for keyword in ['Occupation', 'Occupied', 'Transformation'])]
+        emissions = [e for e in new_elec_act.biosphere() if
+                     any(keyword in e.input._data['name'] for keyword in ['Dioxide', 'Monoxide', 'Methane'])]
+        for e in land:
+            new_amount = e.amount / infrastructure_amount
+            biosphere_act = e.input
+            e.delete()
+            new_ex = new_infrastructure_act.new_exchange(input=biosphere_act, type='biosphere', amount=new_amount)
+            new_ex.save()
+        for e in emissions:
+            new_amount = e.amount / infrastructure_amount
+            biosphere_act = e.input
+            e.delete()
+            new_ex = new_infrastructure_act.new_exchange(input=biosphere_act, type='biosphere', amount=new_amount)
+            new_ex.save()
+    pass
+
+
 def methane_from_biomass_factory():
     # Need from 'biomethane production, high pressure from synthetic gas, wood, fluidised technology' (CH)
     #  synthetic gas factory construction (0.14 units) and industrial furnace production, natural gas (1 unit)
