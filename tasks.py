@@ -11,11 +11,10 @@ import wurst
 
 # TODO:
 #  1. Tests on battery, and wind fleets
-#  2. Change electricity production hydro dataset!! (land use to infrastructure and keep operation)
-#  3. Check acts producing electricity with storage. The infrastructure should not be eliminated for them!!
-#  4. Check with Jann if H2 operation is in MW (as I did it currently) or MWh (LHV throughout its lifetime)
-#  6. Setup databases and tests the functions (with workflow for foreground)
-#  7. Formalise general workflow
+#  2. Check acts producing electricity with storage. The infrastructure should not be eliminated for them!!
+#  3. Check with Jann if H2 operation is in MW (as I did it currently) or MWh (LHV throughout its lifetime)
+#  4. Setup databases and tests the functions (with workflow for foreground)
+#  5. Formalise general workflow
 
 #### BACKGROUND #####
 # 1. Change rail market so it is only electric
