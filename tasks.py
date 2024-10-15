@@ -11,7 +11,8 @@ import wurst
 
 # TODO:
 #  1. Tests on wind fleets
-#  2. Check acts producing electricity with storage. The infrastructure should not be eliminated for them!!
+#  2. Function to eliminate infrastructure for other technologies (not just electricity and heat as we do now)
+#     Check acts producing electricity with storage. The infrastructure should not be eliminated for them!!
 #  3. Check with Jann if H2 operation is in MW (as I did it currently) or MWh (LHV throughout its lifetime)
 #  4. Setup databases and tests the functions (with workflow for foreground)
 #  5. Formalise general workflow
@@ -181,7 +182,6 @@ def eliminate_infrastructure(electricity_heat_act):
         ea_db.register()
     act_copy = electricity_heat_act.copy(database='electricity_and_heat_db')
 
-    # TODO: be careful with batteries
     # find the infrastructure and eliminate it from the foreground
     infrastructure_acts = [e for e in act_copy.technosphere() if e.input._data['unit'] == 'unit']
     for e in infrastructure_acts:
