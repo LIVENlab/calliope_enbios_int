@@ -378,21 +378,22 @@ def gas_to_liquid_update(db_cobalt_name: str, db_gas_to_liquid_name: str):
 
 
 def hydro_update(location: str, db_hydro_name: str):
-    # find hydropower activity
+    """
+    :return: transfers land use and emissions from flooding operations to infrastructure instead of operation.
+    """
     electricity_hydro = ws.get_many(bd.Database(db_hydro_name),
                                     ws.contains('name', 'electricity production, hydro'),
                                     ws.equals('location', location))
     create_additional_acts_db()
-    # TODO: redo it
     for act in electricity_hydro:
         new_elec_act = act.copy(database='additional_acts')
         infrastructure_act = [e.input for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
         new_infrastructure_act = infrastructure_act.copy(database='additional_acts')
         infrastructure_amount = [e.amount for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
         land = [e for e in new_elec_act.biosphere() if
-                any(keyword in e.input._data['name'] for keyword in ['Occupation', 'Occupied', 'Transformation'])]
+                any(keyword in e.input._data['name'] for keyword in ['Occupation', 'occupied', 'Transformation'])]
         emissions = [e for e in new_elec_act.biosphere() if
-                     any(keyword in e.input._data['name'] for keyword in ['Dioxide', 'Monoxide', 'Methane'])]
+                     any(keyword in e.input._data['name'] for keyword in ['Carbon dioxide', 'monoxide', 'Methane'])]
         for e in land:
             new_amount = e.amount / infrastructure_amount
             biosphere_act = e.input
@@ -405,7 +406,8 @@ def hydro_update(location: str, db_hydro_name: str):
             e.delete()
             new_ex = new_infrastructure_act.new_exchange(input=biosphere_act, type='biosphere', amount=new_amount)
             new_ex.save()
-    pass
+        infrastructure_ex = [e for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
+        infrastructure_ex.delete()
 
 
 def methane_from_biomass_factory():
