@@ -10,7 +10,7 @@ import wurst
 
 
 # TODO:
-#  1. Tests on battery, and wind fleets
+#  1. Tests on wind fleets
 #  2. Check acts producing electricity with storage. The infrastructure should not be eliminated for them!!
 #  3. Check with Jann if H2 operation is in MW (as I did it currently) or MWh (LHV throughout its lifetime)
 #  4. Setup databases and tests the functions (with workflow for foreground)
@@ -733,13 +733,14 @@ def batteries_fleet(db_batteries_name: str, scenario: Optional[Literal['cont', '
         print(f'Manual battery scenario with the following technology shares: {technology_share}')
         # Runtime check to enforce battery types as keys
         expected_keys = {'LFP', 'NMC111', 'NMC523', 'NMC622', 'NMC811', 'NMC955', 'SiB',
-                         'Vanadium', 'Lead', 'Sodium-Nickel'}
+                         'Vanadium', 'lead', 'Sodium-Nickel'}
         if set(technology_share.keys()) != expected_keys:
             raise ValueError(f"'technology_share' must contain exactly the keys {expected_keys}")
         if sum(technology_share.values()) != 1:
             raise ValueError(f"'technology_share' shares must sum 1")
 
         # create manual battery scenario
+        create_additional_acts_db()
         battery_original = ws.get_one(bd.Database(db_batteries_name),
                                       ws.equals('name', 'market for battery capacity, stationary (TC scenario)'))
         battery_fleet = battery_original.copy(database='additional_acts')
@@ -747,12 +748,12 @@ def batteries_fleet(db_batteries_name: str, scenario: Optional[Literal['cont', '
         battery_fleet.save()
 
         battery_type_to_exchange = {battery_type: ex for ex in battery_fleet.technosphere() for battery_type in
-                                    technology_share.keys() if battery_type in ex.input.name}
+                                    technology_share.keys() if battery_type in ex.input['name']}
 
         for battery_type, share in technology_share.items():
             ex = battery_type_to_exchange.get(battery_type)
             if ex:
-                ex.amount = share
+                ex._data['amount'] = share
                 ex.save()
 
         # check that the total amount is 1
