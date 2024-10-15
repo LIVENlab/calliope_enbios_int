@@ -53,6 +53,8 @@ biofuel_to_methanol_update(db_methanol_name='premise_base')
 trucks_update(db_truck_name='premise_base')
 passenger_car_update(db_passenger_name='premise_base')
 gas_to_liquid_update(db_cobalt_name='cutoff391', db_gas_to_liquid_name='premise_base')
+for location in consts.LOCATION_EQUIVALENCE.values():
+    hydro_update(location=location, db_hydro_name='cutoff391')
 
 # 1.2 create fleets
 solar_pv_fleet(db_solar_name='premise_base')
