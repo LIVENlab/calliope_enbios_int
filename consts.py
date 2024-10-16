@@ -260,6 +260,4 @@ windtrace_folder = os.path.join(cwd, 'WindTrace')
 VESTAS_FILE = os.path.join(windtrace_folder, 'clean_data.xlsx')
 
 # variables to be set by the user
-PROJECT_NAME = 'repowering'
-SPOLD_FILES = r"C:\ecoinvent_data\3.9.1\cutoff\datasets"
-NEW_DB_NAME = 'turbine_examples'
+NEW_DB_NAME = 'additional_acts'
