@@ -10,12 +10,11 @@ import wurst
 
 
 # TODO:
-#  1. Tests on wind fleets
-#  2. Function to eliminate infrastructure for other technologies (not just electricity and heat as we do now)
+#  1. Function to eliminate infrastructure for other technologies (not just electricity and heat as we do now)
 #     Check acts producing electricity with storage. The infrastructure should not be eliminated for them!!
-#  3. Check with Jann if H2 operation is in MW (as I did it currently) or MWh (LHV throughout its lifetime)
-#  4. Setup databases and tests the functions (with workflow for foreground)
-#  5. Formalise general workflow
+#  2. Check with Jann if H2 operation is in MW (as I did it currently) or MWh (LHV throughout its lifetime)
+#  3. Setup databases and tests the functions (with workflow for foreground)
+#  4. Formalise general workflow
 
 #### BACKGROUND #####
 # 1. Change rail market so it is only electric
@@ -438,25 +437,26 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
     ´´fleet_turbines_definition´´ structure:
     {'turbine_1': [
     {
-    'power': , 'location': , 'manufacturer': , 'rotor_diameter': , 'hub_height': , 'commissioning_year': ,
+    'power': , 'manufacturer': , 'rotor_diameter': , 'hub_height': , 'commissioning_year': ,
     'generator_type': , 'recycled_share_steel': , 'lifetime': , 'eol_scenario':
     },
     0.5], # where this 0.5 is the share of turbine_1
     'turbine_2': [
     {
-    'power': , 'location': , 'manufacturer': , 'rotor_diameter': , 'hub_height': , 'commissioning_year': ,
+    'power': , 'manufacturer': , 'rotor_diameter': , 'hub_height': , 'commissioning_year': ,
     'generator_type': , 'recycled_share_steel': , 'lifetime': , 'eol_scenario':
     },
     0.5], # where this 0.5 is the share of turbine_2
+    }
     """
     create_additional_acts_db()
 
-    expected_keys = {'power', 'location', 'manufacturer', 'rotor_diameter', 'hub_height', 'commissioning_year',
+    expected_keys = {'power', 'manufacturer', 'rotor_diameter', 'hub_height', 'commissioning_year',
                      'generator_type', 'recycled_share_steel', 'lifetime', 'eol_scenario'}
     park_names = []
     for turbine, info in fleet_turbines_definition.items():
         turbine_parameters = info[0]
-        park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["location"]}'
+        park_name = f'{turbine}_{turbine_parameters["power"]}_{location}'
         park_names.append(park_name)
         if turbine_parameters.keys() != expected_keys:
             raise ValueError(f'The keys introduced {turbine_parameters.keys()} do not match '
@@ -474,11 +474,11 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
     # create individual turbines
     for turbine, info in fleet_turbines_definition.items():
         turbine_parameters = info[0]
-        park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["location"]}'
+        park_name = f'{turbine}_{turbine_parameters["power"]}_{location}'
         WindTrace.WindTrace_onshore.lci_wind_turbine(
             new_db=bd.Database('additional_acts'), cutoff391=bd.Database(db_wind_name),
             park_name=park_name, park_power=turbine_parameters['power'], number_of_turbines=1,
-            park_location=turbine_parameters['location'], park_coordinates=(51.181, 13.655),
+            park_location=location, park_coordinates=(51.181, 13.655),
             manufacturer=turbine_parameters['manufacturer'], rotor_diameter=turbine_parameters['rotor_diameter'],
             turbine_power=turbine_parameters['power'], hub_height=turbine_parameters['hub_height'],
             commissioning_year=turbine_parameters['commissioning_year'],
@@ -495,6 +495,7 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
         unit='unit',
         location=location
     )
+    fleet_activity['reference product'] = 'wind turbine fleet, 1 MW'
     fleet_activity.save()
     new_ex = fleet_activity.new_exchange(input=fleet_activity.key, type='production', amount=1)
     new_ex.save()
@@ -502,7 +503,7 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
     for turbine, info in fleet_turbines_definition.items():
         share = info[1]
         turbine_parameters = info[0]
-        park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["location"]}'
+        park_name = f'{turbine}_{turbine_parameters["power"]}_{location}'
         single_turbine_activity = bd.Database('additional_acts').get(park_name + '_single_turbine')
         # to fleet activity (infrastructure)
         new_ex = fleet_activity.new_exchange(input=single_turbine_activity, type='technosphere',
