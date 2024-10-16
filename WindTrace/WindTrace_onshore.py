@@ -6,7 +6,6 @@ from geopy.distance import geodesic
 import random
 from typing import Optional, List, Literal, Tuple
 from stats_arrays import NormalUncertainty
-from statistics import linear_regression
 import sys
 import consts
 
@@ -48,8 +47,8 @@ def steel_turbine(plot_mat: bool = False):
     # Extract short data
     short_x = short_vestas_data['Hub height']
     short_y = short_vestas_data['Low alloy steel']
-    slope, intercept = linear_regression(short_x, short_y, proportional=True)
-    # slope, intercept = linear_regression(short_x, short_y)
+    slope = np.sum(short_x * short_y) / np.sum(short_x ** 2)
+    intercept = 0
     short_predict_steel = np.poly1d([slope, intercept])
     # Calculate residuals
     residuals = short_y - short_predict_steel(short_x)
@@ -118,7 +117,8 @@ def other_turbine_materials(plot_mat=False) -> (tuple, dict, dict):
             valid_indices = ~np.isnan(x) & ~np.isnan(y)
             short_x = short_x[valid_indices]
             short_y = short_y[valid_indices]
-            slope, intercept = linear_regression(short_x, short_y, proportional=True)
+            slope = np.sum(short_x * short_y) / np.sum(short_x ** 2)
+            intercept = 0
             # slope, intercept = linear_regression(short_x, short_y)
             short_predict_mat = np.poly1d([slope, intercept])
             residuals = short_y - short_predict_mat(short_x)
@@ -331,6 +331,7 @@ def mva500_transformer(new_db, cutoff391):
     """
     if not [act for act in new_db if 'Power transformer TrafoStar 500 MVA' in act['name']]:
         new_act = new_db.new_activity(name="Power transformer TrafoStar 500 MVA", unit='unit', code='TrafoStar_500')
+        new_act['reference product'] = "Power transformer TrafoStar 500 MVA"
         new_act.save()
 
         # electric steel
@@ -449,7 +450,6 @@ def manipulate_steel_activities(new_db, cutoff391,
                   'rate if you have an estimation. Otherwise, 41.6% of recycled steel will be considered by '
                   'default.')
             print('Steel recycling share: 41.6%')
-
     if recycled_share is None and electricity_mix is None:
         if not printed_warning:
             print('WARNING. You did not select any electricity_mix. '
@@ -459,14 +459,14 @@ def manipulate_steel_activities(new_db, cutoff391,
         code_name = "steel, " + str(commissioning_year - 1)
         try:
             steel_act = new_db.get(code=code_name)
-        except bd.errors.UnknownObject:
+        except Exception as e:
             steel_act = None
     else:
         act_name = "market for steel, low-alloyed, defined " + str(recycled_share) + str(electricity_mix)
         code_name = "steel, defined " + str(recycled_share) + str(electricity_mix)
         try:
             steel_act = new_db.get(code=code_name)
-        except bd.errors.UnknownObject:
+        except Exception as e:
             steel_act = None
 
     # check if we already created a steel market for that year and skip if we did
@@ -476,13 +476,9 @@ def manipulate_steel_activities(new_db, cutoff391,
 
     if steel_act_check == 0:
         # find recycled steel production activity in Ecoinvent
-        recycled_ei = cutoff391.get(code='b3d48f2f5446c645c128b06b5de93f21',
-                                    name='steel production, electric, low-alloyed',
-                                    location='Europe without Switzerland and Austria')
+        recycled_ei = cutoff391.get(code='b3d48f2f5446c645c128b06b5de93f21')
         # find primary steel production activity in Ecoinvent
-        primary_ei = cutoff391.get(code='89cb4e1a47b707fe43b99135b81fcaba',
-                                   name='steel production, converter, low-alloyed',
-                                   location='RER')
+        primary_ei = cutoff391.get(code='89cb4e1a47b707fe43b99135b81fcaba')
         # Create a copy to manipulate them in the new_db database
         recycled_act = recycled_ei.copy(database=consts.NEW_DB_NAME)
         primary_act = primary_ei.copy(database=consts.NEW_DB_NAME)
@@ -624,6 +620,7 @@ def manipulate_steel_activities(new_db, cutoff391,
         # Create an empty market activity in new_db
         try:
             steel_market = new_db.new_activity(name=act_name, code=code_name, unit='kilogram', location='RER')
+            steel_market['reference product'] = act_name
             steel_market.save()
         except bd.errors.DuplicateNode:
             steel_market = new_db.get(code=code_name)
@@ -699,6 +696,7 @@ def lci_materials(new_db, cutoff391,
     try:
         turbine_act = new_db.new_activity(name=park_name + '_single_turbine', code=park_name + '_single_turbine',
                                           location=park_location, unit='unit', comment=comment)
+        turbine_act['reference product'] = 'wind turbine'
         turbine_act.save()
         new_exc = turbine_act.new_exchange(input=turbine_act.key, amount=1.0, unit="unit", type='production')
         new_exc.save()
@@ -718,6 +716,7 @@ def lci_materials(new_db, cutoff391,
         sys.exit()
 
     cables_act = new_db.new_activity(name=park_name + '_cables', code=park_name + '_intra_cables', unit='unit')
+    cables_act['reference product'] = 'wind park cables'
     cables_act.save()
     new_exc = cables_act.new_exchange(input=cables_act.key, amount=1.0, unit="unit", type='production')
     new_exc.save()
@@ -725,9 +724,11 @@ def lci_materials(new_db, cutoff391,
 
     # create an activity for each life cycle stage
     if include_life_cycle_stages:
+        print('creating an activity for each life-cycle stage')
         # 1. materials
         materials_act = new_db.new_activity(name=park_name + '_materials', code=park_name + '_materials',
                                             location=park_location, unit='unit')
+        materials_act['reference product'] = 'wind turbine materials'
         materials_act.save()
         new_exc = materials_act.new_exchange(input=materials_act.key, amount=1.0, unit="unit", type='production')
         new_exc.save()
@@ -735,6 +736,7 @@ def lci_materials(new_db, cutoff391,
         # 2. manufacturing
         manufacturing_act = new_db.new_activity(name=park_name + '_manufacturing', code=park_name + '_manufacturing',
                                                 location=park_location, unit='unit')
+        manufacturing_act['reference product'] = 'wind turbine manufacturer'
         manufacturing_act.save()
         new_exc = manufacturing_act.new_exchange(input=manufacturing_act.key, amount=1.0, unit="unit",
                                                  type='production')
@@ -743,6 +745,7 @@ def lci_materials(new_db, cutoff391,
         # 3. transport
         transport_act = new_db.new_activity(name=park_name + '_transport', code=park_name + '_transport',
                                             location=park_location, unit='unit')
+        transport_act['reference product'] = 'wind turbine transport'
         transport_act.save()
         new_exc = transport_act.new_exchange(input=transport_act.key, amount=1.0, unit="unit",
                                              type='production')
@@ -751,6 +754,7 @@ def lci_materials(new_db, cutoff391,
         # 4. installation
         installation_act = new_db.new_activity(name=park_name + '_installation', code=park_name + '_installation',
                                                location=park_location, unit='unit')
+        installation_act['reference product'] = 'wind turbine installation'
         installation_act.save()
         new_exc = installation_act.new_exchange(input=installation_act.key, amount=1.0, unit="unit",
                                                 type='production')
@@ -759,6 +763,7 @@ def lci_materials(new_db, cutoff391,
         # 5. operation & maintenance
         om_act = new_db.new_activity(name=park_name + '_maintenance', code=park_name + '_maintenance',
                                      location=park_location, unit='unit')
+        om_act['reference product'] = 'wind turbine maintenance'
         om_act.save()
         new_exc = om_act.new_exchange(input=om_act.key, amount=1.0, unit="unit",
                                       type='production')
@@ -767,6 +772,7 @@ def lci_materials(new_db, cutoff391,
         # 6. eol
         eol_act = new_db.new_activity(name=park_name + '_eol', code=park_name + '_eol',
                                       location=park_location, unit='unit')
+        eol_act['reference product'] = 'wind turbine end of life'
         eol_act.save()
         new_exc = eol_act.new_exchange(input=eol_act.key, amount=1.0, unit="unit",
                                        type='production')
@@ -960,6 +966,7 @@ def lci_materials(new_db, cutoff391,
     park_act = new_db.new_activity(name=park_name,
                                    code=park_name + '_' + str(park_power), location=park_location, unit='unit',
                                    comment=comment)
+    park_act['reference product'] = 'wind park'
     park_act.save()
 
     # add turbines
@@ -1213,8 +1220,7 @@ def transport(new_db, cutoff391,
             others_amount = (sum(mat_mass.values()) - mat_mass['Concrete_foundations']
                              - mat_mass['Low alloy steel']) / 1000 * min(distance_dict.keys())
 
-    truck_trans = cutoff391.get(name='market for transport, freight, lorry >32 metric ton, EURO6',
-                                code='508cc8b20d83e7b31af9848e1fb45815', location='RER')
+    truck_trans = cutoff391.get(code='508cc8b20d83e7b31af9848e1fb45815')
 
     turbine_act = new_db.search(park_name + '_single_turbine')[0]
     if include_life_cycle_stages:
@@ -1408,7 +1414,7 @@ def auxiliary_road_materials(new_db, cutoff391,
 
     if not road_act_in_new_db:
         road_act = cutoff391.get(code='3d1d98819862a4057c75095315820d52')
-        road_new = road_act.copy(database="new_db")
+        road_new = road_act.copy(database=consts.NEW_DB_NAME)
         technosphere_activities_to_remove = ['bitumen', 'concrete', 'steel']
         for ex in road_new.biosphere():
             if 'Transformation' in ex.input._data['name'] or 'Occupation' in ex.input._data['name']:
@@ -1452,8 +1458,7 @@ def excavation_activities(new_db, cutoff391,
     cabling_volume = 1.1 * 0.85 * cable_length
 
     # define brightway activities
-    digger_act = cutoff391.get(name='excavation, hydraulic digger',
-                               code='dc208e3cd1b01954185c03259c97a36a', location='RER')
+    digger_act = cutoff391.get(code='dc208e3cd1b01954185c03259c97a36a')
     turbine_act = new_db.search(park_name + '_single_turbine')[0]
     cables_act = new_db.search(park_name + '_cables')[0]
     if include_life_cycle_stages:
@@ -1622,6 +1627,7 @@ def lci_wind_turbine(new_db, cutoff391,
             cf_comment = 'CF: ' + str(cf) + '. Constant CF (no attrition rate)'
         elec_prod_turbine_act = new_db.new_activity(name=park_name + '_turbine_kwh', code=park_name + '_turbine_kwh',
                                                     location=park_location, unit='kilowatt hour', comment=cf_comment)
+        elec_prod_turbine_act['reference product'] = 'wind turbine'
         elec_prod_turbine_act.save()
         new_exc = elec_prod_turbine_act.new_exchange(input=elec_prod_turbine_act.key, amount=1.0, unit='kilowatt hour',
                                                      type='production')
@@ -1629,6 +1635,7 @@ def lci_wind_turbine(new_db, cutoff391,
         # park
         elec_prod_park_act = new_db.new_activity(name=park_name + '_park_kwh', code=park_name + '_park_kwh',
                                                  location=park_location, unit='kilowatt hour', comment=cf_comment)
+        elec_prod_park_act['reference product'] = 'wind park'
         elec_prod_park_act.save()
         new_exc = elec_prod_park_act.new_exchange(input=elec_prod_park_act.key, amount=1.0, unit='kilowatt hour',
                                                   type='production')
