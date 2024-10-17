@@ -48,15 +48,34 @@ ndb.write_db_to_brightway(name='premise_base')
 # 1.1 update inventories
 # TODO: maybe database arrangement changes to have only a single database
 chp_waste_update(db_waste_name='apos391', db_original_name='cutoff391',
-                       locations=consts.LOCATION_EQUIVALENCE.values())
+                 locations=consts.LOCATION_EQUIVALENCE.values())
 biofuel_to_methanol_update(db_methanol_name='premise_base')
 trucks_update(db_truck_name='premise_base')
 passenger_car_update(db_passenger_name='premise_base')
 gas_to_liquid_update(db_cobalt_name='cutoff391', db_gas_to_liquid_name='premise_base')
+biofuel_to_methane_infrastructure(db_syn_gas_name='cutoff391')
+hp_update(db_hp_name='cutoff391')
+hydro_run_of_river_update(db_hydro_name='cutoff391')
 for location in consts.LOCATION_EQUIVALENCE.values():
-    hydro_update(location=location, db_hydro_name='cutoff391')
+    hydro_reservoir_update(location=location, db_hydro_name='cutoff391')
 
 # 1.2 create fleets
 solar_pv_fleet(db_solar_name='premise_base')
 hydrogen_from_electrolysis_market(db_hydrogen_name='premise_base',
                                   soec_share=0.5, aec_share=0.3, pem_share=0.2)  # TODO: propose relevant fleets
+batteries_fleet(db_batteries_name='premise_base', scenario='tc', technology_share=None)
+# TODO: do I want to create the fleets for each country or rather having a general one?
+for location in consts.LOCATION_EQUIVALENCE.values():
+    wind_onshore_fleet(db_wind_name='cutoff391', location=location, fleet_turbines_definition={'turbine_1': [
+        {
+            'power': 4.0, 'manufacturer': "Vestas", 'rotor_diameter': 100, 'hub_height': 120,
+            'commissioning_year': 2030,
+            'generator_type': "gb_dfig", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 1
+        }, 0.5],
+        'turbine_2': [
+            {
+                'power': 6.0, 'manufacturer': 'Vestas', 'rotor_diameter': 120, 'hub_height': 140,
+                'commissioning_year': 2030,
+                'generator_type': "gb_dfig", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 1
+            },
+            0.5]})
