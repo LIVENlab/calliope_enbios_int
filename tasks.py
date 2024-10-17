@@ -13,6 +13,7 @@ import wurst
 #  1. Function to eliminate infrastructure for other technologies (not just electricity and heat as we do now)
 #     Check acts producing electricity with storage. The infrastructure should not be eliminated for them!!
 #  2. Check with Jann if H2 operation is in MW (as I did it currently) or MWh (LHV throughout its lifetime)
+#  3. Create activity. synthetic gas factory construction and industrial furnace production, natural gas. 1 unit of synthetic gas factory and 7,11 industrial furnace production
 #  3. Setup databases and tests the functions (with workflow for foreground)
 #  4. Formalise general workflow
 
@@ -375,15 +376,18 @@ def gas_to_liquid_update(db_cobalt_name: str, db_gas_to_liquid_name: str):
     new_ex.save()
 
 
-def hydro_update(location: str, db_hydro_name: str):
+def hydro_reservoir_update(location: str, db_hydro_name: str):
     """
-    :return: transfers land use and emissions from flooding operations to infrastructure instead of operation.
+    :return: transfers land use and emissions from flooding operations to infrastructure instead of operation in
+    run-of-river power plants.
     """
-    electricity_hydro = ws.get_many(bd.Database(db_hydro_name),
-                                    ws.contains('name', 'electricity production, hydro'),
-                                    ws.equals('location', location))
+    electricity_reservoir = ws.get_many(
+        bd.Database(db_hydro_name),
+        ws.contains('name', 'electricity production, hydro, reservoir'),
+        ws.equals('location', location)
+    )
     create_additional_acts_db()
-    for act in electricity_hydro:
+    for act in electricity_reservoir:
         new_elec_act = act.copy(database='additional_acts')
         infrastructure_act = [e.input for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
         new_infrastructure_act = infrastructure_act.copy(database='additional_acts')
@@ -406,6 +410,83 @@ def hydro_update(location: str, db_hydro_name: str):
             new_ex.save()
         infrastructure_ex = [e for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
         infrastructure_ex.delete()
+
+
+def hydro_run_of_river_update(db_hydro_name: str):
+    """
+    :return: transfers land use and emissions from flooding operations to infrastructure instead of operation in
+    run-of-river power plants. Location always CA-QC, as it is the only one with clear info in MW of infrastructure.
+    """
+    electricity_run_of = ws.get_one(bd.Database(db_hydro_name),
+                                    ws.contains('name', 'electricity production, hydro, run-of-river'),
+                                    ws.equals('location', 'CA-QC'))
+    create_additional_acts_db()
+    new_elec_act = electricity_run_of.copy(database='additional_acts')
+    infrastructure_act = [e.input for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
+    new_infrastructure_act = infrastructure_act.copy(database='additional_acts')
+    infrastructure_amount = [e.amount for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
+    land = [e for e in new_elec_act.biosphere() if
+            any(keyword in e.input._data['name'] for keyword in ['Occupation', 'occupied', 'Transformation'])]
+    emissions = [e for e in new_elec_act.biosphere() if
+                 any(keyword in e.input._data['name'] for keyword in ['Carbon dioxide', 'monoxide', 'Methane'])]
+    for e in land:
+        new_amount = e.amount / infrastructure_amount
+        biosphere_act = e.input
+        e.delete()
+        new_ex = new_infrastructure_act.new_exchange(input=biosphere_act, type='biosphere', amount=new_amount)
+        new_ex.save()
+    for e in emissions:
+        new_amount = e.amount / infrastructure_amount
+        biosphere_act = e.input
+        e.delete()
+        new_ex = new_infrastructure_act.new_exchange(input=biosphere_act, type='biosphere', amount=new_amount)
+        new_ex.save()
+    infrastructure_ex = [e for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
+    infrastructure_ex.delete()
+
+
+def biofuel_to_methane_infrastructure(db_syn_gas_name: str):
+    """
+    It creates a biomethane factory that includes 1 synthetic gas factory and 7.11 industrial furnaces.
+    """
+    syn_gas_factory = ws.get_one(bd.Database(db_syn_gas_name),
+                                 ws.equals('name', 'synthetic gas factory construction'),
+                                 ws.equals('location', 'CH'))
+    furnace = ws.get_one(bd.Database(db_syn_gas_name),
+                         ws.equals('name', 'industrial furnace production, natural gas'),
+                         ws.equals('location', 'RER'))
+    create_additional_acts_db()
+    new_act = bd.Database('additional_acts').new_activity(name='biomethane factory', code='biomethane factory',
+                                                          location='RER', unit='unit')
+    new_act['reference product'] = 'biomethane factory'
+    new_act.save()
+    new_ex = new_act.new_exchange(input=new_act.key, type='production', amount=1)
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=furnace, type='technosphere', amount=7.11)
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=syn_gas_factory, type='technosphere', amount=1)
+    new_ex.save()
+
+
+def hp_update(db_hp_name: str):
+    heat_exchanger = ws.get_one(bd.Database(db_hp_name),
+                                ws.equals('name', 'market for borehole heat exchanger, 150m'),
+                                ws.equals('location', 'GLO'))
+    heat_pump = ws.get_one(bd.Database(db_hp_name),
+                           ws.equals('name', 'market for heat pump, brine-water, 10kW'),
+                           ws.equals('location', 'GLO'))
+    create_additional_acts_db()
+    new_act = bd.Database('additional_acts').new_activity(name='heat pump with heat exchanger, brine-water, 10kW',
+                                                          code='heat pump with heat exchanger, brine-water, 10kW',
+                                                          location='RER', unit='unit')
+    new_act['reference product'] = 'heat pump with heat exchanger, brine-water, 10kW'
+    new_act.save()
+    new_ex = new_act.new_exchange(input=new_act.key, type='production', amount=1)
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=heat_exchanger, type='technosphere', amount=0.401)
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=heat_pump, type='technosphere', amount=1)
+    new_ex.save()
 
 
 def methane_from_biomass_factory():
@@ -805,7 +886,7 @@ def hydrogen_from_electrolysis_market(db_hydrogen_name: str, soec_share: float, 
     hydrogen_market_act['reference product'] = 'hydrogen production, from fleet 1 MWh/h'
     hydrogen_market_act.save()
     production_exchange = hydrogen_market_act.new_exchange(input=hydrogen_market_act.key, type='production',
-                                                                amount=1)
+                                                           amount=1)
     production_exchange.save()
     for electrolyser_type in ['AEC', 'SOEC', 'PEM']:
         # create individual hydrogen production activities per MWh/h of H2
