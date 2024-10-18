@@ -1,7 +1,10 @@
+import sys
+
 import bw2io as bi
 from premise import *
 from tasks import *
 import bw2data as bd
+import pandas as pd
 
 # setup_databases
 bd.projects.set_current('calliope_enbios_bw2')
@@ -23,7 +26,7 @@ if 'apos391' not in bd.databases:
 # premise, without updates (only imported inventories)
 ndb = NewDatabase(
     scenarios=[
-        {"model": "image", "pathway": "SSP2-RCP19", "year": 2020},
+        {"model": "image", "pathway": "SSP2-RCP19", "year": 2050},
     ],
     source_db="cutoff391",
     source_version="3.9.1",
