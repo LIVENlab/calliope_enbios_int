@@ -12,10 +12,9 @@ import wurst
 # TODO:
 #  1. Function to eliminate infrastructure for other technologies (not just electricity and heat as we do now)
 #     Check acts producing electricity with storage. The infrastructure should not be eliminated for them!!
-#  2. Check with Jann if H2 operation is in MW (as I did it currently) or MWh (LHV throughout its lifetime)
-#  3. Create activity. synthetic gas factory construction and industrial furnace production, natural gas. 1 unit of synthetic gas factory and 7,11 industrial furnace production
-#  3. Setup databases and tests the functions (with workflow for foreground)
-#  4. Formalise general workflow
+#     (1. CHECK THAT THE FUNCTION WORKS, 2. MAKE A LIST OF ACTIVITIES THAT ARE SPECIAL AND HAVE THE INFRASTRUCTURE IN ANOTHER TIER)
+#  2. Setup databases and tests the functions (with workflow for foreground)
+#  3. Formalise general workflow
 
 #### BACKGROUND #####
 # 1. Change rail market so it is only electric
@@ -39,130 +38,125 @@ def iam_location_equivalence():
     return regions_codes
 
 
-def activity_filter_check(bw_db_name: str, activity_name: str, location: str, unit: str):
+def deletable_exchanges(act):
+    infrastructure = [e for e in act.technosphere() if act._data['unit'] == 'unit']
+    print(infrastructure)
+    electricity = [e for e in act.technosphere() if
+                   ('market for electricity' in act._data['name'] and act._data['unit'] == 'kilowatt hour')
+                   or ('market group for electricity' in act._data['name'] and act._data['unit'] == 'kilowatt hour')]
+    print(electricity)
+    heat = [e for e in act.technosphere() if
+            ('market for electricity' in act._data['name'] and act._data['unit'] == 'megajoule')
+            or ('market group for heat' in act._data['name'] and act._data['unit'] == 'megajoule')]
+    print(heat)
+
+    return infrastructure, electricity, heat
+
+
+def delete_infrastructure_heat_and_electricity(location):
     """
-    :return: returns None if there is more than one activity, and returns the activity if it finds a single one
-    (and it exits if it finds more than one activity)
+    It takes all the activities in 'technology_map_clean.xlsx', finds the exact activity
+    (or activities in plural if it has multiple options, i.e., those activities that exist for all
+    locations in Calliope), creates a copy of them in 'additional_acts'
+    (only if the activities were not already in 'additional_acts'), and deletes the inputs that are infrastructure,
+    heat or electricity to avoid double accounting.
     """
-    bw_db = bd.Database(bw_db_name)
-    if len(bw_db) == 0:
-        print(f'empty database! You wrote {bw_db_name}, check the spelling')
-    activity_filter = ws.get_many(bw_db,
-                                  ws.contains('name', activity_name),
-                                  ws.equals('location', location),
-                                  ws.equals('unit', unit))
-    activity_list = list(activity_filter)
-    if len(activity_list) > 1:
-        print(f'More than one {activity_name}, {location}, {unit} found')
-        sys.exit()
-    elif len(activity_list) == 0:
-        print(f'No exact location for the activity {activity_name}, {location}, {unit}. '
-              f'Trying next geography.')
-        return None
-    else:
-        return activity_list[0]
+    # TODO:
+    #  1. check that the function works
+    #  2. implement the deletes
 
+    # delete infrastructure
+    file_path = r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx'
+    df = pd.read_excel(file_path, sheet_name='Foreground')
+    for name, location, database, reference_product in (
+            zip(df['LCI_carrier_prod'], df['prod_location'], df['initial_database'], df['reference product'])):
+        print(name, location, database, reference_product)
+        # Skip if any of the following conditions are met
+        if name == '-' or location == '-' or name == 'No activity found':
+            continue  # Go to the next group
 
-def find_activity(bw_db_name: str, activity_name: str, calliope_location: str,
-                  unit: str, known_ei_location: str = None):
-    """
-    :param calliope_location: string of the country/region acronym as it comes from Calliope
-    :return: checks locations in this priority: 1. given location as a parameter, 2. exact,
-    3. Europe without Switzerland, 4. RER, 5. IAMs locations, 6. CH, 7. Any European country, 8. RoW or GLO,
-    9. Any other. It returns database and code of the activity.
-    """
+        # Adjust the database name if needed
+        if database == 'Ecoinvent':
+            database = 'cutoff391'
 
-    # Check known location
-    if known_ei_location:
-        act = activity_filter_check(bw_db_name=bw_db_name, activity_name=activity_name,
-                                    location=known_ei_location, unit=unit)
-        if act:
-            print(f'name: {activity_name}, location: {act._data["location"]}, '
-                  f'code: {act.key[1]}, database: {act.key[0]}')
-            return act.key[0], act.key[1]  # database and code
+        # If the location is 'country', start checking for activities
+        if location == 'country':
+            for loc in consts.LOCATION_EQUIVALENCE.values():
+                found_activity = False
+                print(loc)
+                try:
+                    act = ws.get_one(bd.Database(database), ws.contains('name', name),
+                                     ws.equals('location', loc),
+                                     ws.contains('reference product', reference_product))
+                    if database != 'additional_acts':
+                        try:
+                            new_act = act.copy(database='additional_acts')
+                            infrastructure, electricity, heat = deletable_exchanges(new_act)
+                            # TODO: check if it prints what it should and then add a line to delete the exchanges in here)
+                        # if the act has already been copied to the database
+                        except Exception as e:
+                            print(act._data['name'], e)
+                    else:
+                        infrastructure, electricity, heat = deletable_exchanges(new_act)
+                        # TODO: check if it prints what it should and then add a line to delete the exchanges in here)
+                    print(f'Activity found for {name} in location: {loc}')
+                    found_activity = True
+                    continue
+                except Exception as e:
+                    print(f'No activity ({name}) in this location: {loc}. '
+                          f'Starting ["CH", "FR", "DE"]')
 
-    # Check exact location
-    location_alpha = consts.LOCATION_EQUIVALENCE[calliope_location]
-    act = activity_filter_check(bw_db_name=bw_db_name, activity_name=activity_name, location=location_alpha, unit=unit)
-    if act:
-        print(f'name: {activity_name}, location: {act._data["location"]}, '
-              f'code: {act.key[1]}, database: {act.key[0]}')
-        return act.key[0], act.key[1]  # database and code
+                # If no activity found in the equivalence list, check fallback locations
+                for fallback_loc in ['CH', 'FR', 'DE']:
+                    try:
+                        # Try to find activities in the fallback location
+                        act = ws.get_one(bd.Database(database), ws.contains('name', name),
+                                         ws.equals('location', fallback_loc),
+                                         ws.contains('reference product', reference_product))
+                        if act:  # If any activities are found in the fallback location
+                            if database != 'additional_acts':
+                                try:
+                                    new_act = act.copy(database='additional_acts')
+                                    infrastructure, electricity, heat = deletable_exchanges(new_act)
+                                    # TODO: check if it prints what it should and then add a line to delete the exchanges in here)
+                                # if the act has already been copied to the database
+                                except Exception as e:
+                                    print(act._data['name'], e)
+                            else:
+                                infrastructure, electricity, heat = deletable_exchanges(new_act)
+                                # TODO: check if it prints what it should and then add a line to delete the exchanges in here)
+                            print(f'Activity found for {name} in fallback location: {fallback_loc}')
+                            found_activity = True
+                            break
+                    except Exception as e:
+                        print(f'No activity ({name}) in this fallback location: {fallback_loc}.')
+                if not found_activity:
+                    print(f'No activity found for {name}. Quitting')
+                    sys.exit()
 
-    # Check 'Europe without Switzerland'
-    act = activity_filter_check(bw_db_name=bw_db_name, activity_name=activity_name,
-                                location='Europe without Switzerland', unit=unit)
-    if act:
-        print(f'name: {activity_name}, location: {act._data["location"]}, '
-              f'code: {act.key[1]}, database: {act.key[0]}')
-        return act.key[0], act.key[1]  # database and code
+                # Continue the outer loop as soon as we find a valid activity
+                if found_activity:
+                    continue
 
-    # Check 'RER'
-    act = activity_filter_check(bw_db_name=bw_db_name, activity_name=activity_name,
-                                location='RER', unit=unit)
-    if act:
-        print(f'name: {activity_name}, location: {act._data["location"]}, '
-              f'code: {act.key[1]}, database: {act.key[0]}')
-        return act.key[0], act.key[1]  # database and code
-
-    # Check iams locations
-    premise_locations = iam_location_equivalence()
-    for iam_loc, ei_locs_list in premise_locations.items():
-        if location_alpha in ei_locs_list:
-            location_alpha = iam_loc
-            continue
         else:
-            print(f'{location_alpha} was not found in any iam region')
-            sys.exit()
-    act = activity_filter_check(bw_db_name=bw_db_name, activity_name=activity_name,
-                                location=location_alpha, unit=unit)
-    if act:
-        print(f'name: {activity_name}, location: {act._data["location"]}, '
-              f'code: {act.key[1]}, database: {act.key[0]}')
-        return act.key[0], act.key[1]  # database and code
-
-    # Check 'CH'
-    act = activity_filter_check(bw_db_name=bw_db_name, activity_name=activity_name,
-                                location='CH', unit=unit)
-    if act:
-        print(f'name: {activity_name}, location: {act._data["location"]}, '
-              f'code: {act.key[1]}, database: {act.key[0]}')
-        return act.key[0], act.key[1]  # database and code
-
-    # Check any country in Europe
-    european_countries = list(consts.LOCATION_EQUIVALENCE.values())
-    for country in european_countries:
-        act = activity_filter_check(bw_db_name=bw_db_name, activity_name=activity_name,
-                                    location=country, unit=unit)
-        if act:
-            print(f'name: {activity_name}, location: {act._data["location"]}, '
-                  f'code: {act.key[1]}, database: {act.key[0]}')
-            return act.key[0], act.key[1]  # database and code
-
-    # Check 'RoW' or 'GLO'
-    # Skip this step if the activity is 'electricity production, hydro, run-of-river', as we want CA-QC because
-    # it is clearer the power capacity (MW) of the dataset
-    if activity_name != 'electricity production, hydro, run-of-river':
-        for loc in ['RoW', 'GLO']:
-            act = activity_filter_check(bw_db_name=bw_db_name, activity_name=activity_name,
-                                        location=loc, unit=unit)
-            if act:
-                print(f'name: {activity_name}, location: {act._data["location"]}, '
-                      f'code: {act.key[1]}, database: {act.key[0]}')
-                return act.key[0], act.key[1]  # database and code
-
-    # Check everything else
-    activity_filter = ws.get_many(bw_db_name,
-                                  ws.equals('name', activity_name),
-                                  ws.equals('unit', unit))
-    act = next(activity_filter, None)
-    if act:
-        print(f'name: {activity_name}, location: {act._data["location"]}, '
-              f'code: {act.key[1]}, database: {act.key[0]}')
-        return act.key[0], act.key[1]
-
-    # print an error if nothing worked
-    print(f'No activity named {activity_name} was found.')
+            # If location is not 'country', proceed with regular activity lookup
+            try:
+                act = ws.get_one(bd.Database(database), ws.contains('name', name),
+                                 ws.equals('location', location))
+                if database != 'additional_acts':
+                    try:
+                        new_act = act.copy(database='additional_acts')
+                        infrastructure, electricity, heat = deletable_exchanges(new_act)
+                        # TODO: check if it prints what it should and then add a line to delete the exchanges in here)
+                    # if the act has already been copied to the database
+                    except Exception as e:
+                        print(act._data['name'], e)
+                else:
+                    infrastructure, electricity, heat = deletable_exchanges(new_act)
+                    # TODO: check if it prints what it should and then add a line to delete the exchanges in here)
+                print(f'Activity found for {name} in location: {location}')
+            except Exception as e:
+                print(f'No activity ({name}) in location: {location}.')
 
 
 ##### eliminate infrastructure #####
