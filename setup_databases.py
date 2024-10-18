@@ -50,7 +50,7 @@ ndb.write_db_to_brightway(name='premise_base')
 chp_waste_update(db_waste_name='apos391', db_original_name='cutoff391',
                  locations=consts.LOCATION_EQUIVALENCE.values())
 biofuel_to_methanol_update(db_methanol_name='premise_base')
-trucks_update(db_truck_name='premise_base')
+trucks_and_bus_update(db_truck_name='premise_base')
 passenger_car_update(db_passenger_name='premise_base')
 gas_to_liquid_update(db_cobalt_name='cutoff391', db_gas_to_liquid_name='premise_base')
 biofuel_to_methane_infrastructure(db_syn_gas_name='cutoff391')
