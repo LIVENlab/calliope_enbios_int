@@ -304,12 +304,14 @@ def biofuel_to_methanol_update(db_methanol_name: str):
     h2_exchange.save()
 
 
-def trucks_update(db_truck_name: str):
+def trucks_and_bus_update(db_truck_name: str):
     """
-    Creates a copy of 'light duty truck, fuel cell electric, 3.5t gross weight, long haul' and
-    'medium duty truck, fuel cell electric, 26t gross weight, long haul' in the database 'additional_acts_db' and
-    deletes all inputs that are not in the keep_inputs list. The idea is to model the truck as ONLY those inputs that
-    make the vehicle electric instead of using an internal combustion engine.
+    Creates a copy of 'light duty truck, fuel cell electric, 3.5t gross weight, long haul',
+    'medium duty truck, fuel cell electric, 26t gross weight, long haul', and
+    'passenger bus, battery electric - opportunity charging, LTO battery, 13m single deck urban bus' in the database
+    'additional_acts_db' and deletes all inputs that are not in the keep_inputs list.
+    The idea is to model the truck and bus as ONLY those inputs that make the vehicle electric instead of
+    using an internal combustion engine.
     """
     # light truck
     light_truck_original = ws.get_one(bd.Database(db_truck_name),
@@ -339,11 +341,24 @@ def trucks_update(db_truck_name: str):
     for ex in medium_truck_technosphere:
         if not any(input_name in ex.input['name'] for input_name in keep_inputs):
             ex.delete()
+    # bus
+    bus_original = ws.get_one(bd.Database(db_truck_name),
+                              ws.equals('name',
+                                        'medium duty truck, fuel cell electric, 26t gross weight, '
+                                        'long haul'),
+                              )
+    bus_act = bus_original.copy(database='additional_acts')
+    bus_technosphere = list(bus_act.technosphere())
+    keep_inputs = ['converter', 'inverter', 'power electronics', 'other components', 'electric motor',
+                   'electricity storage capacity', 'power distribution']
+    for ex in bus_technosphere:
+        if not any(input_name in ex.input['name'] for input_name in keep_inputs):
+            ex.delete()
 
 
 def passenger_car_update(db_passenger_name: str):
     """
-    Creates a copy of 'transport, passenger car, battery electric, Medium' in the database 'additional_acts_db' and
+    Creates a copy of 'passenger car, battery electric, Medium' in the database 'additional_acts_db' and
     deletes glider inputs.
     """
     car_original = ws.get_one(bd.Database(db_passenger_name),
@@ -514,6 +529,7 @@ def methanol_from_biomass_factory():
 def wind_onshore_fleet(db_wind_name: str, location: str,
                        fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]],
                        ):
+    # TODO: pensar en les incerteses.
     """
     ´´fleet_turbines_definition´´ structure:
     {'turbine_1': [
@@ -877,7 +893,7 @@ def hydrogen_from_electrolysis_market(db_hydrogen_name: str, soec_share: float, 
     for electrolyser_type in ['AEC', 'SOEC', 'PEM']:
         # create individual hydrogen production activities per MWh/h of H2
         electrolyser_act = hydrogen_production_act_in_mwh_per_hour(electrolyser_name=electrolyser_type,
-                                                                                 db_hydrogen_name=db_hydrogen_name)
+                                                                   db_hydrogen_name=db_hydrogen_name)
         if electrolyser_type == 'AEC':
             share = aec_share
         elif electrolyser_type == 'SOEC':
@@ -1009,7 +1025,6 @@ def hydrogen_production_update(db_hydrogen_production_name: str, soec_share: flo
     for act, share in tech_acts.items():
         new_ex = new_act.new_exchange(input=act, type='technosphere', amount=share)
         new_ex.save()
-
 
 
 def hydrogen_relink():
