@@ -10,10 +10,8 @@ import wurst
 
 
 # TODO:
-#  1. Function to eliminate infrastructure for other technologies (not just electricity and heat as we do now)
-#     Check acts producing electricity with storage. The infrastructure should not be eliminated for them!!
-#     (1. CHECK THAT THE FUNCTION WORKS, 2. MAKE A LIST OF ACTIVITIES THAT ARE SPECIAL AND HAVE THE INFRASTRUCTURE IN ANOTHER TIER)
-#  2. Setup databases and tests the functions (with workflow for foreground)
+#  1. Setup databases and tests the functions (with workflow for foreground)
+#  2. Wind offshore, airborne and others
 #  3. Formalise general workflow
 
 #### BACKGROUND #####
@@ -39,21 +37,113 @@ def iam_location_equivalence():
 
 
 def deletable_exchanges(act):
-    infrastructure = [e for e in act.technosphere() if act._data['unit'] == 'unit']
+    """
+    finds infrastructure, electricity, and heat inputs and deletes them.
+    """
+    infrastructure = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
     print(infrastructure)
     electricity = [e for e in act.technosphere() if
-                   ('market for electricity' in act._data['name'] and act._data['unit'] == 'kilowatt hour')
-                   or ('market group for electricity' in act._data['name'] and act._data['unit'] == 'kilowatt hour')]
+                   ('market for electricity' in e.input._data['name'] and e.input._data['unit'] == 'kilowatt hour')
+                   or ('market group for electricity' in e.input._data['name'] and e.input._data[
+                       'unit'] == 'kilowatt hour')]
     print(electricity)
     heat = [e for e in act.technosphere() if
-            ('market for electricity' in act._data['name'] and act._data['unit'] == 'megajoule')
-            or ('market group for heat' in act._data['name'] and act._data['unit'] == 'megajoule')]
+            ('market for electricity' in e.input._data['name'] and e.input._data['unit'] == 'megajoule')
+            or ('market group for heat' in e.input._data['name'] and e.input._data['unit'] == 'megajoule')]
     print(heat)
 
     return infrastructure, electricity, heat
 
 
-def delete_infrastructure_heat_and_electricity(location):
+def delete_methanol_infrastructure():
+    """
+        It creates a copy of the methanol syntheses activities and deletes its infrastructure (tier 1 and 2)
+    """
+    create_additional_acts_db()
+    is_in_additional_acts = ws.get_one(bd.Database('additional_acts'),
+        ws.equals('name', 'methanol distillation, hydrogen from electrolysis, CO2 from DAC'))
+    if len(list(is_in_additional_acts)) == 0:
+        from_wood_act = ws.get_one(bd.Database('additional_acts'),
+                                   ws.equals('name', 'methanol distillation, from wood, without CCS')
+                                   )
+        original_from_hydrogen_act = ws.get_one(
+            bd.Database('premise_base'),
+            ws.equals('name', 'methanol distillation, hydrogen from electrolysis, CO2 from DAC')
+        )
+        from_hydrogen_act = original_from_hydrogen_act.copy(database='additional_acts')
+        for act in [from_wood_act, from_hydrogen_act]:
+            infrastructure_ex = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
+            methanol_synthesis_act = \
+                [e.input for e in act.technosphere() if e.input._data['reference product'] == 'methanol, unpurified'][0]
+            methanol_synthesis_ex = [e for e in methanol_synthesis_act.technosphere() if e.input._data['unit'] == 'unit']
+            for e in infrastructure_ex:
+                e.delete()
+            for e in methanol_synthesis_ex:
+                e.delete()
+
+
+def delete_kerosene_infrastructure():
+    """
+    It creates a copy of the kerosene production and diesel production activities and deletes
+    its infrastructure (tier 2)
+    """
+    create_additional_acts_db()
+    kerosene_already_in_additional_acts = ws.get_many(
+            bd.Database('additional_acts'),
+            ws.contains('name',
+                        'kerosene production, synthetic, from Fischer Tropsch process, '),
+            ws.contains('name', 'energy allocation'),
+            ws.exclude(ws.contains('name', 'coal')),
+            ws.exclude(ws.contains('name', 'CCS')))
+    if len(list(kerosene_already_in_additional_acts)) == 0:
+        original_kerosene = ws.get_many(bd.Database('premise_base'),
+                                            ws.contains('name',
+                                                        'kerosene production, synthetic, from Fischer Tropsch process, '),
+                                            ws.contains('name', 'energy allocation'),
+                                            ws.exclude(ws.contains('name', 'coal')),
+                                            ws.exclude(ws.contains('name', 'CCS')))
+        for act in original_kerosene:
+                kerosene = act.copy(database='additional_acts')
+                kerosene_synthetic_act = \
+                    [e.input for e in kerosene.technosphere() if e.input._data['reference product'] == 'kerosene, synthetic'][0]
+                infrastructure_ex = [e for e in kerosene_synthetic_act.technosphere() if e.input._data['unit'] == 'unit']
+                for e in infrastructure_ex:
+                    e.delete()
+
+
+def delete_diesel_infrastructure():
+    """
+    It creates a copy of the kerosene production and diesel production activities and deletes
+    its infrastructure (tier 2)
+    """
+    create_additional_acts_db()
+    # check if we already created the copies in 'additional_acts'
+    diesel_already_in_additional_acts = ws.get_many(
+            bd.Database('additional_acts'),
+            ws.contains('name',
+                        'diesel production, synthetic, from Fischer Tropsch process, '),
+            ws.contains('name', 'energy allocation'),
+            ws.exclude(ws.contains('name', 'coal')),
+            ws.exclude(ws.contains('name', 'CCS')))
+    if len(list(diesel_already_in_additional_acts)) == 0:
+        original_diesel = ws.get_many(bd.Database('premise_base'),
+                                          ws.contains('name', 'diesel production, synthetic, from Fischer Tropsch process, '),
+                                          ws.contains('name', 'energy allocation'),
+                                          ws.exclude(ws.contains('name', 'coal')),
+                                          ws.exclude(ws.contains('name', 'CCS')))
+
+        for act in original_diesel:
+                diesel = act.copy(database='additional_acts')
+                diesel_synthetic_act = \
+                    [e.input for e in diesel.technosphere() if e.input._data['reference product'] == 'diesel, synthetic'][0]
+                infrastructure_ex = [e for e in diesel_synthetic_act.technosphere() if e.input._data['unit'] == 'unit']
+                for e in infrastructure_ex:
+                    e.delete()
+
+
+def delete_infrastructure_main(
+        file_path: str = r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx'
+):
     """
     It takes all the activities in 'technology_map_clean.xlsx', finds the exact activity
     (or activities in plural if it has multiple options, i.e., those activities that exist for all
@@ -66,26 +156,39 @@ def delete_infrastructure_heat_and_electricity(location):
     #  2. implement the deletes
 
     # delete infrastructure
-    file_path = r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx'
     df = pd.read_excel(file_path, sheet_name='Foreground')
     for name, location, database, reference_product in (
             zip(df['LCI_carrier_prod'], df['prod_location'], df['initial_database'], df['reference product'])):
-        print(name, location, database, reference_product)
+        print('NEXT ACTIVITY')
         # Skip if any of the following conditions are met
-        if name == '-' or location == '-' or name == 'No activity found':
-            continue  # Go to the next group
-
+        if name == '-' or name == 'No activity found' or location == '-' or location == 'FR, DE':
+            continue
+        print(f'Name: {name}')
+        print(f'Location: {location}')
+        print(f'Database: {database}')
+        print(f'Reference product: {reference_product}')
         # Adjust the database name if needed
         if database == 'Ecoinvent':
             database = 'cutoff391'
+
+        # delete infrastructure for methanol, diesel and kerosene production (special cases)
+        if 'methanol distillation' in name:
+            delete_methanol_infrastructure()
+            continue
+        if 'diesel production' in name:
+            delete_diesel_infrastructure()
+            continue
+        if 'kerosene production' in name:
+            delete_kerosene_infrastructure()
+            continue
 
         # If the location is 'country', start checking for activities
         if location == 'country':
             for loc in consts.LOCATION_EQUIVALENCE.values():
                 found_activity = False
-                print(loc)
                 try:
                     act = ws.get_one(bd.Database(database), ws.contains('name', name),
+                                     ws.exclude(ws.contains('name', 'renewable energy products')),
                                      ws.equals('location', loc),
                                      ws.contains('reference product', reference_product))
                     if database != 'additional_acts':
@@ -95,15 +198,15 @@ def delete_infrastructure_heat_and_electricity(location):
                             # TODO: check if it prints what it should and then add a line to delete the exchanges in here)
                         # if the act has already been copied to the database
                         except Exception as e:
-                            print(act._data['name'], e)
+                            print(f"The was previously copied in the 'additional_acts' database: {act._data['name']}")
                     else:
                         infrastructure, electricity, heat = deletable_exchanges(new_act)
                         # TODO: check if it prints what it should and then add a line to delete the exchanges in here)
-                    print(f'Activity found for {name} in location: {loc}')
+                    print(f'Activity: {name}. Location: {loc}. Ref product: {reference_product}')
                     found_activity = True
                     continue
                 except Exception as e:
-                    print(f'No activity ({name}) in this location: {loc}. '
+                    print(f'No activity ({name}) in ({loc}). '
                           f'Starting ["CH", "FR", "DE"]')
 
                 # If no activity found in the equivalence list, check fallback locations
@@ -111,6 +214,7 @@ def delete_infrastructure_heat_and_electricity(location):
                     try:
                         # Try to find activities in the fallback location
                         act = ws.get_one(bd.Database(database), ws.contains('name', name),
+                                         ws.exclude(ws.contains('name', 'renewable energy products')),
                                          ws.equals('location', fallback_loc),
                                          ws.contains('reference product', reference_product))
                         if act:  # If any activities are found in the fallback location
@@ -118,18 +222,28 @@ def delete_infrastructure_heat_and_electricity(location):
                                 try:
                                     new_act = act.copy(database='additional_acts')
                                     infrastructure, electricity, heat = deletable_exchanges(new_act)
-                                    # TODO: check if it prints what it should and then add a line to delete the exchanges in here)
+                                    for e in infrastructure:
+                                        e.delete()
+                                    for e in electricity:
+                                        e.delete()
+                                    for e in heat:
+                                        e.delete()
                                 # if the act has already been copied to the database
                                 except Exception as e:
                                     print(act._data['name'], e)
                             else:
                                 infrastructure, electricity, heat = deletable_exchanges(new_act)
-                                # TODO: check if it prints what it should and then add a line to delete the exchanges in here)
-                            print(f'Activity found for {name} in fallback location: {fallback_loc}')
+                                for e in infrastructure:
+                                    e.delete()
+                                for e in electricity:
+                                    e.delete()
+                                for e in heat:
+                                    e.delete()
+                            print(f'Activity: {name}. Location: {fallback_loc}. Ref product: {reference_product}. ')
                             found_activity = True
                             break
                     except Exception as e:
-                        print(f'No activity ({name}) in this fallback location: {fallback_loc}.')
+                        print(f'No activity ({name}) in ({fallback_loc}).')
                 if not found_activity:
                     print(f'No activity found for {name}. Quitting')
                     sys.exit()
@@ -137,23 +251,33 @@ def delete_infrastructure_heat_and_electricity(location):
                 # Continue the outer loop as soon as we find a valid activity
                 if found_activity:
                     continue
-
         else:
             # If location is not 'country', proceed with regular activity lookup
             try:
                 act = ws.get_one(bd.Database(database), ws.contains('name', name),
+                                 ws.exclude(ws.contains('name', 'renewable energy products')),
                                  ws.equals('location', location))
                 if database != 'additional_acts':
                     try:
                         new_act = act.copy(database='additional_acts')
                         infrastructure, electricity, heat = deletable_exchanges(new_act)
-                        # TODO: check if it prints what it should and then add a line to delete the exchanges in here)
+                        for e in infrastructure:
+                            e.delete()
+                        for e in electricity:
+                            e.delete()
+                        for e in heat:
+                            e.delete()
                     # if the act has already been copied to the database
                     except Exception as e:
                         print(act._data['name'], e)
                 else:
                     infrastructure, electricity, heat = deletable_exchanges(new_act)
-                    # TODO: check if it prints what it should and then add a line to delete the exchanges in here)
+                    for e in infrastructure:
+                        e.delete()
+                    for e in electricity:
+                        e.delete()
+                    for e in heat:
+                        e.delete()
                 print(f'Activity found for {name} in location: {location}')
             except Exception as e:
                 print(f'No activity ({name}) in location: {location}.')
@@ -498,24 +622,6 @@ def hp_update(db_hp_name: str):
     new_ex.save()
 
 
-def methane_from_biomass_factory():
-    # Need from 'biomethane production, high pressure from synthetic gas, wood, fluidised technology' (CH)
-    #  synthetic gas factory construction (0.14 units) and industrial furnace production, natural gas (1 unit)
-    # TODO: wait for conversation with Jann. We would only need it if we do something similar as
-    #  with the electricity and heat. Otherwise, we use the electricity_output and not the capacity,
-    #  so do not remove the infrastructure.
-    pass
-
-
-def methanol_from_biomass_factory():
-    # Need from 'methanol distillation, from wood, with CCS'
-    # methanol production facility, construction (12.457+12.89 units per 1 kg of distilled methanol)
-    # TODO: wait for conversation with Jann. We would only need it if we do something similar as
-    #  with the electricity and heat. Otherwise, we use the electricity_output and not the capacity,
-    #  so do not remove the infrastructure.
-    pass
-
-
 # TODO: biosphere 1 kg CO2 removal does not count as negative emissions. Ask Samantha how to deal with it.
 
 ##### create fleets #####
@@ -581,8 +687,8 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
 
     # create fleet activity
     fleet_activity = bd.Database('additional_acts').new_activity(
-        name='wind turbine fleet, 1 MW, for enbios',
-        code='wind turbine fleet, 1 MW, for enbios',
+        name=f'wind turbine fleet, 1 MW, for enbios',
+        code=f'wind turbine fleet, 1 MW, for enbios, {location}',
         unit='unit',
         location=location
     )
@@ -1019,11 +1125,6 @@ def hydrogen_production_update(db_hydrogen_production_name: str, soec_share: flo
     for act, share in tech_acts.items():
         new_ex = new_act.new_exchange(input=act, type='technosphere', amount=share)
         new_ex.save()
-
-
-def hydrogen_relink():
-    # TODO: do I need to relink the market for hydrogen???
-    pass
 
 
 ##### substitute and unlink #####

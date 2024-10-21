@@ -7,6 +7,8 @@ LOCATION_EQUIVALENCE = {
     'MKD': 'MK', 'ISL': 'IS', 'ITA': 'IT', 'LTU': 'LT', 'FIN': 'FI', 'SVK': 'SK', 'SRB': 'RS', 'LUX': 'LU'
 }
 
+ALPINE = ['CH', 'LV', 'MK', 'FR', 'RS', 'AT', 'NO', 'HR', 'IT', 'BA']
+
 # solar_pv scenario 1. Follow today's trend
 # data from Photovoltaics Report (2024) - Fraunhofer Institute
 OPEN_TECHNOLOGY_SHARE = {'CdTe': 0.02, 'CIS': 0, 'micro-Si': 0, 'multi-Si': 0.01, 'single-Si': 0.97}
