@@ -10,9 +10,9 @@ import wurst
 
 
 # TODO:
-#  1. Setup databases and tests the functions (with workflow for foreground)
-#  2. Wind offshore, airborne and others
-#  3. Formalise general workflow
+#  1. Wind offshore, airborne and others
+#  2. Formalise general workflow
+#  3. Background
 
 #### BACKGROUND #####
 # 1. Change rail market so it is only electric
@@ -151,10 +151,6 @@ def delete_infrastructure_main(
     (only if the activities were not already in 'additional_acts'), and deletes the inputs that are infrastructure,
     heat or electricity to avoid double accounting.
     """
-    # TODO:
-    #  1. check that the function works
-    #  2. implement the deletes
-
     # delete infrastructure
     df = pd.read_excel(file_path, sheet_name='Foreground')
     for name, location, database, reference_product in (
