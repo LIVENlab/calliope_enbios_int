@@ -59,7 +59,7 @@ gas_to_liquid_update(db_cobalt_name='cutoff391', db_gas_to_liquid_name='premise_
 biofuel_to_methane_infrastructure(db_syn_gas_name='cutoff391')
 hp_update(db_hp_name='cutoff391')
 hydro_run_of_river_update(db_hydro_name='cutoff391')
-for location in consts.LOCATION_EQUIVALENCE.values():
+for location in ['FR', 'DE']:
     hydro_reservoir_update(location=location, db_hydro_name='cutoff391')
 
 # 1.2 create fleets
@@ -82,3 +82,6 @@ for location in consts.LOCATION_EQUIVALENCE.values():
                 'generator_type': "gb_dfig", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 1
             },
             0.5]})
+
+# 1.3 delete infrastructure and leave all activities ready in 'additional_acts'
+delete_infrastructure_main(file_path=r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx')
