@@ -61,6 +61,7 @@ hp_update(db_hp_name='cutoff391')
 hydro_run_of_river_update(db_hydro_name='cutoff391')
 for location in ['FR', 'DE']:
     hydro_reservoir_update(location=location, db_hydro_name='cutoff391')
+airborne_wind_lci(bd_airborne_name='cutoff391')
 
 # 1.2 create fleets
 solar_pv_fleet(db_solar_name='premise_base')
