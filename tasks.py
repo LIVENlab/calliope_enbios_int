@@ -607,7 +607,7 @@ def airborne_wind_lci(bd_airborne_name: str):
         'concrete': [{'market group for concrete, normal strength': 'GLO'}, 29631 / 2400],
         'gravel': [{'gravel production, crushed': 'CH'}, 78933],
         'cfrp': [{'carbon fibre reinforced plastic, injection moulded': 'GLO'}, 2241],
-        'polywood': [{'plywood production': 'RER'}, 17430 / 700]  # plywood density around 700 kg/m3
+        'plywood': [{'plywood production': 'RER'}, 17430 / 700]  # plywood density around 700 kg/m3
     }
     create_additional_acts_db()
     new_act = bd.Database('additional_acts').new_activity(
