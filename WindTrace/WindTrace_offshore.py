@@ -775,7 +775,7 @@ def maintenance_offshore(new_db, cutoff391,
     PROXY: Calculated rescaling from García-Teruel et al., 2022. We take from Garcia-Teruel the scenario that assumes
     the maintenance operations will be offshore (no dragging to port) [it is likely that this way of operating is the
     norm in the future due to less cost] with HLV vessels. It also includes transportation to port anc back to
-    installation point of broken parts. This includes throughout the lifetime: 4 generatios, 6 gearboxes,
+    installation point of broken parts. This includes throughout the lifetime: 4 generators, 6 gearboxes,
     18 changes of lubrication oil and 17 changes of power electronic components. However, the parts are assumed to be
     repaired (not replaced).
 
@@ -1047,6 +1047,9 @@ def offshore_eol(new_db, cutoff391,
     new_ex.save()
     # add original eol
     new_ex = eol_offshore_act.new_exchange(input=eol_original_act, type='technosphere', amount=1)
+    new_ex.save()
+    # add foundations eol
+    new_ex = eol_offshore_act.new_exchange(input=eol_foundation_act, type='technosphere', amount=1)
     new_ex.save()
     # add operations
     new_ex = eol_offshore_act.new_exchange(input=eol_operations_act, type='technosphere', amount=1)
