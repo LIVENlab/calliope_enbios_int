@@ -1,4 +1,4 @@
-from WindTrace_onshore import *
+from WindTrace.WindTrace_onshore import *
 
 
 # depth: if it is in aarhus_wind_farm_market -> take it from there. Otherwise, use google API (Elevation)
@@ -271,7 +271,7 @@ def floating_parameters(new_db, cutoff391,
     floating_platform_name = f"{str(park_name)}_{str(platform_type)}_floating_platform"
     if not [act for act in new_db if floating_platform_name in act['name']]:
         new_act = new_db.new_activity(name=floating_platform_name, unit='unit', code=floating_platform_name)
-        new_act['reference product'] = f'offshore turbine foundations, floating, {floating_platform_name}'
+        new_act['reference product'] = f'offshore turbine foundations, floating, {" ".join(str(platform_type).split("_"))}'
         new_act.save()
 
         for material, data in structure_mass_intensity.items():
@@ -354,7 +354,7 @@ def submarine_cables(new_db, cutoff391,
     # substation to shore cabling
     subs_to_shore_mat_mass = {}
     for mat in hvdc.keys():
-        subs_to_shore_mat_mass[mat] = 7.7 * distance_to_shore * hvdc[mat]
+        subs_to_shore_mat_mass[mat] = distance_to_shore * hvdc[mat]
         mat_list.append(mat)
 
     # total material
@@ -666,11 +666,11 @@ def offshore_manufacturing(new_db, cutoff391, biosphere3,
     new_act = new_db.new_activity(
         name=f'{park_name}_offshore_manufacturing', code=f'{park_name}_offshore_manufacturing',
         unit='unit', location=park_location)
-    new_act['reference product'] = 'offshore turbine with foundations, cables and substation, manufacturing'
+    new_act['reference product'] = 'offshore turbine, manufacturing'
     new_act.save()
     new_ex = new_act.new_exchange(input=new_act.key, type='production', amount=1)
     new_ex.save()
-    for act in [substation_man_act, foundations_man_act]:
+    for act in [manufacturing_act, foundations_man_act]:
         new_ex = new_act.new_exchange(input=act, type='technosphere', amount=1)
         new_ex.save()
 
@@ -697,7 +697,7 @@ def transport_offshore(new_db, cutoff391,
     # add exchanges
     mass_turbine_substation_and_foundations = get_mass_turbine(park_name=park_name, offshore_type=offshore_type,
                                                                floating_platform=floating_platform,
-                                                               new_db=new_db, cutoff391=cutoff391)
+                                                               new_db=new_db)
     # based on García-Teruel, 2022.
     ferry_act = cutoff391.get('150cb5f77b0346f4f65ba8ec9c178aff')
     # amount reported in Garcia-Teruel / (mass * number of turbines * distance_to_shore) * our_mass * our_distance_to_shore
@@ -756,7 +756,7 @@ def installation_offshore(new_db, cutoff391, biosphere3,
     # add technosphere
     mass_turbine_substation_and_foundations = get_mass_turbine(park_name=park_name, offshore_type=offshore_type,
                                                                floating_platform=floating_platform,
-                                                               new_db=new_db, cutoff391=cutoff391)
+                                                               new_db=new_db)
     # based on García-Teruel, 2022.
     ferry_act = cutoff391.get('150cb5f77b0346f4f65ba8ec9c178aff')
     # amount reported in Garcia-Teruel / (mass * number of turbines) * our_mass. Distance to shore does not play an important role this time, since most operations happen on the installation site.
@@ -799,7 +799,7 @@ def maintenance_offshore(new_db, cutoff391,
     return maintenance_act
 
 
-def get_mass_turbine(new_db, cutoff391,
+def get_mass_turbine(new_db,
                      park_name: str, offshore_type: List[Literal['monopile', 'gravity', 'tripod', 'floating']],
                      floating_platform: List[Literal['semi_sub', 'spar_buoy_concrete', 'spar_buoy_iron',
                      'spar_buoy_steel', 'tension_leg', 'barge']] = None
@@ -1024,7 +1024,7 @@ def offshore_eol(new_db, cutoff391,
 
     mass_turbine_substation_and_foundations = get_mass_turbine(park_name=park_name, offshore_type=offshore_type,
                                                                floating_platform=floating_platform,
-                                                               new_db=new_db, cutoff391=cutoff391)
+                                                               new_db=new_db)
     # based on García-Teruel, 2022.
     ferry_act = cutoff391.get('150cb5f77b0346f4f65ba8ec9c178aff')
     # amount reported in Garcia-Teruel / (mass * number of turbines) * our_mass. Distance to shore does not play an important role this time, since most operations happen on the installation site.
@@ -1119,8 +1119,7 @@ def lci_offshore_turbine(new_db, cutoff391, biosphere3,
     new_ex.save()
     maintenance = maintenance_offshore(
         park_name=park_name,
-        offshore_type=offshore_type,
-        lifetime=lifetime, location=park_location, floating_platform=floating_platform,
+        lifetime=lifetime, location=park_location,
         new_db=new_db, cutoff391=cutoff391
     )
     new_ex = offshore_turbine_act.new_exchange(input=maintenance, type='technosphere', amount=1)
@@ -1134,7 +1133,7 @@ def lci_offshore_turbine(new_db, cutoff391, biosphere3,
     new_ex = offshore_turbine_act.new_exchange(input=eol, type='technosphere', amount=1)
     new_ex.save()
 
-    delete_unnecesary_acts(park_name=park_name, park_power=park_power)
+    delete_unnecesary_acts(park_name=park_name, park_power=park_power, new_db=new_db)
 
     return offshore_turbine_act
 
@@ -1245,7 +1244,7 @@ def offshore_park(new_db, cutoff391, biosphere3,
     new_ex = park_act.new_exchange(input=substation_act, type='technosphere', amount=1)
     new_ex.save()
     # add transformer
-    transformer = mva500_transformer()
+    transformer = mva500_transformer(new_db=new_db, cutoff391=cutoff391)
     new_ex = park_act.new_exchange(input=transformer, type='technosphere', amount=park_power / 500)
     new_ex.save()
     # add cabling

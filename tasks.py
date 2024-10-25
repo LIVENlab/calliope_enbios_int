@@ -5,6 +5,7 @@ import wurst.searching as ws
 import sys
 import bw2data as bd
 import WindTrace.WindTrace_onshore
+import WindTrace.WindTrace_offshore
 import consts
 import wurst
 
