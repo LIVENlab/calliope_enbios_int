@@ -196,13 +196,23 @@ def delete_infrastructure_main(
                         try:
                             new_act = act.copy(database='additional_acts')
                             infrastructure, electricity, heat = deletable_exchanges(new_act)
-                            # TODO: check if it prints what it should and then add a line to delete the exchanges in here)
+                            for e in infrastructure:
+                                e.delete()
+                            for e in electricity:
+                                e.delete()
+                            for e in heat:
+                                e.delete()
                         # if the act has already been copied to the database
                         except Exception as e:
                             print(f"The was previously copied in the 'additional_acts' database: {act._data['name']}")
                     else:
                         infrastructure, electricity, heat = deletable_exchanges(new_act)
-                        # TODO: check if it prints what it should and then add a line to delete the exchanges in here)
+                        for e in infrastructure:
+                            e.delete()
+                        for e in electricity:
+                            e.delete()
+                        for e in heat:
+                            e.delete()
                     print(f'Activity: {name}. Location: {loc}. Ref product: {reference_product}')
                     found_activity = True
                     continue
@@ -644,7 +654,6 @@ def airborne_wind_lci(bd_airborne_name: str):
             new_ex.save()
 
 
-
 # TODO: biosphere 1 kg CO2 removal does not count as negative emissions. Ask Samantha how to deal with it.
 
 ##### create fleets #####
@@ -710,12 +719,12 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
 
     # create fleet activity
     fleet_activity = bd.Database('additional_acts').new_activity(
-        name=f'wind turbine fleet, 1 MW, for enbios',
-        code=f'wind turbine fleet, 1 MW, for enbios, {location}',
+        name=f'onshore wind turbine fleet, 1 MW, for enbios, {location}',
+        code=f'onshore wind turbine fleet, 1 MW, for enbios, {location}',
         unit='unit',
         location=location
     )
-    fleet_activity['reference product'] = 'wind turbine fleet, 1 MW'
+    fleet_activity['reference product'] = 'onshore wind turbine fleet, 1 MW'
     fleet_activity.save()
     new_ex = fleet_activity.new_exchange(input=fleet_activity.key, type='production', amount=1)
     new_ex.save()
@@ -729,12 +738,159 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
         new_ex = fleet_activity.new_exchange(input=single_turbine_activity, type='technosphere',
                                              amount=share * turbine_parameters["power"])
         new_ex.save()
+
+    # create wind fleet maintenance (per 1 MW)
+    fleet_activity = bd.Database('additional_acts').new_activity(
+        name=f'onshore wind turbine fleet, 1 MW, maintenance, for enbios, {location}',
+        code=f'onshore wind turbine fleet, 1 MW, maintenance, for enbios, {location}',
+        unit='unit',
+        location=location
+    )
+    fleet_activity['reference product'] = 'onshore wind turbine fleet maintenance, 1 MW'
+    fleet_activity.save()
+    new_ex = fleet_activity.new_exchange(input=fleet_activity.key, type='production', amount=1)
+    new_ex.save()
+    # add inputs
+    for turbine, info in fleet_turbines_definition.items():
+        share = info[1]
+        turbine_parameters = info[0]
+        park_name = f'{turbine}_{turbine_parameters["power"]}_{location}'
+        maintenance_activity = bd.Database('additional_acts').get(park_name + '_maintenance')
+        # to fleet activity (infrastructure)
+        new_ex = fleet_activity.new_exchange(input=maintenance_activity, type='technosphere',
+                                             amount=share * turbine_parameters["power"])
+        new_ex.save()
+
     return park_names
 
 
-# wind_offshore
-def wind_offshore_fleet():
-    pass
+def wind_offshore_fleet(db_wind_name: str, location: str,
+                       fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]],
+                       ):
+    # TODO: pensar en les incerteses.
+    """
+    ´´fleet_turbines_definition´´ structure:
+    {'turbine_1': [
+    {
+    'power': , 'manufacturer': , 'rotor_diameter': , 'hub_height': , 'commissioning_year': ,
+    'generator_type': , 'recycled_share_steel': , 'lifetime': , 'eol_scenario': , 'offshore_type': ,
+    'floating_platform': , 'sea_depth': , 'distance_to_shore':
+    },
+    0.5], # where this 0.5 is the share of turbine_1
+    'turbine_2': [
+    {
+    'power': , 'manufacturer': , 'rotor_diameter': , 'hub_height': , 'commissioning_year': ,
+    'generator_type': , 'recycled_share_steel': , 'lifetime': , 'eol_scenario': , 'offshore_type': ,
+    'floating_platform': , 'sea_depth': , 'distance_to_shore':
+    },
+    0.5], # where this 0.5 is the share of turbine_2
+    }
+    """
+    create_additional_acts_db()
+
+    expected_keys = {'power', 'manufacturer', 'rotor_diameter', 'hub_height', 'commissioning_year',
+                     'generator_type', 'recycled_share_steel', 'lifetime', 'eol_scenario', 'offshore_type',
+                     'floating_platform', 'sea_depth', 'distance_to_shore'}
+    park_names = []
+    for turbine, info in fleet_turbines_definition.items():
+        turbine_parameters = info[0]
+        if turbine_parameters['offshore_type'] == 'floating':
+            park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["floating_platform"]}_{location}'
+        else:
+            park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["offshore_type"]}_{location}'
+        park_names.append(park_name)
+        if turbine_parameters.keys() != expected_keys:
+            raise ValueError(f'The keys introduced {turbine_parameters.keys()} do not match '
+                             f'the expected keys {expected_keys}')
+    try:
+        # Check if lengths match, meaning no duplicates
+        if len(park_names) == len(list(set(park_names))):
+            print("No duplicates found in park names")
+        else:
+            print("Park name duplicates found. Try other names")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        sys.exit()
+
+    # create individual turbines
+    for turbine, info in fleet_turbines_definition.items():
+        turbine_parameters = info[0]
+        if turbine_parameters['offshore_type'] == 'floating':
+            park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["floating_platform"]}_{location}'
+        else:
+            park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["offshore_type"]}_{location}'
+        WindTrace.WindTrace_offshore.lci_offshore_turbine(
+            new_db=bd.Database('additional_acts'), cutoff391=bd.Database(db_wind_name),
+            biosphere3=bd.Database('biosphere3'),
+            park_name=park_name, park_power=turbine_parameters['power'], number_of_turbines=1,
+            park_location=location, park_coordinates=(51.181, 13.655),
+            manufacturer=turbine_parameters['manufacturer'], rotor_diameter=turbine_parameters['rotor_diameter'],
+            turbine_power=turbine_parameters['power'], hub_height=turbine_parameters['hub_height'],
+            commissioning_year=turbine_parameters['commissioning_year'],
+            generator_type=turbine_parameters['generator_type'],
+            recycled_share_steel=turbine_parameters['recycled_share_steel'],
+            lifetime=turbine_parameters['lifetime'], scenario=turbine_parameters['eol_scenario'],
+            sea_depth=turbine_parameters['sea_depth'], distance_to_shore=turbine_parameters['distance_to_shore'],
+            offshore_type=turbine_parameters['offshore_type'],
+            floating_platform=turbine_parameters['floating_platform']
+        )
+
+    # create fleet activity
+    fleet_activity = bd.Database('additional_acts').new_activity(
+        name=f'offshore wind turbine fleet, 1 MW, for enbios, {location}',
+        code=f'offshore wind turbine fleet, 1 MW, for enbios, {location}',
+        unit='unit',
+        location=location
+    )
+    fleet_activity['reference product'] = 'offshore wind turbine fleet, 1 MW'
+    fleet_activity.save()
+    new_ex = fleet_activity.new_exchange(input=fleet_activity.key, type='production', amount=1)
+    new_ex.save()
+    # add inputs
+    for turbine, info in fleet_turbines_definition.items():
+        share = info[1]
+        turbine_parameters = info[0]
+        if turbine_parameters['offshore_type'] == 'floating':
+            park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["floating_platform"]}_{location}'
+        else:
+            park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["offshore_type"]}_{location}'
+        single_turbine_activity = bd.Database('additional_acts').get(park_name + '_offshore_turbine')
+        # to fleet activity (infrastructure)
+        new_ex = fleet_activity.new_exchange(input=single_turbine_activity, type='technosphere',
+                                             amount=share * turbine_parameters["power"])
+        new_ex.save()
+        # delete maintenance
+        maintenance_activity = bd.Database('additional_acts').get(park_name + '_offshore_maintenance')
+        ex = list(maintenance_activity.upstream())
+        for e in ex:
+            e.delete()
+
+    # create wind fleet maintenance (per 1 MW)
+    fleet_activity = bd.Database('additional_acts').new_activity(
+        name=f'offshore wind turbine fleet, 1 MW, maintenance, for enbios, {location}',
+        code=f'offshore wind turbine fleet, 1 MW, maintenance, for enbios, {location}',
+        unit='unit',
+        location=location
+    )
+    fleet_activity['reference product'] = 'offshore wind turbine fleet maintenance, 1 MW'
+    fleet_activity.save()
+    new_ex = fleet_activity.new_exchange(input=fleet_activity.key, type='production', amount=1)
+    new_ex.save()
+    # add inputs
+    for turbine, info in fleet_turbines_definition.items():
+        share = info[1]
+        turbine_parameters = info[0]
+        if turbine_parameters['offshore_type'] == 'floating':
+            park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["floating_platform"]}_{location}'
+        else:
+            park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["offshore_type"]}_{location}'
+        maintenance_activity = bd.Database('additional_acts').get(park_name + '_offshore_maintenance')
+        # to fleet activity (infrastructure)
+        new_ex = fleet_activity.new_exchange(input=maintenance_activity, type='technosphere',
+                                             amount=share * turbine_parameters["power"])
+        new_ex.save()
+
+    return park_names
 
 
 # solar_pv
