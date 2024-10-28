@@ -700,7 +700,7 @@ def lci_materials(new_db, cutoff391,
         turbine_act.save()
         new_exc = turbine_act.new_exchange(input=turbine_act.key, amount=1.0, unit="unit", type='production')
         new_exc.save()
-        turbine_act.save()
+
     except bd.errors.DuplicateNode:
         print(
             'An inventory for a park with the name ' + '"' + park_name + '"' + 'was already created before in the '
@@ -720,7 +720,7 @@ def lci_materials(new_db, cutoff391,
     cables_act.save()
     new_exc = cables_act.new_exchange(input=cables_act.key, amount=1.0, unit="unit", type='production')
     new_exc.save()
-    cables_act.save()
+
 
     # create an activity for each life cycle stage
     if include_life_cycle_stages:
