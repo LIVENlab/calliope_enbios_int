@@ -177,16 +177,11 @@ def tripod_parameters(new_db, cutoff391,
     t_steel_frame = 807000  # in kg
     t_steel_piles = 847000  # in kg
     t_concrete_mass = 63900  # in kg
-    # transition mass (steel) equivalent to the case if the foundation was a monopile
-    penetration_depth = 19.4002294 * power + 0.000944015847  # penetration in the seabed
-    pile_length = 9 + penetration_depth + sea_depth  # 9m added to the
-    transition_lenght = 0.367 * pile_length + 1.147
-    t_steel_transition = (15.23 * transition_lenght - 73.86) * 1000  # in kg (steel)
-    t_total_steel_mass = t_steel_piles + t_steel_frame + t_steel_transition
+    t_total_steel_mass = t_steel_piles + t_steel_frame
 
     # recalculated mass
-    steel_mass = t_total_steel_mass * power / 3000
-    concrete_mass = t_concrete_mass * power / 3000
+    steel_mass = t_total_steel_mass * power * sea_depth / 3000 / 35  # sea depth of 35 m in Tsai et al
+    concrete_mass = t_concrete_mass * power * sea_depth / 3000 / 35
 
     structural_mass = {'Low alloy steel': steel_mass, 'Concrete_foundations': concrete_mass}  # in kg
 
