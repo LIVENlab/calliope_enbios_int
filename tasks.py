@@ -11,9 +11,8 @@ import wurst
 
 
 # TODO:
-#  1. Wind offshore
-#  2. Formalise general workflow
-#  3. Background
+#  1. Formalise general workflow
+#  2. Background
 
 #### BACKGROUND #####
 # 1. Change rail market so it is only electric
