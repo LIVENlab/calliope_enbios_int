@@ -55,7 +55,7 @@ def deletable_exchanges(act):
     return infrastructure, electricity, heat
 
 
-def delete_methanol_infrastructure():
+def delete_methanol_infrastructure(biosphere_technosphere_disaggregation: bool):
     """
         It creates a copy of the methanol syntheses activities and deletes its infrastructure (tier 1 and 2)
     """
@@ -82,9 +82,11 @@ def delete_methanol_infrastructure():
                 e.delete()
             for e in methanol_synthesis_ex:
                 e.delete()
+            if biosphere_technosphere_disaggregation:
+                technosphere_biosphere_disaggregation(activity=act)
 
 
-def delete_kerosene_infrastructure():
+def delete_kerosene_infrastructure(biosphere_technosphere_disaggregation: bool):
     """
     It creates a copy of the kerosene production and diesel production activities and deletes
     its infrastructure (tier 2)
@@ -112,9 +114,11 @@ def delete_kerosene_infrastructure():
             infrastructure_ex = [e for e in kerosene_synthetic_act.technosphere() if e.input._data['unit'] == 'unit']
             for e in infrastructure_ex:
                 e.delete()
+            if biosphere_technosphere_disaggregation:
+                technosphere_biosphere_disaggregation(activity=act)
 
 
-def delete_diesel_infrastructure():
+def delete_diesel_infrastructure(biosphere_technosphere_disaggregation: bool):
     """
     It creates a copy of the kerosene production and diesel production activities and deletes
     its infrastructure (tier 2)
@@ -143,10 +147,13 @@ def delete_diesel_infrastructure():
             infrastructure_ex = [e for e in diesel_synthetic_act.technosphere() if e.input._data['unit'] == 'unit']
             for e in infrastructure_ex:
                 e.delete()
+            if biosphere_technosphere_disaggregation:
+                technosphere_biosphere_disaggregation(activity=act)
 
 
 def delete_infrastructure_main(
-        file_path: str = r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx'
+        file_path: str = r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx',
+        biosphere_technosphere_disaggregation: bool = True
 ):
     """
     It takes all the activities in 'technology_map_clean.xlsx', finds the exact activity
@@ -158,7 +165,7 @@ def delete_infrastructure_main(
     # delete infrastructure
     df = pd.read_excel(file_path, sheet_name='Foreground')
     for name, location, database, reference_product in (
-            zip(df['LCI_carrier_prod'], df['prod_location'], df['initial_database'], df['reference product'])):
+            zip(df['LCI_operation_and_maintenance'], df['prod_location'], df['initial_database'], df['reference product'])):
         print('NEXT ACTIVITY')
         # Skip if any of the following conditions are met
         if name == '-' or name == 'No activity found' or location == '-' or location == 'FR, DE':
@@ -173,13 +180,13 @@ def delete_infrastructure_main(
 
         # delete infrastructure for methanol, diesel and kerosene production (special cases)
         if 'methanol distillation' in name:
-            delete_methanol_infrastructure()
+            delete_methanol_infrastructure(biosphere_technosphere_disaggregation)
             continue
         if 'diesel production' in name:
-            delete_diesel_infrastructure()
+            delete_diesel_infrastructure(biosphere_technosphere_disaggregation)
             continue
         if 'kerosene production' in name:
-            delete_kerosene_infrastructure()
+            delete_kerosene_infrastructure(biosphere_technosphere_disaggregation)
             continue
 
         # If the location is 'country', start checking for activities
@@ -201,6 +208,7 @@ def delete_infrastructure_main(
                                 e.delete()
                             for e in heat:
                                 e.delete()
+                            technosphere_biosphere_disaggregation(new_act)
                         # if the act has already been copied to the database
                         except Exception as e:
                             print(f"The was previously copied in the 'additional_acts' database: {act._data['name']}")
@@ -212,6 +220,7 @@ def delete_infrastructure_main(
                             e.delete()
                         for e in heat:
                             e.delete()
+                        technosphere_biosphere_disaggregation(new_act)
                     print(f'Activity: {name}. Location: {loc}. Ref product: {reference_product}')
                     found_activity = True
                     continue
@@ -238,6 +247,7 @@ def delete_infrastructure_main(
                                         e.delete()
                                     for e in heat:
                                         e.delete()
+                                    technosphere_biosphere_disaggregation(new_act)
                                 # if the act has already been copied to the database
                                 except Exception as e:
                                     print(act._data['name'], e)
@@ -249,6 +259,7 @@ def delete_infrastructure_main(
                                     e.delete()
                                 for e in heat:
                                     e.delete()
+                                technosphere_biosphere_disaggregation(new_act)
                             print(f'Activity: {name}. Location: {fallback_loc}. Ref product: {reference_product}. ')
                             found_activity = True
                             break
@@ -277,6 +288,7 @@ def delete_infrastructure_main(
                             e.delete()
                         for e in heat:
                             e.delete()
+                        technosphere_biosphere_disaggregation(new_act)
                     # if the act has already been copied to the database
                     except Exception as e:
                         print(act._data['name'], e)
@@ -288,6 +300,7 @@ def delete_infrastructure_main(
                         e.delete()
                     for e in heat:
                         e.delete()
+                    technosphere_biosphere_disaggregation(act)
                 print(f'Activity found for {name} in location: {location}')
             except Exception as e:
                 print(f'No activity ({name}) in location: {location}.')
@@ -528,6 +541,7 @@ def hydro_reservoir_update(location: str, db_hydro_name: str):
             new_ex.save()
         infrastructure_ex = [e for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
         infrastructure_ex.delete()
+        technosphere_biosphere_disaggregation(new_elec_act)
 
 
 def hydro_run_of_river_update(db_hydro_name: str):
@@ -621,10 +635,11 @@ def airborne_wind_lci(bd_airborne_name: str):
     }
     create_additional_acts_db()
     new_act = bd.Database('additional_acts').new_activity(
-        name='airborne wind system, 1.8MW', code='airborne wind system, 1.8MW', location='RER', unit='unit',
-        comment='Rigid. Yo-yo. Rated power: 1.8MW. Annual electricity production: 6142 MWh/y.'
+        name='airborne wind system, 328MW', code='airborne wind system, 328MW', location='RER', unit='unit',
+        comment='Rigid. Yo-yo. Total power: 328 MW. Number of systems: 182. Rated power: 1.8MW. '
+                'Annual electricity production: 6142 MWh/y.'
                 'Lifetime: 20 years.  Based on Wilhelm, (2015).')
-    new_act['reference product'] = 'airborne wind system, 1.8MW'
+    new_act['reference product'] = 'airborne wind system, 328MW'
     new_act.save()
 
     new_ex = new_act.new_exchange(input=new_act.key, type='production', amount=1)
@@ -651,6 +666,15 @@ def airborne_wind_lci(bd_airborne_name: str):
 
             new_ex = new_act.new_exchange(input=act, type='technosphere', amount=input_amount)
             new_ex.save()
+    # add transport
+
+    # add installation (0.48 m2 excavation for cabling)
+
+    # add eol (as in WindTrace)
+
+    # create maintenance (273000 kg lubricating oil, considering 3 changes, 521400 km by car for inspections)
+
+
 
 
 # TODO: biosphere 1 kg CO2 removal does not count as negative emissions. Ask Samantha how to deal with it.
@@ -1303,6 +1327,20 @@ def hydrogen_production_update(db_hydrogen_production_name: str, soec_share: flo
     for act, share in tech_acts.items():
         new_ex = new_act.new_exchange(input=act, type='technosphere', amount=share)
         new_ex.save()
+
+
+def technosphere_biosphere_disaggregation(activity):
+    create_additional_acts_db()
+    for sphere in ['biosphere', 'technosphere']:
+        # biosphere
+        act = activity.copy(database='additional_acts')
+        if sphere == 'biosphere':
+            act.technosphere().delete()
+        else:
+            act.biosphere().delete()
+        act['name'] = f'{act["name"]}, {sphere}'
+        act['reference product'] = f'{act["reference product"]}, {sphere}'
+        act.save()
 
 
 ##### substitute and unlink #####

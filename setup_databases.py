@@ -51,7 +51,7 @@ ndb.write_db_to_brightway(name='premise_base')
 # 1.1 update inventories
 # TODO: maybe database arrangement changes to have only a single database
 chp_waste_update(db_waste_name='apos391', db_original_name='cutoff391',
-                 locations=consts.LOCATION_EQUIVALENCE.values())
+                 locations=['CH'])
 biofuel_to_methanol_update(db_methanol_name='premise_base')
 trucks_and_bus_update(db_truck_name='premise_base')
 passenger_car_update(db_passenger_name='premise_base')
