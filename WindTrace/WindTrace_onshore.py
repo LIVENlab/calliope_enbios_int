@@ -1155,8 +1155,7 @@ def maintenance(new_db, cutoff391,
     else:
         om_activity = turbine_act
     # Inspection trips
-    inp = cutoff391.get(name='transport, passenger car, large size, diesel, EURO 4',
-                        code='dceed1b2fd31e759a751c6dd912a45f3')
+    inp = cutoff391.get(code='dceed1b2fd31e759a751c6dd912a45f3')
     ex = om_activity.new_exchange(input=inp, type='technosphere', amount=200 * (lifetime * 2))
     ex.save()
     om_activity.save()
@@ -1164,13 +1163,12 @@ def maintenance(new_db, cutoff391,
     # Change oil and lubrication
     mass_materials, m_poly = materials_mass(generator_type=generator_type,
                                             turbine_power=turbine_power, hub_height=hub_height)
-    inp = cutoff391.get(name='market for lubricating oil', code='92391c8c6958ada25b22935e3fa6f06f')
+    inp = cutoff391.get(code='92391c8c6958ada25b22935e3fa6f06f')
     ex = om_activity.new_exchange(input=inp, type='technosphere',
                                   amount=mass_materials['Lubricating oil'] * (lifetime / 2))
     ex.save()
     om_activity.save()
-    inp = cutoff391.get(name='treatment of waste mineral oil, hazardous waste incineration, with energy recovery',
-                        code='ad6d0f2a8b45536da196238df879077b')
+    inp = cutoff391.get(code='ad6d0f2a8b45536da196238df879077b')
     ex = om_activity.new_exchange(input=inp, type='technosphere',
                                   amount=mass_materials['Lubricating oil'] * -(lifetime / 2))
     ex.save()

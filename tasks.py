@@ -165,7 +165,8 @@ def delete_infrastructure_main(
     # delete infrastructure
     df = pd.read_excel(file_path, sheet_name='Foreground')
     for name, location, database, reference_product in (
-            zip(df['LCI_operation_and_maintenance'], df['prod_location'], df['initial_database'], df['reference product'])):
+            zip(df['LCI_operation_and_maintenance'], df['prod_location'], df['initial_database'],
+                df['reference product'])):
         print('NEXT ACTIVITY')
         # Skip if any of the following conditions are met
         if name == '-' or name == 'No activity found' or location == '-' or location == 'FR, DE':
@@ -622,6 +623,14 @@ def hp_update(db_hp_name: str):
 
 
 def airborne_wind_lci(bd_airborne_name: str):
+    """
+    Based on Wilhelm, (2015). Rigid. Yo-yo. Total power: 328 MW. Number of systems: 182. Rated power: 1.8MW.
+    Annual electricity production: 6142 MWh/y.
+    Lifetime: 20 years.
+    Parts of the system: wing system, tethering, ground station, landing system, launcher (rail track).
+    Life-cycle phases: materials, manufacturing, installation. No EoL. No transport (it can't be as much
+    as reported in the paper!). Maintenance in a different inventory.
+    """
     input_data = {
         'steel': [{'market for steel, low-alloyed': 'GLO', 'hot rolling, steel': 'Europe without Austria'}, 73455],
         'iron': [{'cast iron production': 'RER', 'hot rolling, steel': 'Europe without Austria'}, 21165],
@@ -666,15 +675,42 @@ def airborne_wind_lci(bd_airborne_name: str):
 
             new_ex = new_act.new_exchange(input=act, type='technosphere', amount=input_amount)
             new_ex.save()
-    # add transport
 
     # add installation (0.48 m2 excavation for cabling)
+    excavation = ws.get_one(
+        bd.Database(bd_airborne_name),
+        ws.equals('name', 'excavation, hydraulic digger'),
+        ws.equals('location', 'RER'))
+    new_ex = new_act.new_exchange(input=excavation, type='technosphere', amount=182 * 400 * 0.48)
+    new_ex.save()
 
-    # add eol (as in WindTrace)
+    # no eol
 
     # create maintenance (273000 kg lubricating oil, considering 3 changes, 521400 km by car for inspections)
+    new_act = bd.Database('additional_acts').new_activity(
+        name='airborne wind system, 328MW, maintenance', code='airborne wind system, 328MW, maintenance',
+        location='RER', unit='unit',
+        comment='Rigid. Yo-yo. Total power: 328 MW. Number of systems: 182. Rated power: 1.8MW. '
+                'Annual electricity production: 6142 MWh/y.'
+                'Lifetime: 20 years.  Based on Wilhelm, (2015).')
+    new_act['reference product'] = 'airborne wind system, 328MW, maintenance'
+    new_act.save()
 
+    new_ex = new_act.new_exchange(input=new_act.key, type='production', amount=1)
+    new_ex.save()
 
+    car_transport = ws.get_one(
+        bd.Database(bd_airborne_name),
+        ws.equals('name', 'transport, passenger car'),
+        ws.equals('location', 'RER'))
+    new_ex = new_act.new_exchange(input=car_transport, type='technosphere', amount=521400)
+    new_ex.save()
+    oil = ws.get_one(
+        bd.Database(bd_airborne_name),
+        ws.equals('name', 'lubricating oil production'),
+        ws.equals('location', 'RER'))
+    new_ex = new_act.new_exchange(input=oil, type='technosphere', amount=273000)
+    new_ex.save()
 
 
 # TODO: biosphere 1 kg CO2 removal does not count as negative emissions. Ask Samantha how to deal with it.
@@ -736,9 +772,12 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
             commissioning_year=turbine_parameters['commissioning_year'],
             generator_type=turbine_parameters['generator_type'],
             recycled_share_steel=turbine_parameters['recycled_share_steel'],
-            lifetime=turbine_parameters['lifetime'], eol_scenario=turbine_parameters['eol_scenario'],
-            use_and_maintenance=False
+            lifetime=turbine_parameters['lifetime'], eol_scenario=turbine_parameters['eol_scenario']
         )
+        maintenance_activity = bd.Database('additional_acts').get(park_name + '_maintenance')
+        ex = list(maintenance_activity.upstream())
+        for e in ex:
+            e.delete()
 
     # create fleet activity
     fleet_activity = bd.Database('additional_acts').new_activity(
@@ -788,8 +827,8 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
 
 
 def wind_offshore_fleet(db_wind_name: str, location: str,
-                       fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]],
-                       ):
+                        fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]],
+                        ):
     # TODO: pensar en les incerteses.
     """
     ´´fleet_turbines_definition´´ structure:
