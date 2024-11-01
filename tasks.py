@@ -17,12 +17,12 @@ import wurst
 #### BACKGROUND #####
 # 1.1. Unlink carrier activities
 # 1.1.1 Electricity
-def unlink_electricity():
+def unlink_electricity(db_name: str = 'premise_base'):
     market_group_locations = ['ENSTO-E', 'UCTE', 'Europe without Switzerland', 'RER']
     for location in market_group_locations:
         # get the market groups for electricity high voltage, medium voltage, low voltage.
         market_groups = ws.get_many(
-            bd.Database('cutoff391'),
+            bd.Database(db_name),
             ws.contains('name', 'market group for electricity'),
             ws.equals('location', location)
         )
@@ -39,13 +39,16 @@ def unlink_electricity():
 
 
 # 1.1.2 Heat
-def unlink_heat():
-    # TODO: finish
-    # get the market groups for heat: 1. 'central or small-scale, biomethane', 2. 'central or small-scale, natural gas',
-    # 3. 'central or small scale, other than natural gas', 4. 'district or industrial, natural gas',
-    # 5. 'district or industrial, other than natural gas',
+def unlink_heat(db_name: str = 'premise_base'):
+    """
+    It gets the market groups for heat ('central or small-scale, biomethane', 'central or small-scale, natural gas',
+    'central or small scale, other than natural gas', 'district or industrial, natural gas',
+    'district or industrial, other than natural gas') and heat production processes in Europe (RER, CH,
+    Europe without Switzerland) and deletes upstream.
+    """
+
     market_groups = ws.get_many(
-        bd.Database('cutoff391'),
+        bd.Database(db_name),
         ws.contains('name', 'market group for heat'),
         ws.equals('location', 'RER')
     )
@@ -59,18 +62,107 @@ def unlink_heat():
         for e in market_group_act.upstream():
             e.delete()
 
-    # heat production activities
+    # heat production activities and market for heat activities
     locations = ['RER', 'Europe without Switzerland', 'CH']
     for location in locations:
         heat_production_acts = ws.get_many(
-            bd.Database('cutoff391'),
+            bd.Database(db_name),
             ws.contains('name', 'heat production,'),
+            ws.equals('location', location),
+            ws.exclude(ws.contains('name', 'wheat'))
+        )
+        for act in heat_production_acts:
+            for e in act.upstream():
+                e.delete()
+        market_for_heat_acts = ws.get_many(
+            bd.Database(db_name),
+            ws.contains('name', 'market for heat,'),
             ws.equals('location', location)
         )
+        for act in heat_production_acts:
+            for e in act.upstream():
+                e.delete()
+
+
+# 1.1.3 CO2
+def unlink_co2(db_name: str = 'premise_base'):
+    """
+     It deletes CO2 inputs for methane production, methanol production and syngas production.
+    """
+    co2_from_dac_acts = ws.get_many(
+        bd.Database(db_name),
+        ws.equals('reference product', 'carbon dioxide, captured from atmosphere'),
+        ws.equals('location', 'RER')
+    )
+    for act in co2_from_dac_acts:
+        for e in act.upstream():
+            e.delete()
+
+
+# 1.1.4 Hydrogen
+def unlink_hydrogen(db_name: str = 'premise_base'):
+    """
+    It deletes input for syngas, carbon monoxide production, methanol production, kerosene, diesel, gasoline, and
+    ammonia production
+    """
+    for source in ['electrolysis', 'woody biomass']:
+        hydrogen_acts = ws.get_many(
+            bd.Database(db_name),
+            ws.contains('name', 'hydrogen production, gaseous'),
+            ws.contains('name', source)
+        )
+        for act in hydrogen_acts:
+            for e in act.upstream():
+                e.delete()
+
+# 1.1.5 Waste
+# In cutoff it comes without any environmental burdens, so there is no need to apply any unlinks
+
+# 1.1.6 Biomass
+def unlink_biomass(db_name: str = 'premise_base'):
+    """
+    To avoid double accounting, we want to delete the upstream of those biomass activities that are used as
+    fuel to produce heat or electricity, or as feedstock to produce synthetic fuels (kerosene and diesel), methanol and
+    methane. Thus, we don't want to include those exchanges where biomass is used for other stuff (e.g., build
+    furniture).
+    This function finds European markets for wood pellet, wood chips and bark chips, and deletes their upstream exchanges
+    that give service to the above-mentioned activities.
+    """
+    pellet_act = ws.get_one(
+        bd.Database(db_name),
+        ws.equals('name', 'market for wood pellet, measured as dry mass'),
+        ws.equals('location', 'RER')
+    )
+    for e in pellet_act.upstream():
+        if any(ref_prod in e.output['reference product'] for ref_prod in
+               ['heat,', 'electricity,', 'methanol,', 'methane,', 'kerosene,', 'diesel,']):
+            e.delete()
+    for location in ['Europe without Switzerland', 'CH', 'RER']:
+        # wood chips, dry; wood chips, wet; wood chips, post-consumer
+        chips_acts = ws.get_many(
+            bd.Database(db_name),
+            ws.contains('name', 'market for wood chips,'),
+            ws.equals('location', location)
+        )
+        for act in chips_acts:
+            for e in act.upstream():
+                if any(ref_prod in e.output['reference product'] for ref_prod in
+                       ['heat,', 'electricity,', 'methanol,', 'methane,', 'kerosene,', 'diesel,']):
+                    e.delete()
+        if location != 'RER':
+            bark_chips_act = ws.get_one(
+                bd.Database(db_name),
+                ws.contains('name', 'market for bark chips,'),
+                ws.equals('location', location)
+            )
+            for e in bark_chips_act.upstream():
+                if any(ref_prod in e.output['reference product'] for ref_prod in
+                       ['heat,', 'electricity,', 'methanol,', 'methane,', 'kerosene,', 'diesel,']):
+                    e.delete()
 
 
 # 1.2.1 Change rail market, so it is only electric
-def train_update():
+def train_update(db_name: str = 'premise_base'):
     """
     Change train freight transport to 100% electric.
     Two European markets:
@@ -80,12 +172,12 @@ def train_update():
     have electric and diesel inputs. The function deletes the diesel input and changes the amount of electric to 1.
     """
     market_europe = ws.get_one(
-        bd.Database('cutoff391'),
+        bd.Database(db_name),
         ws.equals('name', 'market for transport, freight train'),
         ws.equals('location', 'Europe without Switzerland')
     )
     market_ch = ws.get_one(
-        bd.Database('cutoff391'),
+        bd.Database(db_name),
         ws.equals('name', 'market for transport, freight train'),
         ws.equals('location', 'CH'))
     for act in [market_europe, market_ch]:
@@ -822,14 +914,11 @@ def airborne_wind_lci(bd_airborne_name: str):
     new_ex.save()
 
 
-# TODO: biosphere 1 kg CO2 removal does not count as negative emissions. Ask Samantha how to deal with it.
-
 ##### create fleets #####
 # wind_onshore
 def wind_onshore_fleet(db_wind_name: str, location: str,
                        fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]],
                        ):
-    # TODO: pensar en les incerteses.
     """
     ´´fleet_turbines_definition´´ structure:
     {'turbine_1': [
@@ -938,7 +1027,6 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
 def wind_offshore_fleet(db_wind_name: str, location: str,
                         fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]],
                         ):
-    # TODO: pensar en les incerteses.
     """
     ´´fleet_turbines_definition´´ structure:
     {'turbine_1': [
