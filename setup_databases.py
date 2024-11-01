@@ -36,6 +36,19 @@ ndb = NewDatabase(
     key='tUePmX_S5B8ieZkkM7WUU2CnO8SmShwmAeWK9x2rTFo='
 )
 ndb.write_db_to_brightway(name='premise_base')
+# TODO: Ecoinvent will NEVER be used. We use premise_base or additional_acts ALWAYS. Additional_acts activities should never have cutoff391 as initial database. We can leave 'Ecoinvent' in 'technology_mapping_clean', but we should add a line in the code to transform that into 'premise_base'
+# TODO: database handling should be as follows:
+# 1. Import cutoff and apos
+# 2. Import premise_original
+# 3. Create a copy of premise_original named premise_base (so we can also do analysis WITHOUT background changes using premise_original)
+# -> infrastructure analysis possible. Without background changes
+# 4. Apply background changes to premise_base
+# -> infrastructure analysis possible. With background changes
+# 5. Apply foreground changes
+# -> O&M analysis possible. WITHOUT infrastructure, but with all inputs.
+# 6. Apply avoid_double accounting
+# -> O&M analysis possible. WITHOUT infrastructure, AND WITHOUT carrier inputs.
+
 
 
 # 1. set the background
