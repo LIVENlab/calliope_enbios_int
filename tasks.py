@@ -15,7 +15,85 @@ import wurst
 #  2. Background
 
 #### BACKGROUND #####
-# 1. Change rail market so it is only electric
+# 1.1. Unlink carrier activities
+# 1.1.1 Electricity
+def unlink_electricity():
+    market_group_locations = ['ENSTO-E', 'UCTE', 'Europe without Switzerland', 'RER']
+    for location in market_group_locations:
+        # get the market groups for electricity high voltage, medium voltage, low voltage.
+        market_groups = ws.get_many(
+            bd.Database('cutoff391'),
+            ws.contains('name', 'market group for electricity'),
+            ws.equals('location', location)
+        )
+        for market_group_act in market_groups:
+            # in the technosphere we have the local markets (per country)
+            technosphere = [e for e in market_group_act.technosphere()]
+            for ex in technosphere:
+                # delete upstream of the local market (country)
+                for e in ex.input.upstream():
+                    e.delete()
+            # delete market group upstream also
+            for e in market_group_act.upstream():
+                e.delete()
+
+
+# 1.1.2 Heat
+def unlink_heat():
+    # TODO: finish
+    # get the market groups for heat: 1. 'central or small-scale, biomethane', 2. 'central or small-scale, natural gas',
+    # 3. 'central or small scale, other than natural gas', 4. 'district or industrial, natural gas',
+    # 5. 'district or industrial, other than natural gas',
+    market_groups = ws.get_many(
+        bd.Database('cutoff391'),
+        ws.contains('name', 'market group for heat'),
+        ws.equals('location', 'RER')
+    )
+    for market_group_act in market_groups:
+        # Each market group has CH and Europe without Switzerland
+        technosphere = [e for e in market_group_act.technosphere()]
+        for ex in technosphere:
+            # delete upstream of the local market (country)
+            for e in ex.input.upstream():
+                e.delete()
+        for e in market_group_act.upstream():
+            e.delete()
+
+    # heat production activities
+    locations = ['RER', 'Europe without Switzerland', 'CH']
+    for location in locations:
+        heat_production_acts = ws.get_many(
+            bd.Database('cutoff391'),
+            ws.contains('name', 'heat production,'),
+            ws.equals('location', location)
+        )
+
+
+# 1.2.1 Change rail market, so it is only electric
+def train_update():
+    """
+    Change train freight transport to 100% electric.
+    Two European markets:
+    1. market for transport, freight train (Europe without Switzerland)
+    2. market group for transport, freight train (RER)
+    The second one has as inputs the first one for both Europe without Switzerland and CH. These two,
+    have electric and diesel inputs. The function deletes the diesel input and changes the amount of electric to 1.
+    """
+    market_europe = ws.get_one(
+        bd.Database('cutoff391'),
+        ws.equals('name', 'market for transport, freight train'),
+        ws.equals('location', 'Europe without Switzerland')
+    )
+    market_ch = ws.get_one(
+        bd.Database('cutoff391'),
+        ws.equals('name', 'market for transport, freight train'),
+        ws.equals('location', 'CH'))
+    for act in [market_europe, market_ch]:
+        ex_diesel = [e for e in act.technosphere() if 'diesel' in e.input['name']][0]
+        ex_electric = [e for e in act.technosphere() if 'electricity' in e.input['name']][0]
+        ex_electric['amount'] = 1
+        ex_electric.save()
+        ex_diesel.delete()
 
 
 ##### assign location #####
@@ -60,9 +138,9 @@ def delete_methanol_infrastructure(biosphere_technosphere_disaggregation: bool):
         It creates a copy of the methanol syntheses activities and deletes its infrastructure (tier 1 and 2)
     """
     create_additional_acts_db()
-    is_in_additional_acts = ws.get_one(bd.Database('additional_acts'),
-                                       ws.equals('name',
-                                                 'methanol distillation, hydrogen from electrolysis, CO2 from DAC'))
+    is_in_additional_acts = ws.get_many(bd.Database('additional_acts'),
+                                        ws.equals('name',
+                                                  'methanol distillation, hydrogen from electrolysis, CO2 from DAC'))
     if len(list(is_in_additional_acts)) == 0:
         from_wood_act = ws.get_one(bd.Database('additional_acts'),
                                    ws.equals('name', 'methanol distillation, from wood, without CCS')
@@ -379,6 +457,33 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
         new_ex.save()
 
 
+def update_methanol_facility():
+    """
+    Copy methanol infrastructure and re-scale it, so it consists of an adiabatic reactor of 12.6 m3 and an isothermal
+    reactor of 8 m3 with an approximate production rate of 20.8 kg/h
+    """
+    methanol_facility_act = ws.get_one(
+        bd.Database('premise_base'),
+        ws.equals('name', 'methanol production facility, construction'))
+
+    for ex in methanol_facility_act.technosphere():
+        if 'chemical factory' in ex.input['name']:
+            ex['amount'] = 0.00899 / 0.0333
+            ex.save()
+        elif 'air compressor' in ex.input['name']:
+            ex['amount'] = 0.755 / 0.0333
+            ex.save()
+        elif 'concrete' in ex.input['name']:
+            ex['amount'] = ex['amount'] * 4490000000 / (0.0333 * 12.46 * 2400)
+            ex.save()
+        elif 'flat glass' in ex.input['name']:
+            ex['amount'] = 80.342
+            ex.save()
+        else:
+            ex['amount'] = ex['amount'] * 4490000000 / (0.0333 * 12.46)
+            ex.save()
+
+
 def biofuel_to_methanol_update(db_methanol_name: str):
     """
     In the background of the methanol production, the function substitutes H2 production with CCS
@@ -461,8 +566,8 @@ def trucks_and_bus_update(db_truck_name: str):
     # bus
     bus_original = ws.get_one(bd.Database(db_truck_name),
                               ws.equals('name',
-                                        'medium duty truck, fuel cell electric, 26t gross weight, '
-                                        'long haul'),
+                                        'passenger bus, battery electric - opportunity charging, LTO battery, '
+                                        '13m single deck urban bus'),
                               )
     bus_act = bus_original.copy(database='additional_acts')
     bus_technosphere = list(bus_act.technosphere())
@@ -473,7 +578,7 @@ def trucks_and_bus_update(db_truck_name: str):
             ex.delete()
 
 
-def passenger_car_update(db_passenger_name: str):
+def passenger_car_and_scooter_update(db_passenger_name: str):
     """
     Creates a copy of 'passenger car, battery electric, Medium' in the database 'additional_acts_db' and
     deletes glider inputs.
@@ -483,8 +588,14 @@ def passenger_car_update(db_passenger_name: str):
                               )
     create_additional_acts_db()
     car_act = car_original.copy(database='additional_acts')
-    car_technosphere = list(car_act.technosphere())
-    for ex in car_technosphere:
+    for ex in car_act.technosphere():
+        if 'glider' in ex.input['name']:
+            ex.delete()
+    scooter_original = ws.get_one(bd.Database(db_passenger_name),
+                                  ws.equals('name', 'scooter, battery electric, 4-11kW'),
+                                  )
+    scooter_act = scooter_original.copy(database='additional_acts')
+    for ex in scooter_act.technosphere():
         if 'glider' in ex.input['name']:
             ex.delete()
 
@@ -502,8 +613,6 @@ def gas_to_liquid_update(db_cobalt_name: str, db_gas_to_liquid_name: str):
     cobalt_act = list(ws.get_many(bd.Database(db_cobalt_name), ws.equals('name', 'market for cobalt'),
                                   ws.equals('reference product', 'cobalt'),
                                   ))[0]
-    production_ex = gas_to_liquid_act.new_exchange(input=gas_to_liquid_act.key, type='production', amount=1)
-    production_ex.save()
     new_ex = gas_to_liquid_act.new_exchange(input=cobalt_act, type='technosphere', amount=1250000)
     new_ex.save()
 
@@ -798,7 +907,7 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
         single_turbine_activity = bd.Database('additional_acts').get(park_name + '_single_turbine')
         # to fleet activity (infrastructure)
         new_ex = fleet_activity.new_exchange(input=single_turbine_activity, type='technosphere',
-                                             amount=share * turbine_parameters["power"])
+                                             amount=share / turbine_parameters["power"])
         new_ex.save()
 
     # create wind fleet maintenance (per 1 MW)
@@ -820,7 +929,7 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
         maintenance_activity = bd.Database('additional_acts').get(park_name + '_maintenance')
         # to fleet activity (infrastructure)
         new_ex = fleet_activity.new_exchange(input=maintenance_activity, type='technosphere',
-                                             amount=share * turbine_parameters["power"])
+                                             amount=share / turbine_parameters["power"])
         new_ex.save()
 
     return park_names
@@ -919,7 +1028,7 @@ def wind_offshore_fleet(db_wind_name: str, location: str,
         single_turbine_activity = bd.Database('additional_acts').get(park_name + '_offshore_turbine')
         # to fleet activity (infrastructure)
         new_ex = fleet_activity.new_exchange(input=single_turbine_activity, type='technosphere',
-                                             amount=share * turbine_parameters["power"])
+                                             amount=share / turbine_parameters["power"])
         new_ex.save()
         # delete maintenance
         maintenance_activity = bd.Database('additional_acts').get(park_name + '_offshore_maintenance')
@@ -949,7 +1058,7 @@ def wind_offshore_fleet(db_wind_name: str, location: str,
         maintenance_activity = bd.Database('additional_acts').get(park_name + '_offshore_maintenance')
         # to fleet activity (infrastructure)
         new_ex = fleet_activity.new_exchange(input=maintenance_activity, type='technosphere',
-                                             amount=share * turbine_parameters["power"])
+                                             amount=share / turbine_parameters["power"])
         new_ex.save()
 
     return park_names
@@ -1163,11 +1272,14 @@ def batteries_fleet(db_batteries_name: str, scenario: Optional[Literal['cont', '
     :return: returns the appropriate battery fleet activity. Either CONT, TC or manual scenario.
     """
     if scenario == 'cont':
-        battery_fleet = ws.get_one(bd.Database(db_batteries_name),
-                                   ws.equals('name', 'market for battery capacity, stationary (CONT scenario)'))
+        battery_fleet_original = ws.get_one(bd.Database(db_batteries_name),
+                                            ws.equals('name',
+                                                      'market for battery capacity, stationary (CONT scenario)'))
+        battery_fleet = battery_fleet_original.copy(database='additional_acts')
     elif scenario == 'tc':
-        battery_fleet = ws.get_one(bd.Database(db_batteries_name),
-                                   ws.equals('name', 'market for battery capacity, stationary (TC scenario)'))
+        battery_fleet_original = ws.get_one(bd.Database(db_batteries_name),
+                                            ws.equals('name', 'market for battery capacity, stationary (TC scenario)'))
+        battery_fleet = battery_fleet_original.copy(database='additional_acts')
     else:
         print(f'Manual battery scenario with the following technology shares: {technology_share}')
         # Runtime check to enforce battery types as keys
@@ -1390,11 +1502,81 @@ def technosphere_biosphere_disaggregation(activity):
 
 ##### materials as indicator #####
 # 1. foreground
-def foreground_materials():
+def foreground_materials(act):
     # TODO:
     # 1. CRMs; 2. list of heavily used materials: steel, iron, copper, aluminium, cement, concrete, water, plastics;
     # 3. group materials per ISIC classification.
-    pass
+    metals_cpc = ['41114: Ferro-nickel', '41422: Unwrought nickel',
+                  '41310: Silver (including silver plated with gold or platinum), unwrought or in semi-manufactured forms, or in powder […]',
+                  '41601: Tungsten, molybdenum, tantalum, magnesium, cobalt, cadmium, titanium, zirconium, beryllium, gallium, hafnium, […]',
+                  '41320: Gold (including gold plated with platinum), unwrought or in semi-manufactured forms, or in powder form',
+                  '41116: Ferrous products obtained by direct reduction of iron ore and other spongy ferrous products, in lumps, pellets[…]',
+                  '41603: Bismuth, antimony, manganese, chromium and articles thereof; including waste and scrap of bismuth or manganese',
+                  '412: Products of iron or steel',
+                  '4160: Other non-ferrous metals and articles thereof (including waste and scrap of some metals); cermets and articles […]',
+                  '41122: Alloy steel in ingots or other primary forms and semi-finished products of alloy steel',
+                  '41115: Other ferro-alloys',
+                  '41431: Unwrought aluminium',
+                  '41413: Refined copper and copper alloys, unwrought; master alloys of copper',
+                  '41330: Platinum, unwrought or in semi-manufactured forms, or in powder form',
+                  '41432: Alumina (aluminium oxide), except artificial corundum',
+                  '41: Basic metals',
+                  '41513: Wire of copper',
+                  '41111: Pig iron and spiegeleisen in pigs, blocks or other primary forms',
+                  '4153: Semi-finished products of aluminium or aluminium alloys',
+                  '41443: Tin, unwrought',
+                  '4151: Semi-finished products of copper or copper alloys',
+                  '4128: Tubes, pipes and hollow profiles, of steel',
+                  '413: Basic precious metals and metals clad with precious metals',
+                  '41412: Unrefined copper; copper anodes for electrolytic refining',
+                  '41112: Ferro-manganese',
+                  '4111: Primary materials of the iron and steel industry',
+                  '41121: Non-alloy steel in ingots or other primary forms, and semi-finished products of non-alloy steel',
+                  '4132: Gold (including gold plated with platinum), unwrought or in semi-manufactured forms, or in powder form',
+                  '41411: Copper mattes; cement copper',
+                  '41113: Ferro-chromium',
+                  '41117: Granules and powders, of pig iron and spiegeleisen, or steel',
+                  '4124: Bars and rods, hot-rolled, of iron or steel',
+                  '41442: Zinc, unwrought',
+                  '4121: Flat-rolled products of steel, not further worked than hot-rolled',
+                  '41441: Lead, unwrought',
+                  '41531: Powders and flakes of aluminium',
+                  '4133: Platinum, unwrought or in semi-manufactured forms, or in powder form']
+    cement_cpc = ['374: Plaster, lime and cement',
+                  '37440: Portland cement, aluminous cement, slag cement and similar hydraulic cements, except in the form of clinkers',
+                  '37410: Plasters', '37430: Cement clinkers', '3741: Plasters',
+                  '37420: Quicklime, slaked lime and hydraulic lime',
+                  '3744: Portland cement, aluminous cement, slag cement and similar hydraulic cements, except in the form of clinkers']
+    concrete_cpc = ['37510: Non-refractory mortars and concretes',
+                    '37530: Articles of plaster or of compositions based on plaster',
+                    '37540: Tiles, flagstones, bricks and similar articles, of cement, concrete or artificial stone',
+                    '37570: Articles of asbestos-cement, cellulose fibre-cement or the like',
+                    '375: Articles of concrete, cement and plaster']
+    plastics_cpc = ['347: Plastics in primary forms', '34710: Polymers of ethylene, in primary forms',
+                    '34740: Polyacetals, other polyethers and epoxide resins, in primary forms; polycarbonates, alkyd resins, polyallyl es[…]',
+                    '34730: Polymers of vinyl chloride or other halogenated olefins, in primary forms',
+                    '34790: Other plastics in primary forms; ion exchangers',
+                    '34720: Polymers of styrene, in primary forms']
+    metals = []
+    cement = []
+    concrete = []
+    plastics = []
+    for ex in act.technosphere():
+        try:
+            for classification in ex.input['classifications']:
+                if classification[0] == 'CPC':
+                    if classification[1] in metals_cpc:
+                        metals.append(ex['amount'])
+                    elif classification[1] in cement_cpc:
+                        cement.append(ex['amount'])
+                    elif classification[1] in concrete_cpc:
+                        print(ex.input['name'], 'concrete')
+                        concrete.append(ex['amount'])
+                    elif classification[1] in plastics_cpc:
+                        plastics.append(ex['amount'])
+        except Exception as e:
+            pass
+    return sum(metals), sum(cement), sum(concrete), sum(plastics)
 
 
 # 2. all value chain
