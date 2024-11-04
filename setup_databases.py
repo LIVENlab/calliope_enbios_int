@@ -77,6 +77,15 @@ def avoid_double_accounting():
     # In cutoff it comes without any environmental burdens, so there is no need to apply any unlinks
     # 1.1.6 Biomass
     unlink_biomass()
+    # 1.1.7 Methane
+    unlink_methane()
+    # 1.1.8 Methanol
+    unlink_methanol()
+    # 1.1.9 Kerosene
+    unlink_kerosene()
+    # 1.1.10 Diesel
+    unlink_diesel()
+
 
 
 # 1.2 substitute background activities
@@ -88,7 +97,8 @@ train_update()
 #  2. Biomass:
 #  3. steel and iron: look for inventories
 #  4. plastics:
-#  5. ammonia and methanol
+#  5. ammonia and urea
+#  5bis. methanol
 #  6. transport
 #  7. electricity
 #  8. heat

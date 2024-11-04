@@ -162,6 +162,100 @@ def unlink_biomass(db_name: str = 'premise_base'):
                     e.delete()
 
 
+# 1.1.7 Methane
+def unlink_methane(db_name: str = 'premise_base'):
+    """
+        To avoid double accounting, we want to delete the upstream of those biomass activities that are used as
+        fuel to produce heat or electricity, or as feedstock to produce synthetic fuels (kerosene and diesel), methanol and
+        methane. Thus, we don't want to include those exchanges where natural gas is used as feedstock.
+        This function finds European markets for biomethane, methane and natural gas, and deletes their upstream exchanges
+        that give service to the above-mentioned activities.
+        """
+    for location in ['CH', 'RER']:
+        biomethane_acts = ws.get_many(
+            bd.Database(db_name),
+            ws.startswith('reference product', 'biomethane'),
+            ws.exclude(ws.contains('reference product', 'mixed')),
+            ws.equals('location', location)
+        )
+        for act in biomethane_acts:
+            for e in act.upstream():
+                if any(ref_prod in e.output['reference product'] for ref_prod in
+                       ['heat,', 'electricity,', 'methanol,', 'kerosene,', 'diesel,']):
+                    e.delete()
+
+    methane_acts = ws.get_many(
+        bd.Database(db_name),
+        ws.startswith('reference product', 'methane,'),
+    )  # all in RER
+    for act in methane_acts:
+        for e in act.upstream():
+            if any(ref_prod in e.output['reference product'] for ref_prod in
+                   ['heat,', 'electricity,', 'methanol,', 'kerosene,', 'diesel,']):
+                e.delete()
+    european_locations = list(consts.LOCATION_EQUIVALENCE.values()) + ['RER', 'RoE', 'Europe without Switzerland']
+    for location in european_locations:
+        nat_gas_acts = ws.get_many(
+            bd.Database(db_name),
+            ws.startswith('reference product', 'natural gas,'),
+            ws.contains('reference product', 'pressure'),
+            ws.equals('location', location)
+        )
+        for act in nat_gas_acts:
+            for e in act.upstream():
+                if any(ref_prod in e.output['reference product'] for ref_prod in
+                       ['heat,', 'electricity,', 'methanol,', 'kerosene,', 'diesel,']):
+                    e.delete()
+
+
+# 1.1.8 Methanol
+def unlink_methanol(db_name: str = 'premise_base'):
+    """
+    Because methanol can be used as a feedstock, we want to delete the entire upstream (unless in gives service to
+    another methanol production activity).
+    """
+    for location in ['CH', 'RER']:
+        methanol_acts = ws.get_many(
+            bd.Database(db_name),
+            ws.startswith('reference product', 'methanol,'),
+            ws.equals('location', location)
+        )
+        for act in methanol_acts:
+            for e in act.upstream():
+                if 'methanol' not in e.output['reference product']:
+                    e.delete()
+
+
+# 1.1.9 Kerosene
+def unlink_kerosene(db_name: str = 'premise_base'):
+    for location in ['RER', 'Europe without Switzerland', 'CH']:
+        kerosene_acts = ws.get_many(
+            bd.Database(db_name),
+            ws.startswith('reference product', 'kerosene'),
+            ws.equals('location', location)
+        )
+        for act in kerosene_acts:
+            for e in act.upstream():
+                if any(ref_prod in e.output['reference product'] for ref_prod in
+                       ['heat,', 'electricity,', 'methanol,', 'methane,', 'diesel,']):
+                    e.delete()
+
+
+# 1.1.10
+def unlink_diesel(db_name: str = 'premise_base'):
+    for location in ['RER', 'Europe without Switzerland', 'CH']:
+        diesel_acts = ws.get_many(
+            bd.Database(db_name),
+            ws.startswith('reference product', 'diesel'),
+            ws.equals('location', location)
+        )
+        for act in diesel_acts:
+            for e in act.upstream():
+                if any(ref_prod in e.output['reference product'] for ref_prod in
+                       ['heat,', 'electricity,', 'methanol,', 'methane,', 'kerosene,']):
+                    e.delete()
+
+
 # 1.2.1 Change rail market, so it is only electric
 def train_update(db_name: str = 'premise_base'):
     """
