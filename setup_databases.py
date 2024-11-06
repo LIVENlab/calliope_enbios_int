@@ -107,12 +107,11 @@ def update_background():
     # 1.2.3. biomass
     # check report to see what IAMs say in terms of % biomass
     # 1.2.4. steel
-    # LCI in 'Papers'
+    steel_update()
     # 1.2.5. plastics
 
     # TODO:
     #  2. Biomass:
-    #  3. steel and iron: look for inventories
     #  4. plastics:
     #  5. ammonia and urea
     #  5bis. methanol
