@@ -13,6 +13,9 @@ import wurst
 # TODO:
 #  1. Formalise general workflow
 #  2. Background
+#  3. Because infrastructure is mainly GLOBAL, we cannot relink much of the European steel and iron. We need to do it
+#  AFTER the forground has been modified: 1. Create a copy of each infrastructure in technology_mapping, 2. Change
+#  location to RER, 3. Do the same process as in steel_update, 4. apply special function to wind infrastructure.
 
 #### BACKGROUND #####
 # 1.1. Unlink carrier activities
@@ -335,8 +338,8 @@ def iron_steel_h2_dri_eaf():
     cargo vessel + truck
     3. Create iron production (from H2-DRI). Hydrogen and Heat inputs calculated stochiometrically. Other inoputs and
     outputs from Nurdiawati et al., 2023.
-    4. Steel production (from H2-DRI). Assumption: 50% scrap iron, 50% iron from H2-DRI route. Exact same proces as
-    steel production with EAF, but changing the iron input.
+    4. Steel production (from H2-DRI). For both steel low-alloyed, and chromium steel. Assumption: 50% scrap iron, 50%
+    iron from H2-DRI route. Exact same proces as steel production with EAF, but changing the iron input.
     """
     # create iron pellet (Europe)
     new_act = bd.Database('premise_base').new_activity(
@@ -356,8 +359,9 @@ def iron_steel_h2_dri_eaf():
     new_ex.save()
     # inputs from technosphere
     new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
-                                                   ws.equals('name', 'aluminium oxide factory'),
-                                                   ws.equals('location', 'RoW')),
+                                                   ws.equals('name', 'aluminium oxide factory '
+                                                                     'construction'),
+                                                   ws.equals('location', 'RER')),
                                   amount=0.000000000025, type='technosphere')
     new_ex.save()
     new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
@@ -580,12 +584,14 @@ def iron_steel_h2_dri_eaf():
                                      amount=220 * 0.001, type='technosphere')
     new_ex.save()
     new_ex = market_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
-                                                      ws.equals('name', 'transport, freight, sea, bulk carrier for dry goods'),
+                                                      ws.equals('name',
+                                                                'transport, freight, sea, bulk carrier for dry goods'),
                                                       ws.equals('location', 'GLO')),
                                      amount=776 * 0.001, type='technosphere')
     new_ex.save()
     new_ex = market_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
-                                                      ws.equals('name', 'transport, freight, lorry >32 metric ton, EURO6'),
+                                                      ws.equals('name',
+                                                                'transport, freight, lorry >32 metric ton, EURO6'),
                                                       ws.equals('location', 'RER')),
                                      amount=64 * 0.001, type='technosphere')
     new_ex.save()
@@ -605,12 +611,14 @@ def iron_steel_h2_dri_eaf():
     new_ex.save()
     # technosphere
     new_ex = dri_act.new_exchange(input=market_act,
-                                     amount=1.391, type='technosphere')
+                                  amount=1.391, type='technosphere')
     new_ex.save()
     new_ex = dri_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
-                                                      ws.equals('name', 'hydrogen production, gaseous, 30 bar, from PEM electrolysis, from grid electricity'),
-                                                      ws.equals('location', 'RER')),
-                                  amount=0.054, type='technosphere')  # stochiometric recalculation based on Nurdiawati et al., 2023
+                                                   ws.equals('name',
+                                                             'hydrogen production, gaseous, 30 bar, from PEM electrolysis, from grid electricity'),
+                                                   ws.equals('location', 'RER')),
+                                  amount=0.054,
+                                  type='technosphere')  # stochiometric recalculation based on Nurdiawati et al., 2023
     new_ex.save()
     new_ex = dri_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
                                                    ws.equals('name',
@@ -633,23 +641,67 @@ def iron_steel_h2_dri_eaf():
                                   amount=0.04, type='biosphere')
     new_ex.save()
 
-    # steel-EAF process: 50% scrap iron, 50% iron from H2-DRI
-    steel_act_original = ws.get_one(bd.Database('premise_base'),
-                           ws.equals('name', 'steel production, electric, low-alloyed'),
-                           ws.equals('location', 'Europe without Switzerland and Austria'))
-    steel_act = steel_act_original.copy()
-    steel_act['reference product'] = 'steel, from DRI-EAF'
-    steel_act['name'] = 'steel production, from DRI-EAF'
-    steel_act.save()
-    iron_exchange = [e for e in steel_act.technosphere() if e.input['name'] == 'market for iron scrap, sorted, pressed'][0]
-    new_ex = steel_act.new_exchange(input=dri_act, type='technosphere', amount=iron_exchange.amount/2)
-    new_ex.save()
-    iron_exchange['amount'] = iron_exchange.amount/2
-    iron_exchange.save()
+    # steel-EAF process: 50% scrap iron, 50% iron from H2-DRI. For both steel and chromium steel
+
+    steel_acts_original = ws.get_many(bd.Database('premise_base'),
+                                      ws.startswith('name', 'steel production, electric,'),
+                                      ws.contains('reference product', 'steel')
+                                      )
+    steel_act_to_return = []
+    chromium_steel_act_to_return = []
+    for act in steel_acts_original:
+        if any(location in act['location'] for location in ['Europe without Switzerland', 'RER']):
+            steel_act = act.copy()
+            steel_act['reference product'] = f'{steel_act["reference product"]}, from DRI'
+            steel_act['name'] = f'{steel_act["name"]}, from DRI-EAF'
+            steel_act.save()
+            iron_exchange = \
+                [e for e in steel_act.technosphere() if e.input['name'] == 'market for iron scrap, sorted, pressed'][0]
+            new_ex = steel_act.new_exchange(input=dri_act, type='technosphere', amount=iron_exchange.amount / 2)
+            new_ex.save()
+            iron_exchange['amount'] = iron_exchange.amount / 2
+            iron_exchange.save()
+            if steel_act['location'] == 'RER':
+                chromium_steel_act_to_return.append(steel_act)
+            else:
+                steel_act_to_return.append(steel_act)
+
+    return chromium_steel_act_to_return[0], steel_act_to_return[0], dri_act
 
 
-
-
+def steel_update():
+    """
+    1. Executes iron_steel_h2_dri_eaf(), so the iron and steel H2-DRI-EAF inventories are created
+    2. Filters the markets for steel (unalloyed, low-alloyed, chromium steel) and in case they give a service to an
+    activity happening in Europe in the upstream, they relink it to the equivalent H2-DRI-EF
+    3. Same process with cast iron act
+    """
+    chromium_act, steel_act, iron_act = iron_steel_h2_dri_eaf()
+    # substitute steel
+    steel_market_acts = ws.get_many(bd.Database('premise_base'),
+                                    ws.startswith('name', 'market for steel,'),
+                                    )
+    locations = list(consts.LOCATION_EQUIVALENCE.values()) + ['RER', 'Europe']
+    for act in steel_market_acts:
+        for ex in act.upstream():
+            if any(loc in ex.output._data['location'] for loc in locations) or 'market for steel' in ex.output['name']:
+                if 'chromium' in ex.input['name']:
+                    ex.input = chromium_act
+                    ex.save()
+                else:
+                    ex.input = steel_act
+                    ex.save()
+    # substitute iron
+    cast_iron_act = ws.get_one(bd.Database('premise_base'),
+                              ws.equals('name', 'market for cast iron'))
+    for ex in cast_iron_act.upstream():
+        if any(loc in ex.output._data['location'] for loc in locations):
+            if 'chromium' in ex.input['name']:
+                ex.input = chromium_act
+                ex.save()
+            else:
+                ex.input = steel_act
+                ex.save()
 
 
 
