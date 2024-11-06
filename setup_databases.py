@@ -29,13 +29,25 @@ if "cutoff391" not in bd.databases:
 # premise, without updates (only imported inventories)
 ndb = NewDatabase(
     scenarios=[
-        {"model": "image", "pathway": "SSP2-RCP19", "year": 2050},
+        {"model": "image", "pathway": "SSP2-RCP19", "year": 2020},
     ],
     source_db="cutoff391",
     source_version="3.9.1",
     key='tUePmX_S5B8ieZkkM7WUU2CnO8SmShwmAeWK9x2rTFo='
 )
 ndb.write_db_to_brightway(name='premise_base')
+# premise with cement update
+ndb = NewDatabase(
+    scenarios=[
+        {"model": "image", "pathway": "SSP2-RCP19", "year": 2020},
+    ],
+    source_db="cutoff391",
+    source_version="3.9.1",
+    key='tUePmX_S5B8ieZkkM7WUU2CnO8SmShwmAeWK9x2rTFo='
+)
+ndb.update('cement')
+ndb.write_db_to_brightway(name='premise_cement')
+
 # TODO: Ecoinvent will NEVER be used. We use premise_base or additional_acts ALWAYS. Additional_acts activities should never have cutoff391 as initial database. We can leave 'Ecoinvent' in 'technology_mapping_clean', but we should add a line in the code to transform that into 'premise_base'
 # TODO: database handling should be as follows:
 # 1. Import cutoff and apos
@@ -48,7 +60,6 @@ ndb.write_db_to_brightway(name='premise_base')
 # -> O&M analysis possible. WITHOUT infrastructure, but with all inputs.
 # 6. Apply avoid_double accounting
 # -> O&M analysis possible. WITHOUT infrastructure, AND WITHOUT carrier inputs.
-
 
 
 # 1. set the background
@@ -87,127 +98,137 @@ def avoid_double_accounting():
     unlink_diesel()
 
 
+def update_background():
+    # 1.2 substitute background activities
+    # 1.2.1. cement
+    cement_update()
+    # 1.2.2 make European freight trains 100% electric
+    train_update()
+    # 1.2.3. biomass
+    # check report to see what IAMs say in terms of % biomass
+    # 1.2.4. steel
+    # LCI in 'Papers'
+    # 1.2.5. plastics
 
-# 1.2 substitute background activities
-# 1.2.1 make European freight trains 100% electric
-train_update()
-
-# TODO:
-#  1. cement: assume CCS
-#  2. Biomass:
-#  3. steel and iron: look for inventories
-#  4. plastics:
-#  5. ammonia and urea
-#  5bis. methanol
-#  6. transport
-#  7. electricity
-#  8. heat
+    # TODO:
+    #  2. Biomass:
+    #  3. steel and iron: look for inventories
+    #  4. plastics:
+    #  5. ammonia and urea
+    #  5bis. methanol
+    #  6. transport
 
 
-# 2. set the foreground
-# 2.1 update inventories
-# TODO: maybe database arrangement changes to have only a single database
-update_methanol_facility()
-chp_waste_update(db_waste_name='apos391', db_original_name='cutoff391',
-                 locations=['CH'])
-biofuel_to_methanol_update(db_methanol_name='premise_base')
-trucks_and_bus_update(db_truck_name='premise_base')
-passenger_car_and_scooter_update(db_passenger_name='premise_base')
-gas_to_liquid_update(db_cobalt_name='cutoff391', db_gas_to_liquid_name='premise_base')
-biofuel_to_methane_infrastructure(db_syn_gas_name='cutoff391')
-hp_update(db_hp_name='cutoff391')
-hydro_run_of_river_update(db_hydro_name='cutoff391')
-for location in ['FR', 'DE']:
-    hydro_reservoir_update(location=location, db_hydro_name='cutoff391')
-airborne_wind_lci(bd_airborne_name='cutoff391')
+def update_foreground():
+    # 2. set the foreground
+    # 2.1 update inventories
+    update_methanol_facility()
+    chp_waste_update(db_waste_name='apos391', db_original_name='cutoff391',
+                     locations=['CH'])
+    biofuel_to_methanol_update(db_methanol_name='premise_base')
+    trucks_and_bus_update(db_truck_name='premise_base')
+    passenger_car_and_scooter_update(db_passenger_name='premise_base')
+    gas_to_liquid_update(db_cobalt_name='cutoff391', db_gas_to_liquid_name='premise_base')
+    biofuel_to_methane_infrastructure(db_syn_gas_name='cutoff391')
+    hp_update(db_hp_name='cutoff391')
+    hydro_run_of_river_update(db_hydro_name='cutoff391')
+    for location in ['FR', 'DE']:
+        hydro_reservoir_update(location=location, db_hydro_name='cutoff391')
+    airborne_wind_lci(bd_airborne_name='cutoff391')
+    # 2.2 create fleets
+    create_fleets()
+    # 2.3 delete infrastructure and leave all activities ready in 'additional_acts'
+    delete_infrastructure_main(
+        file_path=r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx')
 
-# 2.2 create fleets
-solar_pv_fleet(db_solar_name='premise_base')
-hydrogen_from_electrolysis_market(db_hydrogen_name='premise_base',
-                                  soec_share=0.5, aec_share=0.3, pem_share=0.2)  # TODO: propose relevant fleets
-batteries_fleet(db_batteries_name='premise_base', scenario='tc', technology_share=None)
-# wind fleets created in Germany
-wind_onshore_fleet(db_wind_name='cutoff391', location='DE', fleet_turbines_definition={'turbine_1': [
-    {
-        'power': 4.0, 'manufacturer': "Vestas", 'rotor_diameter': 125, 'hub_height': 100,
-        'commissioning_year': 2030,
-        'generator_type': "gb_dfig", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4
-    }, 0.333],
-    'turbine_2': [
+
+def create_fleets():
+    # 2.2 create fleets
+    solar_pv_fleet(db_solar_name='premise_base')
+    hydrogen_from_electrolysis_market(db_hydrogen_name='premise_base',
+                                      soec_share=0.5, aec_share=0.3, pem_share=0.2)  # TODO: propose relevant fleets
+    batteries_fleet(db_batteries_name='premise_base', scenario='tc', technology_share=None)
+    # wind fleets created in Germany
+    wind_onshore_fleet(db_wind_name='cutoff391', location='DE', fleet_turbines_definition={'turbine_1': [
         {
-            'power': 6.0, 'manufacturer': 'Vestas', 'rotor_diameter': 145, 'hub_height': 120,
+            'power': 4.0, 'manufacturer': "Vestas", 'rotor_diameter': 125, 'hub_height': 100,
             'commissioning_year': 2030,
             'generator_type': "gb_dfig", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4
-        },
-        0.333],
-    'turbine_3': [
+        }, 0.333],
+        'turbine_2': [
+            {
+                'power': 6.0, 'manufacturer': 'Vestas', 'rotor_diameter': 145, 'hub_height': 120,
+                'commissioning_year': 2030,
+                'generator_type': "gb_dfig", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4
+            },
+            0.333],
+        'turbine_3': [
+            {
+                'power': 8.0, 'manufacturer': 'Vestas', 'rotor_diameter': 160, 'hub_height': 145,
+                'commissioning_year': 2030,
+                'generator_type': "gb_dfig", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4
+            },
+            0.333]}
+                       )
+    wind_offshore_fleet(db_wind_name='cutoff391', location='DE', fleet_turbines_definition={'turbine_1': [
         {
-            'power': 8.0, 'manufacturer': 'Vestas', 'rotor_diameter': 160, 'hub_height': 145,
-            'commissioning_year': 2030,
-            'generator_type': "gb_dfig", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4
-        },
-        0.333]}
-                   )
-wind_offshore_fleet(db_wind_name='cutoff391', location='DE', fleet_turbines_definition={'turbine_1': [
-    {
-        'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
-        'commissioning_year': 2030,
-        'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
-        'offshore_type': 'gravity', 'floating_platform': None, 'sea_depth': 5, 'distance_to_shore': 30
-    }, 0.05],  # based on the SG 14-222 DD
-    'turbine_2': [
-        {
-            'power': 10.0, 'manufacturer': "Vestas", 'rotor_diameter': 164, 'hub_height': 138,
+            'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
             'commissioning_year': 2030,
             'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
             'offshore_type': 'gravity', 'floating_platform': None, 'sea_depth': 5, 'distance_to_shore': 30
-        }, 0.05],  # based on the V164-10MW
-    'turbine_3': [
-        {
-            'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
-            'commissioning_year': 2030,
-            'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
-            'offshore_type': 'monopile', 'floating_platform': None, 'sea_depth': 30, 'distance_to_shore': 30
-        }, 0.2],
-    'turbine_4': [
-        {
-            'power': 10.0, 'manufacturer': "Vestas", 'rotor_diameter': 164, 'hub_height': 138,
-            'commissioning_year': 2030,
-            'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
-            'offshore_type': 'monopile', 'floating_platform': None, 'sea_depth': 30, 'distance_to_shore': 30
-        }, 0.2],
-    'turbine_5': [
-        {
-            'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
-            'commissioning_year': 2030,
-            'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
-            'offshore_type': 'tripod', 'floating_platform': None, 'sea_depth': 45, 'distance_to_shore': 30
-        }, 0.1],
-    'turbine_6': [
-        {
-            'power': 10.0, 'manufacturer': "Vestas", 'rotor_diameter': 164, 'hub_height': 138,
-            'commissioning_year': 2030,
-            'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
-            'offshore_type': 'tripod', 'floating_platform': None, 'sea_depth': 45, 'distance_to_shore': 30
-        }, 0.1],
-    'turbine_7': [
-        {
-            'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
-            'commissioning_year': 2030,
-            'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
-            'offshore_type': 'floating', 'floating_platform': 'spar_buoy_steel', 'sea_depth': 45,
-            'distance_to_shore': 30
-        }, 0.15],
-    'turbine_8': [
-        {
-            'power': 10.0, 'manufacturer': "Vestas", 'rotor_diameter': 164, 'hub_height': 138,
-            'commissioning_year': 2030,
-            'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
-            'offshore_type': 'floating', 'floating_platform': 'spar_buoy_steel', 'sea_depth': 45,
-            'distance_to_shore': 30
-        }, 0.15]
-})
+        }, 0.05],  # based on the SG 14-222 DD
+        'turbine_2': [
+            {
+                'power': 10.0, 'manufacturer': "Vestas", 'rotor_diameter': 164, 'hub_height': 138,
+                'commissioning_year': 2030,
+                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
+                'offshore_type': 'gravity', 'floating_platform': None, 'sea_depth': 5, 'distance_to_shore': 30
+            }, 0.05],  # based on the V164-10MW
+        'turbine_3': [
+            {
+                'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
+                'commissioning_year': 2030,
+                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
+                'offshore_type': 'monopile', 'floating_platform': None, 'sea_depth': 30, 'distance_to_shore': 30
+            }, 0.2],
+        'turbine_4': [
+            {
+                'power': 10.0, 'manufacturer': "Vestas", 'rotor_diameter': 164, 'hub_height': 138,
+                'commissioning_year': 2030,
+                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
+                'offshore_type': 'monopile', 'floating_platform': None, 'sea_depth': 30, 'distance_to_shore': 30
+            }, 0.2],
+        'turbine_5': [
+            {
+                'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
+                'commissioning_year': 2030,
+                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
+                'offshore_type': 'tripod', 'floating_platform': None, 'sea_depth': 45, 'distance_to_shore': 30
+            }, 0.1],
+        'turbine_6': [
+            {
+                'power': 10.0, 'manufacturer': "Vestas", 'rotor_diameter': 164, 'hub_height': 138,
+                'commissioning_year': 2030,
+                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
+                'offshore_type': 'tripod', 'floating_platform': None, 'sea_depth': 45, 'distance_to_shore': 30
+            }, 0.1],
+        'turbine_7': [
+            {
+                'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
+                'commissioning_year': 2030,
+                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
+                'offshore_type': 'floating', 'floating_platform': 'spar_buoy_steel', 'sea_depth': 45,
+                'distance_to_shore': 30
+            }, 0.15],
+        'turbine_8': [
+            {
+                'power': 10.0, 'manufacturer': "Vestas", 'rotor_diameter': 164, 'hub_height': 138,
+                'commissioning_year': 2030,
+                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
+                'offshore_type': 'floating', 'floating_platform': 'spar_buoy_steel', 'sea_depth': 45,
+                'distance_to_shore': 30
+            }, 0.15]
+    })
 
-# 2.3 delete infrastructure and leave all activities ready in 'additional_acts'
-delete_infrastructure_main(
-    file_path=r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx')
+
+

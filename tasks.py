@@ -256,7 +256,49 @@ def unlink_diesel(db_name: str = 'premise_base'):
                     e.delete()
 
 
-# 1.2.1 Change rail market, so it is only electric
+# 1.2.1 Cement update
+def cement_update():
+    """
+    1. It creates a copy of the activity clinker production, efficient, with on-site CCS from premise_cement base
+    2. It re-links its inputs to those of premise_base
+    3. It deletes premise_cement (as we won't need it anymore)
+    4. It substitutes clinker production (without CCS) upstream for clinker production with CCS in European regions
+    NOTE: premise_cement database is a premise database (imagage_rcp19, 2050) with ndb.update('cement'), copy
+    """
+    cement_ccs_original = ws.get_one(
+        bd.Database('premise_cement'),
+        ws.equals('name', 'clinker production, efficient, with on-site CCS'),
+        ws.equals('location', 'WEU')
+    )
+    # create a copy of the clinker production with CCS
+    cement_ccs = cement_ccs_original.copy(database='premise_base')
+    # relink inputs to 'premise_base' acts
+    for ex in cement_ccs.technosphere():
+        if ex.input['location'] == 'WEU':
+            location = 'RER'
+        else:
+            location = ex.input['location']
+        ex.input = ws.get_one(bd.Database('premise_base'),
+                              ws.equals('name', ex.input['name']),
+                              ws.equals('location', location),
+                              ws.equals('reference product', ex.input['reference product']))
+        ex.save()
+    # delete premise_cement, as we won't need it anymore
+    del bd.databases['premise_cement']
+    # substitute upstream of clinker production in Europe for clinker production with CCS
+    for location in ['Europe without Switzerland', 'CH']:
+        cement_original = ws.get_one(
+            bd.Database('premise_base'),
+            ws.equals('name', 'clinker production'),
+            ws.equals('location', location),
+            ws.equals('reference product', 'clinker')
+        )
+        for ex in cement_original.upstream():
+            ex.input = cement_ccs
+            ex.save()
+
+
+# 1.2.2 Change rail market, so it is only electric
 def train_update(db_name: str = 'premise_base'):
     """
     Change train freight transport to 100% electric.
@@ -281,6 +323,334 @@ def train_update(db_name: str = 'premise_base'):
         ex_electric['amount'] = 1
         ex_electric.save()
         ex_diesel.delete()
+
+
+# 1.2.3 steel update
+def iron_steel_h2_dri_eaf():
+    """
+    1. Create iron pellet, with data from Nurdiawati et al., 2023 (https://doi.org/10.1016/j.jclepro.2023.136262)
+    and Remus et al. 2013 (https://doi.org/10.2791/97469). Infrastructure added as in RoW Ecoinvent dataset. NOTE:
+    direct CO2 emissions adjusted to 0.01, assuming 60% reduction from RoW Ecoinvent dataset.
+    2. Create iron pellet market, which includes the transport from LKAB mines in Sweden to central Sweden by train +
+    cargo vessel + truck
+    3. Create iron production (from H2-DRI). Hydrogen and Heat inputs calculated stochiometrically. Other inoputs and
+    outputs from Nurdiawati et al., 2023.
+    4. Steel production (from H2-DRI). Assumption: 50% scrap iron, 50% iron from H2-DRI route. Exact same proces as
+    steel production with EAF, but changing the iron input.
+    """
+    # create iron pellet (Europe)
+    new_act = bd.Database('premise_base').new_activity(
+        name='iron pellet production',
+        code='iron pellet production',
+        unit='kilogram',
+        location='RER',
+        comment='based on Nurdiawati et al., 2023 (SI Table A8) [https://doi.org/10.1016/j.jclepro.2023.136262], and'
+                'Remus et al., 2013 [https://doi.org/10.2791/97469]. It assumes the production in LKAB facilities '
+                'in Sweden. Infrastructure added as in RoW Ecoinvent dataset. NOTE: '
+                'direct CO2 emissions adjusted to 0.01, assuming 60% reduction from RoW Ecoinvent dataset.'
+    )
+    new_act['reference product'] = 'iron pellet'
+    new_act.save()
+    # output
+    new_ex = new_act.new_exchange(input=new_act.key, amount=1, type='production')
+    new_ex.save()
+    # inputs from technosphere
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
+                                                   ws.equals('name', 'aluminium oxide factory'),
+                                                   ws.equals('location', 'RoW')),
+                                  amount=0.000000000025, type='technosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
+                                                   ws.equals('name', 'iron ore beneficiation'),
+                                                   ws.equals('location', 'RoW')),
+                                  amount=0.9499, type='technosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
+                                                   ws.equals('name', 'market for hard coal'),
+                                                   ws.equals('location', 'Europe, without Russia and Turkey')),
+                                  amount=0.0077, type='technosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
+                                                   ws.equals('name', 'bentonite quarry operation'),
+                                                   ws.equals('location', 'DE')
+                                                   ),
+                                  amount=0.0053, type='technosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
+                                                   ws.equals('name', 'market for dolomite'),
+                                                   ws.equals('location', 'RER')),
+                                  amount=0.0068, type='technosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
+                                                   ws.equals('name', 'market for lime'),
+                                                   ws.equals('location', 'RER')),
+                                  amount=0.0025, type='technosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
+                                                   ws.equals('name', 'compressed air production, '
+                                                                     '1000 kPa gauge, <30kW, optimised generation'),
+                                                   ws.equals('location', 'RER')),
+                                  amount=0.0089, type='technosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
+                                                   ws.equals('name', 'market group for light fuel oil'),
+                                                   ws.equals('location', 'RER')),
+                                  amount=0.0020, type='technosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
+                                                   ws.equals('name', 'market group for electricity, '
+                                                                     'medium voltage'),
+                                                   ws.equals('location', 'Europe without Switzerland')),
+                                  amount=0.0203, type='technosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
+                                                   ws.equals('name', 'market group for tap water'),
+                                                   ws.equals('location', 'RER')),
+                                  amount=0.0004, type='technosphere')
+    new_ex.save()
+    # biosphere
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.equals('name', 'Cadmium II'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=(0.02 * 2.2 / 1000000000000) ** 0.5, type='biosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.equals('name', 'Chromium III'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=(5.1 * 22.4 / 1000000000000) ** 0.5, type='biosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.equals('name', 'Copper ion'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=(1.6 * 6.7 / 1000000000000) ** 0.5, type='biosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.equals('name', 'Mercury II'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=(0.4 * 24.2 / 1000000000000) ** 0.5, type='biosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.equals('name', 'Manganese II'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=(5.1 * 64.3 / 1000000000000) ** 0.5, type='biosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.equals('name', 'Nickel II'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=(6.5 * 12.7 / 1000000000000) ** 0.5, type='biosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.equals('name', 'Lead II'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=(15.6 * 70.8 / 1000000000000) ** 0.5, type='biosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.equals('name', 'Tellurium'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=(0.6 * 3.0 / 1000000000000) ** 0.5, type='biosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.equals('name', 'Vanadium V'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=(13.4 * 15.1 / 1000000000000) ** 0.5, type='biosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.equals('name', 'Zinc II'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=(3 * 1300 / 1000000000000) ** 0.5, type='biosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.equals('name', 'Particulate Matter, < 2.5 um'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=(14 * 150 / 1000000000000) ** 0.5, type='biosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.equals('name', 'Particulate Matter, < 2.5 um'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=(14 * 150 / 1000000000000) ** 0.5, type='biosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.equals('name', 'Hydrogen fluoride'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=(1.8 * 5.8 / 1000000000) ** 0.5, type='biosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.equals('name', 'Hydrochloric acid'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=(2.4 * 41.0 / 1000000000) ** 0.5, type='biosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.equals('name', 'Sulfur oxides'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=(11 * 213 / 1000000000) ** 0.5, type='biosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.equals('name', 'Nitrogen oxides'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=(150 * 550 / 1000000000) ** 0.5, type='biosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.equals('name', 'Carbon monoxide, fossil'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=(10 * 410 / 1000000000) ** 0.5, type='biosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.equals('name', 'Carbon dioxide, fossil'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=0.01, type='biosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.startswith('name', 'NMVOC,'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=(5 * 40 / 1000000000) ** 0.5, type='biosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.startswith('name', 'PAH,'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=(0.7 * 1.1 / 1000000000000) ** 0.5, type='biosphere')
+    new_ex.save()
+    new_ex = new_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.startswith('name', 'Dioxins,'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=(0.7 * 1.1 / 1000000000000000) ** 0.5, type='biosphere')
+    new_ex.save()
+
+    # create market for iron pellet (Europe), which includes transportation from Sweden to DRI plant site
+    market_act = bd.Database('premise_base').new_activity(
+        name='market for iron pellet',
+        code='market for iron pellet',
+        unit='kilogram',
+        location='RER',
+        comment='based on Nurdiawati et al., 2023. '
+    )
+    market_act['reference product'] = 'iron pellet'
+    market_act.save()
+    # output
+    new_ex = market_act.new_exchange(input=market_act.key, amount=1, type='production')
+    new_ex.save()
+    # technosphere: iron pellet + transport
+    new_ex = market_act.new_exchange(input=new_act,
+                                     amount=1, type='technosphere')
+    new_ex.save()
+    new_ex = market_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
+                                                      ws.equals('name', 'transport, freight train, electricity'),
+                                                      ws.equals('location', 'Europe without Switzerland')),
+                                     amount=220 * 0.001, type='technosphere')
+    new_ex.save()
+    new_ex = market_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
+                                                      ws.equals('name', 'transport, freight, sea, bulk carrier for dry goods'),
+                                                      ws.equals('location', 'GLO')),
+                                     amount=776 * 0.001, type='technosphere')
+    new_ex.save()
+    new_ex = market_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
+                                                      ws.equals('name', 'transport, freight, lorry >32 metric ton, EURO6'),
+                                                      ws.equals('location', 'RER')),
+                                     amount=64 * 0.001, type='technosphere')
+    new_ex.save()
+
+    # Create DRI activity
+    dri_act = bd.Database('premise_base').new_activity(
+        name='iron production, from DRI',
+        code='iron production, from DRI',
+        unit='kilogram',
+        location='RER',
+        comment='based on Nurdiawati et al., 2023. Table A12'
+    )
+    dri_act['reference product'] = 'iron, from H2-DRI'
+    dri_act.save()
+    # output
+    new_ex = dri_act.new_exchange(input=dri_act.key, amount=1, type='production')
+    new_ex.save()
+    # technosphere
+    new_ex = dri_act.new_exchange(input=market_act,
+                                     amount=1.391, type='technosphere')
+    new_ex.save()
+    new_ex = dri_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
+                                                      ws.equals('name', 'hydrogen production, gaseous, 30 bar, from PEM electrolysis, from grid electricity'),
+                                                      ws.equals('location', 'RER')),
+                                  amount=0.054, type='technosphere')  # stochiometric recalculation based on Nurdiawati et al., 2023
+    new_ex.save()
+    new_ex = dri_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
+                                                   ws.equals('name',
+                                                             'market group for heat, district or industrial, natural gas'),
+                                                   ws.equals('location', 'RER')),
+                                  amount=2.5, type='technosphere')  # stochiometric calculation
+    new_ex.save()
+    new_ex = dri_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
+                                                   ws.equals('name',
+                                                             'water production, decarbonised'),
+                                                   ws.equals('location', 'DE')),
+                                  amount=1.5, type='technosphere')
+    new_ex.save()
+    # biosphere
+    new_ex = dri_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                   ws.startswith('name', 'Carbon dioxide, fossil'),
+                                                   ws.equals('type', 'emission'),
+                                                   ws.equals('categories', ('air',))
+                                                   ),
+                                  amount=0.04, type='biosphere')
+    new_ex.save()
+
+    # steel-EAF process: 50% scrap iron, 50% iron from H2-DRI
+    steel_act_original = ws.get_one(bd.Database('premise_base'),
+                           ws.equals('name', 'steel production, electric, low-alloyed'),
+                           ws.equals('location', 'Europe without Switzerland and Austria'))
+    steel_act = steel_act_original.copy()
+    steel_act['reference product'] = 'steel, from DRI-EAF'
+    steel_act['name'] = 'steel production, from DRI-EAF'
+    steel_act.save()
+    iron_exchange = [e for e in steel_act.technosphere() if e.input['name'] == 'market for iron scrap, sorted, pressed'][0]
+    new_ex = steel_act.new_exchange(input=dri_act, type='technosphere', amount=iron_exchange.amount/2)
+    new_ex.save()
+    iron_exchange['amount'] = iron_exchange.amount/2
+    iron_exchange.save()
+
+
+
+
+
 
 
 ##### assign location #####
