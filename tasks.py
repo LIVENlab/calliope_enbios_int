@@ -693,7 +693,7 @@ def steel_update():
                     ex.save()
     # substitute iron
     cast_iron_act = ws.get_one(bd.Database('premise_base'),
-                              ws.equals('name', 'market for cast iron'))
+                               ws.equals('name', 'market for cast iron'))
     for ex in cast_iron_act.upstream():
         if any(loc in ex.output._data['location'] for loc in locations):
             if 'chromium' in ex.input['name']:
@@ -703,6 +703,140 @@ def steel_update():
                 ex.input = steel_act
                 ex.save()
 
+
+def delete_methanol_facility_duplicate():
+    """
+    The original data source (https://doi.org/10.1039/C9SE00658C) does not report a facility use for the purification
+    of methanol. However, premise adds it and it represents 99% of impacts of methanol production because it is
+    over-dimensioned. This function deletes it.
+    """
+    methanol_facility_act = ws.get_one(
+        bd.Database('premise_base'),
+        ws.equals('name', 'methanol production facility, construction'))
+    for ex in methanol_facility_act.upstream():
+        if ', purified' in ex.output._data['reference product']:
+            ex.delete()
+
+
+# plastics
+def methanol_to_olefins():
+    delete_methanol_facility_duplicate()
+    for output in ['propylene', 'ethylene', 'butene']:
+        output_act = bd.Database('premise_base').new_activity(
+            name=f'{output} production, from methanol (energy allocation)',
+            code=f'{output} production, from methanol (energy allocation)',
+            unit='kilogram',
+            location='RER',
+            comment='based on Chen et al., 2024. '
+                    '(https://research.tue.nl/en/studentTheses/comparative-life-cycle-assessment-of-methanol-to-olefins-and-meth). '
+                    'Table 14. Methanol-to-olefin process. Energy allocation. '
+                    'Outputs (propylene: 46.4 MJ7kg, ethylene: 47.2 MJ/kg, butane: 45.7 MJ/kg)'
+        )
+        output_act['reference product'] = f'{output}, from methanol'
+        output_act.save()
+        # output
+        new_ex = output_act.new_exchange(input=output_act.key, amount=1, type='production')
+        new_ex.save()
+        # technosphere
+        if output == 'propylene':
+            allocation_factor = (1 * 46.4) / (1 * 46.4 + 0.85 * 47.2 + 0.3 * 45.7)
+        elif output == 'ethylene':
+            allocation_factor = (0.85 * 47.2) / (1 * 46.4 + 0.85 * 47.2 + 0.3 * 45.7)
+        else:
+            allocation_factor = (0.3 * 45.7) / (1 * 46.4 + 0.85 * 47.2 + 0.3 * 45.7)
+        new_ex = output_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
+                                                          ws.equals('name',
+                                                                    'methanol distillation, hydrogen from electrolysis, CO2 from DAC')
+                                                          ),
+                                         amount=5.93 * allocation_factor, type='technosphere')
+        new_ex.save()
+        new_ex = output_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
+                                                          ws.equals('name',
+                                                                    'market group for electricity, medium voltage'),
+                                                          ws.equals('location', 'RER')
+                                                          ),
+                                         amount=0.98973 * allocation_factor, type='technosphere')
+        new_ex.save()
+        new_ex = output_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
+                                                          ws.equals('name',
+                                                                    'steam production, in chemical industry'),
+                                                          ws.equals('location', 'RER')
+                                                          ),
+                                         amount=10.75 * allocation_factor, type='technosphere')
+        new_ex.save()
+        new_ex = output_act.new_exchange(input=ws.get_one(bd.Database('premise_base'),
+                                                          ws.equals('name',
+                                                                    'water production, deionised'),
+                                                          ws.equals('location', 'Europe without Switzerland')
+                                                          ),
+                                         amount=23.70 * allocation_factor, type='technosphere')
+        new_ex.save()
+        # biosphere
+        new_ex = output_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                          ws.startswith('name', 'Carbon dioxide, fossil'),
+                                                          ws.equals('type', 'emission'),
+                                                          ws.equals('categories', ('air',))
+                                                          ),
+                                         amount=0.36 * allocation_factor, type='biosphere')
+        new_ex.save()
+        new_ex = output_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                          ws.startswith('name', 'Carbon monoxide, fossil'),
+                                                          ws.equals('type', 'emission'),
+                                                          ws.equals('categories', ('air',))
+                                                          ),
+                                         amount=0.00003365 * allocation_factor, type='biosphere')
+        new_ex.save()
+        new_ex = output_act.new_exchange(input=ws.get_one(bd.Database('biosphere3'),
+                                                          ws.startswith('name', 'Nitrogen oxides'),
+                                                          ws.equals('type', 'emission'),
+                                                          ws.equals('categories', ('air',))
+                                                          ),
+                                         amount=0.00017516 * allocation_factor, type='biosphere')
+        new_ex.save()
+
+
+def relink_olefins():
+    for chemical in ['propylene', 'ethylene']:  # butene does not have European market
+        act = ws.get_one(bd.Database('premise_base'),
+                         ws.startswith('name', f'market for {chemical}'),
+                         ws.equals('location', 'RER')
+                         )
+        for ex in act.upstream():
+            ex.input = ws.get_one(bd.Database('premise_base'),
+                                  ws.startswith('name', f'{chemical} production, from methanol'))
+            ex.save()
+
+
+def plastics_update():
+    methanol_to_olefins()
+    relink_olefins()
+
+
+def methanol_update():
+    """
+    Substitutes all methanol exchanges in Europe (where methanol is used as feedstock) for methanol from electrolysis.
+    """
+    methanol_act = ws.get_one(bd.Database('premise_base'), ws.equals('name', 'market for methanol'))
+    european_locations = list(consts.LOCATION_EQUIVALENCE.values()) + ['RER', 'RoE', 'Europe']
+    for ex in methanol_act.upstream():
+        if any(loc in ex.output['location'] for loc in european_locations):
+            ex.input = ws.get_one(
+                bd.Database('premise_base'),
+                ws.equals('name', 'methanol distillation, hydrogen from electrolysis, CO2 from DAC'))
+            ex.save()
+
+
+def ammonia_update():
+    """
+    Substitutes all ammonia exchanges in Europe for ammonia from hydrogen.
+    """
+    ammonia_act = ws.get_one(bd.Database('premise_base'),
+                             ws.equals('name', 'market for ammonia, anhydrous, liquid'),
+                             ws.equals('location', 'RER'))
+    for ex in ammonia_act.upstream():
+        ex.input = ws.get_one(bd.Database('premise_base'),
+                              ws.equals('name', 'ammonia production, hydrogen from electrolysis'))
+        ex.save()
 
 
 ##### assign location #####
@@ -1068,28 +1202,33 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
 
 def update_methanol_facility():
     """
-    Copy methanol infrastructure and re-scale it, so it consists of an adiabatic reactor of 12.6 m3 and an isothermal
-    reactor of 8 m3 with an approximate production rate of 20.8 kg/h
+    Re-scale methanol infrastructure. According to the original dataset (https://doi.org/10.1039/C9SE00658C) used to
+    create the inventories in premise it consists of an adiabatic reactor of 12.6 m3 and an isothermal
+    reactor of 8 m3. LT assumed 20 years. Production rate will be 44900000 kg / 20 years / 8000 h = 280 kg/h
     """
-    methanol_facility_act = ws.get_one(
+    methanol_facility_act_original = ws.get_one(
         bd.Database('premise_base'),
         ws.equals('name', 'methanol production facility, construction'))
+    methanol_facility_act = methanol_facility_act_original.copy(database='additional_acts')
 
     for ex in methanol_facility_act.technosphere():
+        # chemical factory
         if 'chemical factory' in ex.input['name']:
-            ex['amount'] = 0.00899 / 0.0333
+            ex['amount'] = 0.00899 / 44900000 * 12.5  # data taken from https://doi.org/10.1039/C9SE00658C and premise
             ex.save()
+        # air compressor
         elif 'air compressor' in ex.input['name']:
-            ex['amount'] = 0.755 / 0.0333
+            ex['amount'] = 0.755 / 44900000 * 12.5  # data taken from https://doi.org/10.1039/C9SE00658C and premise
             ex.save()
+        # build reactors and heat exchanger
         elif 'concrete' in ex.input['name']:
-            ex['amount'] = ex['amount'] * 4490000000 / (0.0333 * 12.46 * 2400)
+            ex['amount'] = ex['amount'] * 44900000 / (0.0333 * 12.5 * 2400)
             ex.save()
         elif 'flat glass' in ex.input['name']:
-            ex['amount'] = 80.342
+            ex['amount'] = 81  # own estimation
             ex.save()
         else:
-            ex['amount'] = ex['amount'] * 4490000000 / (0.0333 * 12.46)
+            ex['amount'] = ex['amount'] * 44900000 / (0.0333 * 12.5)
             ex.save()
 
 

@@ -109,12 +109,16 @@ def update_background():
     # 1.2.4. steel
     steel_update()
     # 1.2.5. plastics
+    # NOTE: aromatics follow today's synthetic route dues to lack of data. Olefins produced from methanol, produced
+    # from hydrogen and CO2 (DAC). Assumptions on recycling and improved circular economies could not be matched.
+    plastics_update()
+    # 1.2.6. methanol
+    methanol_update()
+    # 1.2.7. ammonia
+    ammonia_update()
 
     # TODO:
     #  2. Biomass:
-    #  4. plastics:
-    #  5. ammonia and urea
-    #  5bis. methanol
     #  6. transport
 
 
