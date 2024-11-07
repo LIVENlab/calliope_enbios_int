@@ -116,6 +116,8 @@ def update_background():
     methanol_update()
     # 1.2.7. ammonia
     ammonia_update()
+    # 1.2.8 transport
+    transport_update()
 
     # TODO:
     #  2. Biomass:

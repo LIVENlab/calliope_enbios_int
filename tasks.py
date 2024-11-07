@@ -839,6 +839,99 @@ def ammonia_update():
         ex.save()
 
 
+def trucks_update():
+    """
+    1. It improves road transport efficiency by changing EUROX to EURO6.
+    2. It makes road transport work with synthetic diesel, from biomass.
+    3. All services given by a truck in premise_base, are now 50% provided by an electric truck and 50% provided by a
+    synthetic diesel truck.
+    """
+    freight_lorry_acts = ws.get_many(bd.Database('premise_base'),
+                                     ws.startswith('name', 'market for transport, freight, lorry'),
+                                     ws.equals('location', 'RER'))
+    for act in freight_lorry_acts:
+        if '16-32' in act['name']:
+            electric_mass = '18'
+        elif '3.5-7.5' in act['name']:
+            electric_mass = '7.5'
+        elif '7.5-16' in act['name']:
+            electric_mass = '18'
+        else:
+            electric_mass = '40'
+
+        if 'unspecified' in act['name']:
+            act.technosphere().delete()
+            new_ex = act.new_exchange(
+                input=ws.get_one(bd.Database('premise_base'),
+                                 ws.equals('name', 'transport, freight, lorry, all sizes, EURO6 to '
+                                                   'generic market for transport, freight, lorry, unspecified')
+                                 ),
+                amount=1, type='technosphere'
+            )
+            new_ex.save()
+            # divide the service: 50% electric, 50% synthetic diesel
+            for ex in act.upstream():
+                ex.output.new_exchange(
+                    input=ws.get_one(
+                        bd.Database('premise_base'),
+                        ws.equals('name', 'transport, freight, lorry, fuel cell electric, 18t gross weight, long haul')
+                    ), amount=ex['amount'] / 2
+                )
+                ex['amount'] = ex['amount'] / 2
+                ex.save()
+        elif 'EURO6' not in act['name']:
+            for ex in act.upstream():
+                # update efficiency to EURO6
+                ex.input = ws.get_one(bd.Database('premise_base'),
+                                 ws.equals('name', ex.input['name'][:-1] + '6')
+                                 )
+                ex.save()
+                # divide the service: 50% electric, 50% synthetic diesel
+                ex.output.new_exchange(
+                    input=ws.get_one(
+                        bd.Database('premise_base'),
+                        ws.equals('name', f'transport, freight, lorry, fuel cell electric, {electric_mass}t gross weight, long haul')
+                    ), amount=ex['amount'] / 2
+                )
+                ex['amount'] = ex['amount'] / 2
+                ex.save()
+        else:
+            # For EURO6 vehicles, synthetic diesel as input
+            transpot_act = list(act.technosphere())[0]
+            for ex in transpot_act.technosphere():
+                if 'diesel' in ex.input['reference product']:
+                    ex.input = ws.get_one(
+                        bd.Database('premise_base'),
+                        ws.equals('name', 'diesel production, synthetic, Fischer Tropsch process, '
+                                          'hydrogen from wood gasification, energy allocation'))
+                    ex.save()
+            for ex in act.upstream():
+                # divide the service: 50% electric, 50% synthetic diesel
+                ex.output.new_exchange(
+                    input=ws.get_one(
+                        bd.Database('premise_base'),
+                        ws.equals('name', f'transport, freight, lorry, fuel cell electric, {electric_mass}t gross weight, long haul')
+                    ), amount=ex['amount'] / 2
+                )
+                ex['amount'] = ex['amount'] / 2
+                ex.save()
+
+
+def aviation_update():
+    # TODO
+    pass
+
+def sea_transport_update():
+    # TODO
+    pass
+
+
+def transport_update():
+    trucks_update()
+    aviation_update()
+    sea_transport_update()
+
+
 ##### assign location #####
 def iam_location_equivalence():
     """
