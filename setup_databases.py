@@ -4,6 +4,13 @@ from tasks import *
 import bw2data as bd
 from consts import *
 
+# TODO:
+#  1. Finish cement and steel foreground update (including hydro and fleets)
+#  2. Plot background changes with current electricity mix and with only wind
+#  3. Put database flow at test in a new project
+#  4. Do infrastructure analysis at all steps
+#  5. Carefully document everything
+#  6. Think about implementation of material indicators (contrast NEW TOOL with my own functions).
 
 def install_and_update_databases():
     """
