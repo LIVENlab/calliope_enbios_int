@@ -10,13 +10,6 @@ import consts
 import wurst
 
 
-# TODO:
-#  3. Because infrastructure is mainly GLOBAL, we cannot relink much of the European steel and iron. We need to do it
-#  AFTER the forground has been modified: 1. Create a copy of each infrastructure in technology_mapping, 2. Change
-#  location to RER, 3. Do the same process as in steel_update. Note that if it is a market (only 3 markets in
-#  technology_mapping), I'll have to deal with the technosphere inputs 4. apply special function to wind infrastructure.
-#  NOTE: for most technologies it is negligible (except RES techs) the influence of infrastructure. No need for changes.
-
 #### BACKGROUND #####
 # 1.1. Unlink carrier activities
 # 1.1.1 Electricity
@@ -1016,8 +1009,83 @@ def transport_update():
     sea_transport_update()
 
 
-def update_cement_iron_foreground():
-    pass
+def update_cement_iron_foreground(
+        file_path: str = r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx'):
+    """
+    Because energy infrastructure usually has GLO location, the steel and cement are not updated for them. This function
+    does the following to address it:
+    1. checks every infrastructure act that is going to be used in the Calliope-Enbios integration (mapping file)
+    2. looks for concrete, steel or chromium steel inputs
+    3. re-links them to the updated activities for Europe (following H2-DRI-EAF pathway). In the case of concrete,
+    'concrete, normal strength' in 'CH' is used no matter what was the type of initial concrete.
+    4. TODO: I still need to deal with reservoir infrastructure and fleets!
+    """
+    df = pd.read_excel(file_path, sheet_name='Foreground')
+    failed = []
+    solved = []
+    for index, row in df.iterrows():
+        if row['LCI_energy_cap'] in solved:
+            continue
+        if row['cap_database'] == 'Ecoinvent':
+            database = 'premise_base'
+        else:
+            database = row['cap_database']
+        try:
+            act = ws.get_one(bd.Database(database),
+                             ws.equals('name', row['LCI_energy_cap']),
+                             ws.equals('location', row['cap_location'])
+                             )
+            solved.append(row['LCI_energy_cap'])
+            if 'market' in act['name']:
+                for ex in act.technosphere():
+                    cement_iron_steel_subs(act=ex.input)
+            else:
+                cement_iron_steel_subs(act=act)
+
+        except Exception as e:
+            failed.append(row['LCI_energy_cap'])
+
+    return failed
+
+
+def cement_iron_steel_subs(act):
+    steel_list = {
+        'market for steel, chromium steel 18/8': 'steel production, electric, chromium steel 18/8, from DRI-EAF',
+        'market for steel, chromium steel 18/8, hot rolled': 'market for steel, chromium steel 18/8, hot rolled',
+        'market for steel, low-alloyed': 'steel production, electric, low-alloyed, from DRI-EAF',
+        'market for steel, low-alloyed, hot rolled': 'market for steel, chromium steel 18/8, hot rolled',
+        'market for steel, unalloyed': 'steel production, electric, low-alloyed, from DRI-EAF'}
+    for ex in act.technosphere():
+        # substitute iron
+        if ex.input['name'] == 'market for cast iron' or ex.input['name'] == 'cast iron production':
+            ex.input = ws.get_one(bd.Database('premise_base'),
+                                  ws.equals('name', 'iron production, from DRI'))
+            ex.save()
+        # substitute steel
+        elif any(name == ex.input['name'] for name in steel_list.keys()):
+            try:
+                ex.input = ws.get_one(bd.Database('premise_base'),
+                                      ws.equals('name', steel_list[ex.input['name']]),
+                                      ws.equals('location', 'RER'))
+                ex.save()
+            except Exception:
+                pass
+            try:
+                ex.input = ws.get_one(bd.Database('premise_base'),
+                                      ws.equals('name', steel_list[ex.input['name']]),
+                                      ws.equals('location', 'Europe without Switzerland and Austria'))
+                ex.save()
+            except Exception:
+                pass
+        # substitute concrete
+        elif 'concrete' in act['name']:
+            try:
+                ex.input = ws.get_one(bd.Database('premise_base'),
+                                      ws.equals('name', 'market for concrete, normal strength'),
+                                      ws.equals('location', 'CH'))
+                ex.save()
+            except Exception:
+                pass
 
 
 ##### assign location #####
@@ -2418,90 +2486,6 @@ def technosphere_biosphere_disaggregation(activity):
         act['reference product'] = f'{act["reference product"]}, {sphere}'
         act.save()
 
-
-##### substitute and unlink #####
-# Note: eliminate downstream connections of all hydrogen activities (not only those from electrolysers)
-# (biofuel_to_liquids).
-# Note: maybe relink_technosphere_exchanges() from wurst?
-
-
-##### materials as indicator #####
-# 1. foreground
-def foreground_materials(act):
-    # TODO:
-    # 1. CRMs; 2. list of heavily used materials: steel, iron, copper, aluminium, cement, concrete, water, plastics;
-    # 3. group materials per ISIC classification.
-    metals_cpc = ['41114: Ferro-nickel', '41422: Unwrought nickel',
-                  '41310: Silver (including silver plated with gold or platinum), unwrought or in semi-manufactured forms, or in powder […]',
-                  '41601: Tungsten, molybdenum, tantalum, magnesium, cobalt, cadmium, titanium, zirconium, beryllium, gallium, hafnium, […]',
-                  '41320: Gold (including gold plated with platinum), unwrought or in semi-manufactured forms, or in powder form',
-                  '41116: Ferrous products obtained by direct reduction of iron ore and other spongy ferrous products, in lumps, pellets[…]',
-                  '41603: Bismuth, antimony, manganese, chromium and articles thereof; including waste and scrap of bismuth or manganese',
-                  '412: Products of iron or steel',
-                  '4160: Other non-ferrous metals and articles thereof (including waste and scrap of some metals); cermets and articles […]',
-                  '41122: Alloy steel in ingots or other primary forms and semi-finished products of alloy steel',
-                  '41115: Other ferro-alloys',
-                  '41431: Unwrought aluminium',
-                  '41413: Refined copper and copper alloys, unwrought; master alloys of copper',
-                  '41330: Platinum, unwrought or in semi-manufactured forms, or in powder form',
-                  '41432: Alumina (aluminium oxide), except artificial corundum',
-                  '41: Basic metals',
-                  '41513: Wire of copper',
-                  '41111: Pig iron and spiegeleisen in pigs, blocks or other primary forms',
-                  '4153: Semi-finished products of aluminium or aluminium alloys',
-                  '41443: Tin, unwrought',
-                  '4151: Semi-finished products of copper or copper alloys',
-                  '4128: Tubes, pipes and hollow profiles, of steel',
-                  '413: Basic precious metals and metals clad with precious metals',
-                  '41412: Unrefined copper; copper anodes for electrolytic refining',
-                  '41112: Ferro-manganese',
-                  '4111: Primary materials of the iron and steel industry',
-                  '41121: Non-alloy steel in ingots or other primary forms, and semi-finished products of non-alloy steel',
-                  '4132: Gold (including gold plated with platinum), unwrought or in semi-manufactured forms, or in powder form',
-                  '41411: Copper mattes; cement copper',
-                  '41113: Ferro-chromium',
-                  '41117: Granules and powders, of pig iron and spiegeleisen, or steel',
-                  '4124: Bars and rods, hot-rolled, of iron or steel',
-                  '41442: Zinc, unwrought',
-                  '4121: Flat-rolled products of steel, not further worked than hot-rolled',
-                  '41441: Lead, unwrought',
-                  '41531: Powders and flakes of aluminium',
-                  '4133: Platinum, unwrought or in semi-manufactured forms, or in powder form']
-    cement_cpc = ['374: Plaster, lime and cement',
-                  '37440: Portland cement, aluminous cement, slag cement and similar hydraulic cements, except in the form of clinkers',
-                  '37410: Plasters', '37430: Cement clinkers', '3741: Plasters',
-                  '37420: Quicklime, slaked lime and hydraulic lime',
-                  '3744: Portland cement, aluminous cement, slag cement and similar hydraulic cements, except in the form of clinkers']
-    concrete_cpc = ['37510: Non-refractory mortars and concretes',
-                    '37530: Articles of plaster or of compositions based on plaster',
-                    '37540: Tiles, flagstones, bricks and similar articles, of cement, concrete or artificial stone',
-                    '37570: Articles of asbestos-cement, cellulose fibre-cement or the like',
-                    '375: Articles of concrete, cement and plaster']
-    plastics_cpc = ['347: Plastics in primary forms', '34710: Polymers of ethylene, in primary forms',
-                    '34740: Polyacetals, other polyethers and epoxide resins, in primary forms; polycarbonates, alkyd resins, polyallyl es[…]',
-                    '34730: Polymers of vinyl chloride or other halogenated olefins, in primary forms',
-                    '34790: Other plastics in primary forms; ion exchangers',
-                    '34720: Polymers of styrene, in primary forms']
-    metals = []
-    cement = []
-    concrete = []
-    plastics = []
-    for ex in act.technosphere():
-        try:
-            for classification in ex.input['classifications']:
-                if classification[0] == 'CPC':
-                    if classification[1] in metals_cpc:
-                        metals.append(ex['amount'])
-                    elif classification[1] in cement_cpc:
-                        cement.append(ex['amount'])
-                    elif classification[1] in concrete_cpc:
-                        print(ex.input['name'], 'concrete')
-                        concrete.append(ex['amount'])
-                    elif classification[1] in plastics_cpc:
-                        plastics.append(ex['amount'])
-        except Exception as e:
-            pass
-    return sum(metals), sum(cement), sum(concrete), sum(plastics)
 
 
 # 2. all value chain

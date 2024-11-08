@@ -111,7 +111,7 @@ def update_background():
     # 1.2.2 make European freight trains 100% electric
     train_update()
     # 1.2.3. biomass
-    # TODO: waiting on Calliope assumptions
+    # TODO: waiting for Calliope assumptions
     # 1.2.4. steel
     steel_update()
     # 1.2.5. plastics
@@ -147,7 +147,9 @@ def update_foreground():
     # 2.3 delete infrastructure and leave all activities ready in 'additional_acts'
     delete_infrastructure_main(
         file_path=r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx')
-
+    # finally, relink concrete and steel inputs to the infrastructure we are going to use.
+    # TODO: still it needs to be finished
+    update_cement_iron_foreground()
 
 def create_fleets():
     # 2.2 create fleets
