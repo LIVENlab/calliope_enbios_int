@@ -1,65 +1,71 @@
-import sys
-
 import bw2io as bi
 from premise import *
 from tasks import *
 import bw2data as bd
-import pandas as pd
+from consts import *
 
-# setup_databases
-bd.projects.set_current('calliope_enbios_bw2')
-bi.bw2setup()
 
-SPOLDS_CUTOFF = r"C:\ecoinvent_data\3.9.1\cutoff\datasets"
-SPOLDS_APOS = r"C:\ecoinvent_data\3.9.1\apos\datasets"
+def install_and_update_databases():
+    """
+    1. Import cutoff and apos
+    2. Import premise_original, import premise_cement
+    3. Create a copy of premise_original named premise_base (so we can also do analysis WITHOUT background changes using premise_original)
+    -> infrastructure analysis possible. Without background changes
+    4. Apply background changes to premise_base
+    -> infrastructure analysis possible. With background changes
+    5. Apply foreground changes
+    -> O&M analysis possible. WITHOUT infrastructure, but with all inputs.
+    6. Apply avoid_double accounting
+    -> O&M analysis possible. WITHOUT infrastructure, AND WITHOUT carrier inputs.
+    """
+    # setup_databases
+    bd.projects.set_current(PROJECT_NAME)
+    bi.bw2setup()
 
-# Ecoinvent v3.9.1 cutoff and apos
-if 'original_cutoff391' not in bd.databases:
-    ei = bi.SingleOutputEcospold2Importer(SPOLDS_CUTOFF, "original_cutoff391", use_mp=False)
-    ei.apply_strategies()
-    ei.write_database()
-if 'apos391' not in bd.databases:
-    ei = bi.SingleOutputEcospold2Importer(SPOLDS_APOS, "apos391", use_mp=False)
-    ei.apply_strategies()
-    ei.write_database()
-# create a copy of cutoff391
-if "cutoff391" not in bd.databases:
-    bd.Database('original_cutoff391').copy("cutoff391")
+    # Ecoinvent v3.9.1 cutoff and apos
+    if 'original_cutoff391' not in bd.databases:
+        ei = bi.SingleOutputEcospold2Importer(SPOLDS_CUTOFF, "original_cutoff391", use_mp=False)
+        ei.apply_strategies()
+        ei.write_database()
+    if 'apos391' not in bd.databases:
+        ei = bi.SingleOutputEcospold2Importer(SPOLDS_APOS, "apos391", use_mp=False)
+        ei.apply_strategies()
+        ei.write_database()
 
-# premise, without updates (only imported inventories)
-ndb = NewDatabase(
-    scenarios=[
-        {"model": "image", "pathway": "SSP2-RCP19", "year": 2020},
-    ],
-    source_db="cutoff391",
-    source_version="3.9.1",
-    key='tUePmX_S5B8ieZkkM7WUU2CnO8SmShwmAeWK9x2rTFo='
-)
-ndb.write_db_to_brightway(name='premise_base')
-# premise with cement update
-ndb = NewDatabase(
-    scenarios=[
-        {"model": "image", "pathway": "SSP2-RCP19", "year": 2020},
-    ],
-    source_db="cutoff391",
-    source_version="3.9.1",
-    key='tUePmX_S5B8ieZkkM7WUU2CnO8SmShwmAeWK9x2rTFo='
-)
-ndb.update('cement')
-ndb.write_db_to_brightway(name='premise_cement')
+    # premise, without updates (only imported inventories)
+    ndb = NewDatabase(
+        scenarios=[
+            {"model": "image", "pathway": "SSP2-RCP19", "year": 2020},
+        ],
+        source_db="cutoff391",
+        source_version="3.9.1",
+        key='tUePmX_S5B8ieZkkM7WUU2CnO8SmShwmAeWK9x2rTFo='
+    )
+    ndb.write_db_to_brightway(name='premise_original')
 
-# TODO: Ecoinvent will NEVER be used. We use premise_base or additional_acts ALWAYS. Additional_acts activities should never have cutoff391 as initial database. We can leave 'Ecoinvent' in 'technology_mapping_clean', but we should add a line in the code to transform that into 'premise_base'
-# TODO: database handling should be as follows:
-# 1. Import cutoff and apos
-# 2. Import premise_original
-# 3. Create a copy of premise_original named premise_base (so we can also do analysis WITHOUT background changes using premise_original)
-# -> infrastructure analysis possible. Without background changes
-# 4. Apply background changes to premise_base
-# -> infrastructure analysis possible. With background changes
-# 5. Apply foreground changes
-# -> O&M analysis possible. WITHOUT infrastructure, but with all inputs.
-# 6. Apply avoid_double accounting
-# -> O&M analysis possible. WITHOUT infrastructure, AND WITHOUT carrier inputs.
+    # premise with cement update
+    ndb = NewDatabase(
+        scenarios=[
+            {"model": "image", "pathway": "SSP2-RCP19", "year": 2020},
+        ],
+        source_db="cutoff391",
+        source_version="3.9.1",
+        key='tUePmX_S5B8ieZkkM7WUU2CnO8SmShwmAeWK9x2rTFo='
+    )
+    ndb.update('cement')
+    ndb.write_db_to_brightway(name='premise_cement')
+
+    # create premise_original copy named 'premise_base)
+    bd.Database('premise_original').copy(name="premise_base")
+
+    # background changes
+    update_background()
+
+    # foreground changes
+    update_foreground()
+
+    # avoid double accounting
+    avoid_double_accounting()
 
 
 # 1. set the background
@@ -105,7 +111,7 @@ def update_background():
     # 1.2.2 make European freight trains 100% electric
     train_update()
     # 1.2.3. biomass
-    # check report to see what IAMs say in terms of % biomass
+    # TODO: waiting on Calliope assumptions
     # 1.2.4. steel
     steel_update()
     # 1.2.5. plastics
@@ -116,12 +122,8 @@ def update_background():
     methanol_update()
     # 1.2.7. ammonia
     ammonia_update()
-    # 1.2.8 transport
+    # 1.2.8 transport (NOTE: it takes 15-20 min)
     transport_update()
-
-    # TODO:
-    #  2. Biomass:
-    #  6. transport
 
 
 def update_foreground():
@@ -234,6 +236,3 @@ def create_fleets():
                 'distance_to_shore': 30
             }, 0.15]
     })
-
-
-

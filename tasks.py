@@ -11,11 +11,11 @@ import wurst
 
 
 # TODO:
-#  1. Formalise general workflow
-#  2. Background
 #  3. Because infrastructure is mainly GLOBAL, we cannot relink much of the European steel and iron. We need to do it
 #  AFTER the forground has been modified: 1. Create a copy of each infrastructure in technology_mapping, 2. Change
-#  location to RER, 3. Do the same process as in steel_update, 4. apply special function to wind infrastructure.
+#  location to RER, 3. Do the same process as in steel_update. Note that if it is a market (only 3 markets in
+#  technology_mapping), I'll have to deal with the technosphere inputs 4. apply special function to wind infrastructure.
+#  NOTE: for most technologies it is negligible (except RES techs) the influence of infrastructure. No need for changes.
 
 #### BACKGROUND #####
 # 1.1. Unlink carrier activities
@@ -829,6 +829,7 @@ def methanol_update():
 def ammonia_update():
     """
     Substitutes all ammonia exchanges in Europe for ammonia from hydrogen.
+    NOTE: takes around 25 min.
     """
     ammonia_act = ws.get_one(bd.Database('premise_base'),
                              ws.equals('name', 'market for ammonia, anhydrous, liquid'),
@@ -845,11 +846,13 @@ def trucks_update():
     2. It makes road transport work with synthetic diesel, from biomass.
     3. All services given by a truck in premise_base, are now 50% provided by an electric truck and 50% provided by a
     synthetic diesel truck.
+    NOTE: it takes 15-20 min.
     """
     freight_lorry_acts = ws.get_many(bd.Database('premise_base'),
                                      ws.startswith('name', 'market for transport, freight, lorry'),
                                      ws.equals('location', 'RER'))
     for act in freight_lorry_acts:
+        print(act['name'])
         if '16-32' in act['name']:
             electric_mass = '18'
         elif '3.5-7.5' in act['name']:
@@ -860,44 +863,56 @@ def trucks_update():
             electric_mass = '40'
 
         if 'unspecified' in act['name']:
+            print('unspecified. Substituting technosphere for EURO6')
             act.technosphere().delete()
             new_ex = act.new_exchange(
                 input=ws.get_one(bd.Database('premise_base'),
                                  ws.equals('name', 'transport, freight, lorry, all sizes, EURO6 to '
-                                                   'generic market for transport, freight, lorry, unspecified')
+                                                   'generic market for transport, freight, lorry, unspecified'),
+                                 ws.equals('location', 'RER')
                                  ),
                 amount=1, type='technosphere'
             )
             new_ex.save()
             # divide the service: 50% electric, 50% synthetic diesel
+            print('Dividing service: 50% electric, 50% synthetic diesel')
             for ex in act.upstream():
-                ex.output.new_exchange(
+                print(f'changing {ex}')
+                new_ex = ex.output.new_exchange(
                     input=ws.get_one(
                         bd.Database('premise_base'),
                         ws.equals('name', 'transport, freight, lorry, fuel cell electric, 18t gross weight, long haul')
-                    ), amount=ex['amount'] / 2
+                    ), amount=ex['amount'] / 2, type='technosphere'
                 )
+                new_ex.save()
                 ex['amount'] = ex['amount'] / 2
                 ex.save()
         elif 'EURO6' not in act['name']:
+            print('Dividing service: 50% electric, 50% synthetic diesel')
             for ex in act.upstream():
+                print('updating efficiency to EURO6')
                 # update efficiency to EURO6
                 ex.input = ws.get_one(bd.Database('premise_base'),
-                                 ws.equals('name', ex.input['name'][:-1] + '6')
-                                 )
+                                      ws.equals('name', ex.input['name'][:-1] + '6'),
+                                      ws.equals('location', 'RER')
+                                      )
                 ex.save()
+                print(f'changing {ex}')
                 # divide the service: 50% electric, 50% synthetic diesel
-                ex.output.new_exchange(
+                new_ex = ex.output.new_exchange(
                     input=ws.get_one(
                         bd.Database('premise_base'),
-                        ws.equals('name', f'transport, freight, lorry, fuel cell electric, {electric_mass}t gross weight, long haul')
-                    ), amount=ex['amount'] / 2
+                        ws.equals('name',
+                                  f'transport, freight, lorry, fuel cell electric, {electric_mass}t gross weight, long haul')
+                    ), amount=ex['amount'] / 2, type='technosphere'
                 )
+                new_ex.save()
                 ex['amount'] = ex['amount'] / 2
                 ex.save()
         else:
+            print('EURO6 vehicle. Adding synthetic diesel')
             # For EURO6 vehicles, synthetic diesel as input
-            transpot_act = list(act.technosphere())[0]
+            transpot_act = list(act.technosphere())[0].input
             for ex in transpot_act.technosphere():
                 if 'diesel' in ex.input['reference product']:
                     ex.input = ws.get_one(
@@ -905,31 +920,104 @@ def trucks_update():
                         ws.equals('name', 'diesel production, synthetic, Fischer Tropsch process, '
                                           'hydrogen from wood gasification, energy allocation'))
                     ex.save()
+            print('Dividing service: 50% electric, 50% synthetic diesel')
             for ex in act.upstream():
                 # divide the service: 50% electric, 50% synthetic diesel
-                ex.output.new_exchange(
+                new_ex = ex.output.new_exchange(
                     input=ws.get_one(
                         bd.Database('premise_base'),
-                        ws.equals('name', f'transport, freight, lorry, fuel cell electric, {electric_mass}t gross weight, long haul')
-                    ), amount=ex['amount'] / 2
+                        ws.equals('name',
+                                  f'transport, freight, lorry, fuel cell electric, {electric_mass}t gross weight, long haul')
+                    ), amount=ex['amount'] / 2, type='technosphere'
                 )
+                new_ex.save()
                 ex['amount'] = ex['amount'] / 2
                 ex.save()
 
 
-def aviation_update():
-    # TODO
-    pass
-
 def sea_transport_update():
-    # TODO
-    pass
+    """
+    1. Takes 'transport, freight, sea' activities (which have GLO locations only) and creates a RER location for them
+    2. Substitutes heavy oil for synthetic diesel (from biomass) with the same demand amount. Plus, it deletes heavy oil
+    wastes.
+    3. Re-links all exchanges where GLO  transport act was giving a service to any European location. Now the service is
+    provided by the RER act.
+    4. Takes 'market for transport, freight, sea' activities. It creates the RER market, changing its inputs to the
+    RER 'transport, freight, sea' activity.
+    5. Re-links all exchanges where GLO market act was giving a service to any European location. Now the service is
+    provided by the RER act.
+    """
+    sea_transport_acts = ws.get_many(bd.Database('premise_base'),
+                                     ws.startswith('name', 'transport, freight, sea,')
+                                     )
+    sea_transport_market_acts = ws.get_many(bd.Database('premise_base'),
+                                            ws.startswith('name', 'market for transport, freight, sea')
+                                            )
+    european_locations = list(consts.LOCATION_EQUIVALENCE.values()) + ['RER', 'RoE', 'Europe']
+    for act in sea_transport_acts:
+        # create European location for the same activity
+        european_act = act.copy()
+        european_act['location'] = 'RER'
+        european_act.save()
+        # substitute heavy fuel oil for synthetic diesel
+        heavy_fuel_oil_amounts = [e['amount'] for e in european_act.technosphere() if
+                                  'heavy fuel oil' in e.input['reference product']]
+        oil = False
+        for ex in european_act.technosphere():
+            if 'oil' in ex.input['reference product']:
+                ex.delete()
+                oil = True
+        if oil:
+            diesel_ex = european_act.new_exchange(
+                input=ws.get_one(
+                    bd.Database('premise_base'),
+                    ws.equals('name',
+                              f'diesel production, synthetic, Fischer Tropsch process, '
+                              'hydrogen from wood gasification, energy allocation')
+                ), amount=sum(heavy_fuel_oil_amounts), type='technosphere'
+            )
+            diesel_ex.save()
+        # change the provider of all those activities that have sea transport as an input to the new RER location
+        for ex in act.upstream():
+            if any(loc in ex.output['location'] for loc in european_locations):
+                ex.input = european_act
+                ex.save()
+    for market in sea_transport_market_acts:
+        european_market = market.copy()
+        european_market['location'] = 'RER'
+        european_market.save()
+        # delete technosphere and make it only RER
+        european_market.technosphere().delete()
+        european_ex = european_market.new_exchange(
+            input=ws.get_one(bd.Database('premise_base'),
+                             ws.equals('name', european_market['name'][11:]),
+                             ws.equals('location', 'RER')
+                             ),
+            type='technosphere', amount=1
+        )
+        european_ex.save()
+        # change the provider of all those activities that have sea transport as an input to the new RER location
+        for ex in market.upstream():
+            if any(loc in ex.output['location'] for loc in european_locations):
+                ex.input = european_market
+                ex.save()
 
 
 def transport_update():
+    """
+    Updates transport background for the European regions.
+    CONSIDERATIONS
+    Air transport: Aircraft transport does not give service to any activity in Europe. Left out.
+    Road transport (cars): Cars give service to very few activities in the European market, so they are left out.
+    Road transport (trucks): improves efficiency to EURO6, uses synthetic diesel, electrifies half of the fleet
+    Sea transport: uses synthetic diesel instead of heavy fuel oil. No diesel wastes accounted for.
+    """
     trucks_update()
-    aviation_update()
     sea_transport_update()
+
+
+def update_cement_iron_foreground():
+    pass
 
 
 ##### assign location #####
