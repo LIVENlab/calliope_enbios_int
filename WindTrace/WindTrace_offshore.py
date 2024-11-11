@@ -414,7 +414,7 @@ def substation_platform(new_db, cutoff391, biosphere3,
         new_exc.save()
 
         # iron
-        iron = cutoff391.get(code='e0ad78b195d3be413c9b5792339382b9')  # iron ore concentrate
+        iron = cutoff391.get(code='e6ba5991b1ecab06c9e5ebc33af41364')  # market for cast iron
         new_exc = new_act.new_exchange(input=iron, amount=ballast_fixed, unit="kilogram", type='technosphere')
         new_exc.save()
 
