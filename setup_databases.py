@@ -6,7 +6,6 @@ from consts import *
 
 
 # TODO:
-#  1. Finish cement and steel foreground update (including hydro and fleets)
 #  2. Plot background changes with current electricity mix and with only wind
 #  3. Put database flow at test in a new project
 #  4. Do infrastructure analysis at all steps

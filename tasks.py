@@ -259,7 +259,7 @@ def cement_update():
     2. It re-links its inputs to those of premise_base
     3. It deletes premise_cement (as we won't need it anymore)
     4. It substitutes clinker production (without CCS) upstream for clinker production with CCS in European regions
-    NOTE: premise_cement database is a premise database (imagage_rcp19, 2050) with ndb.update('cement'), copy
+    NOTE: premise_cement database is a premise database (image_rcp19, 2050) with ndb.update('cement')
     """
     cement_ccs_original = ws.get_one(
         bd.Database('premise_cement'),
@@ -268,6 +268,8 @@ def cement_update():
     )
     # create a copy of the clinker production with CCS
     cement_ccs = cement_ccs_original.copy(database='premise_base')
+    cement_ccs['location'] = 'RER'
+    cement_ccs.save()
     # relink inputs to 'premise_base' acts
     for ex in cement_ccs.technosphere():
         if ex.input['location'] == 'WEU':
@@ -635,7 +637,6 @@ def iron_steel_h2_dri_eaf():
     new_ex.save()
 
     # steel-EAF process: 50% scrap iron, 50% iron from H2-DRI. For both steel and chromium steel
-
     steel_acts_original = ws.get_many(bd.Database('premise_base'),
                                       ws.startswith('name', 'steel production, electric,'),
                                       ws.contains('reference product', 'steel')
@@ -723,7 +724,7 @@ def methanol_to_olefins():
             comment='based on Chen et al., 2024. '
                     '(https://research.tue.nl/en/studentTheses/comparative-life-cycle-assessment-of-methanol-to-olefins-and-meth). '
                     'Table 14. Methanol-to-olefin process. Energy allocation. '
-                    'Outputs (propylene: 46.4 MJ7kg, ethylene: 47.2 MJ/kg, butane: 45.7 MJ/kg)'
+                    'Outputs (propylene: 46.4 MJ/kg, ethylene: 47.2 MJ/kg, butane: 45.7 MJ/kg)'
         )
         output_act['reference product'] = f'{output}, from methanol'
         output_act.save()
@@ -791,7 +792,7 @@ def methanol_to_olefins():
 def relink_olefins():
     for chemical in ['propylene', 'ethylene']:  # butene does not have European market
         act = ws.get_one(bd.Database('premise_base'),
-                         ws.startswith('name', f'market for {chemical}'),
+                         ws.equals('name', f'market for {chemical}'),
                          ws.equals('location', 'RER')
                          )
         for ex in act.upstream():
@@ -847,7 +848,7 @@ def trucks_update():
     for act in freight_lorry_acts:
         print(act['name'])
         if '16-32' in act['name']:
-            electric_mass = '18'
+            electric_mass = '26'
         elif '3.5-7.5' in act['name']:
             electric_mass = '7.5'
         elif '7.5-16' in act['name']:
@@ -871,14 +872,15 @@ def trucks_update():
             print('Dividing service: 50% electric, 50% synthetic diesel')
             for ex in act.upstream():
                 print(f'changing {ex}')
+                amount = ex['amount']
                 new_ex = ex.output.new_exchange(
                     input=ws.get_one(
                         bd.Database('premise_base'),
-                        ws.equals('name', 'transport, freight, lorry, fuel cell electric, 18t gross weight, long haul')
-                    ), amount=ex['amount'] / 2, type='technosphere'
+                        ws.equals('name', 'transport, freight, lorry, battery electric, 18t gross weight, long haul')
+                    ), amount=amount/2, type='technosphere'
                 )
                 new_ex.save()
-                ex['amount'] = ex['amount'] / 2
+                ex['amount'] = amount / 2
                 ex.save()
         elif 'EURO6' not in act['name']:
             print('Dividing service: 50% electric, 50% synthetic diesel')
@@ -892,15 +894,16 @@ def trucks_update():
                 ex.save()
                 print(f'changing {ex}')
                 # divide the service: 50% electric, 50% synthetic diesel
+                amount = ex['amount']
                 new_ex = ex.output.new_exchange(
                     input=ws.get_one(
                         bd.Database('premise_base'),
                         ws.equals('name',
-                                  f'transport, freight, lorry, fuel cell electric, {electric_mass}t gross weight, long haul')
-                    ), amount=ex['amount'] / 2, type='technosphere'
+                                  f'transport, freight, lorry, battery electric, {electric_mass}t gross weight, long haul')
+                    ), amount=amount/2, type='technosphere'
                 )
                 new_ex.save()
-                ex['amount'] = ex['amount'] / 2
+                ex['amount'] = amount / 2
                 ex.save()
         else:
             print('EURO6 vehicle. Adding synthetic diesel')
@@ -916,15 +919,16 @@ def trucks_update():
             print('Dividing service: 50% electric, 50% synthetic diesel')
             for ex in act.upstream():
                 # divide the service: 50% electric, 50% synthetic diesel
+                amount = ex['amount']
                 new_ex = ex.output.new_exchange(
                     input=ws.get_one(
                         bd.Database('premise_base'),
                         ws.equals('name',
-                                  f'transport, freight, lorry, fuel cell electric, {electric_mass}t gross weight, long haul')
-                    ), amount=ex['amount'] / 2, type='technosphere'
+                                  f'transport, freight, lorry, battery electric, {electric_mass}t gross weight, long haul')
+                    ), amount=amount/2, type='technosphere'
                 )
                 new_ex.save()
-                ex['amount'] = ex['amount'] / 2
+                ex['amount'] = amount / 2
                 ex.save()
 
 
