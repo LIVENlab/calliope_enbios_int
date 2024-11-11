@@ -4,6 +4,7 @@ from tasks import *
 import bw2data as bd
 from consts import *
 
+
 # TODO:
 #  1. Finish cement and steel foreground update (including hydro and fleets)
 #  2. Plot background changes with current electricity mix and with only wind
@@ -155,8 +156,8 @@ def update_foreground():
     delete_infrastructure_main(
         file_path=r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx')
     # finally, relink concrete and steel inputs to the infrastructure we are going to use.
-    # TODO: still it needs to be finished
     update_cement_iron_foreground()
+
 
 def create_fleets():
     # 2.2 create fleets

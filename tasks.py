@@ -1018,7 +1018,8 @@ def update_cement_iron_foreground(
     2. looks for concrete, steel or chromium steel inputs
     3. re-links them to the updated activities for Europe (following H2-DRI-EAF pathway). In the case of concrete,
     'concrete, normal strength' in 'CH' is used no matter what was the type of initial concrete.
-    4. TODO: I still need to deal with reservoir infrastructure and fleets!
+    ASSUMPTIONS:
+    - Batteries and PV panels won't be produced in Europe! Their iron, steel and cement in the first tier is not updated
     """
     df = pd.read_excel(file_path, sheet_name='Foreground')
     failed = []
@@ -1030,6 +1031,31 @@ def update_cement_iron_foreground(
             database = 'premise_base'
         else:
             database = row['cap_database']
+        # address wind fleets
+        if 'wind' in row['tech']:
+            wind_materials_acts = ws.get_many(bd.Database(database),
+                                              ws.contains('name', '_materials')
+                                              )
+            for act in wind_materials_acts:
+                if '_offshore_materials' in act['name']:
+                    # materials are divided into turbine and substation
+                    for sub_act in act.technosphere():
+                        cement_iron_steel_subs(sub_act)
+                        # steel in WindTrace is different. Let's substitute it
+                        for ex in sub_act.technosphere():
+                            if 'steel, low-alloyed' in ex.input['name']:
+                                ex.input = ws.get_one(bd.Database('premise_base'),
+                                                      ws.equals('name',
+                                                                'steel production, electric, low-alloyed, from DRI-EAF'), )
+                                ex.save()
+                else:
+                    cement_iron_steel_subs(act)
+                    # steel in WindTrace is different. Let's substitute it
+                    for ex in act.technosphere():
+                        if 'steel, low-alloyed' in ex.input['name']:
+                            ex.input = ws.get_one(bd.Database('premise_base'),
+                                                  ws.equals('name', 'steel production, electric, low-alloyed, from DRI-EAF'),)
+                            ex.save()
         try:
             act = ws.get_one(bd.Database(database),
                              ws.equals('name', row['LCI_energy_cap']),
