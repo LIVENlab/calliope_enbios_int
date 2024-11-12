@@ -71,6 +71,11 @@ def install_and_update_databases():
     # foreground changes
     update_foreground()
 
+    # TODO: continue with this flow
+    handle_databases()
+
+    #
+
     # avoid double accounting
     avoid_double_accounting()
 
@@ -122,7 +127,7 @@ def update_background():
     # 1.2.4. steel
     steel_update()
     # 1.2.5. plastics
-    # NOTE: aromatics follow today's synthetic route dues to lack of data. Olefins produced from methanol, produced
+    # NOTE: aromatics follow today's synthetic route due to lack of data. Olefins produced from methanol, produced
     # from hydrogen and CO2 (DAC). Assumptions on recycling and improved circular economies could not be matched.
     plastics_update()
     # 1.2.6. methanol
@@ -137,25 +142,35 @@ def update_foreground():
     # 2. set the foreground
     # 2.1 update inventories
     update_methanol_facility()
-    chp_waste_update(db_waste_name='apos391', db_original_name='cutoff391',
+    chp_waste_update(db_waste_name='apos391', db_original_name='premise_base',
                      locations=['CH'])
     biofuel_to_methanol_update(db_methanol_name='premise_base')
     trucks_and_bus_update(db_truck_name='premise_base')
     passenger_car_and_scooter_update(db_passenger_name='premise_base')
-    gas_to_liquid_update(db_cobalt_name='cutoff391', db_gas_to_liquid_name='premise_base')
-    biofuel_to_methane_infrastructure(db_syn_gas_name='cutoff391')
-    hp_update(db_hp_name='cutoff391')
-    hydro_run_of_river_update(db_hydro_name='cutoff391')
-    for location in ['FR', 'DE']:
-        hydro_reservoir_update(location=location, db_hydro_name='cutoff391')
-    airborne_wind_lci(bd_airborne_name='cutoff391')
+    gas_to_liquid_update(db_cobalt_name='premise_base', db_gas_to_liquid_name='premise_base')
+    biofuel_to_methane_infrastructure(db_syn_gas_name='premise_base')
+    hp_update(db_hp_name='premise_base')
+    hydro_run_of_river_update(db_hydro_name='premise_base')
+    hydro_reservoir_update(location='RER', db_hydro_name='premise_base')
+    airborne_wind_lci(bd_airborne_name='premise_base')
     # 2.2 create fleets
     create_fleets()
-    # 2.3 delete infrastructure and leave all activities ready in 'additional_acts'
+
+
+def handle_databases():
+    # 'infrastructure (unaltered)' -> contains a copy of all infrastructures in technology_mapping_clean.xlsx
+    unaltered_infrastructure_db()
+    # 'infrastructure (with European steel and concrete)' -> contains a copy of all infrastructures, but their steel and
+    # cement input is change to the recently created European markets with new synthetic routes
+    update_cement_iron_foreground()
+
+    # delete infrastructure
+    # TODO: check
     delete_infrastructure_main(
         file_path=r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx')
     # finally, relink concrete and steel inputs to the infrastructure we are going to use.
-    update_cement_iron_foreground()
+
+
 
 
 def create_fleets():
@@ -165,7 +180,7 @@ def create_fleets():
                                       soec_share=0.5, aec_share=0.3, pem_share=0.2)  # TODO: propose relevant fleets
     batteries_fleet(db_batteries_name='premise_base', scenario='tc', technology_share=None)
     # wind fleets created in Germany
-    wind_onshore_fleet(db_wind_name='cutoff391', location='DE', fleet_turbines_definition={'turbine_1': [
+    wind_onshore_fleet(db_wind_name='original_cutoff391', location='DE', fleet_turbines_definition={'turbine_1': [
         {
             'power': 4.0, 'manufacturer': "Vestas", 'rotor_diameter': 125, 'hub_height': 100,
             'commissioning_year': 2030,
@@ -186,7 +201,7 @@ def create_fleets():
             },
             0.333]}
                        )
-    wind_offshore_fleet(db_wind_name='cutoff391', location='DE', fleet_turbines_definition={'turbine_1': [
+    wind_offshore_fleet(db_wind_name='original_cutoff391', location='DE', fleet_turbines_definition={'turbine_1': [
         {
             'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
             'commissioning_year': 2030,
