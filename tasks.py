@@ -8,6 +8,7 @@ import WindTrace.WindTrace_onshore
 import WindTrace.WindTrace_offshore
 import consts
 import wurst
+from auxiliary_functions import *
 
 
 #### BACKGROUND #####
@@ -1016,12 +1017,21 @@ def transport_update():
 def premise_base_auxiliary():
     """
     It creates a copy of premise_base after all background and foreground changes and before infrastructure deletion
-    and O&M separation. We want to have this database because we want to keep premise_base unaltered. It will be used
-    in the function to change steel and cement in European infrastructure.
+    and O&M separation. We want to have these databases because we want to keep premise_base unaltered.
+    'premise_auxiliary_for_infrastructure' will be the base for 'infrastructure (with European steel and concrete)'
+    'premise_auxiliary_for_technosphere_unaltered' will be the base for 'O&M (unaltered)'
+    'premise_auxiliary_for_technosphere_with_EC' will be the base for 'O&M (technosphere with EC)'
+    'premise_auxiliary_for_technosphere_without_EC' will be the base for 'O&M (technosphere without EC)'
     """
-    if 'premise_base_auxiliary' not in bd.databases:
-        new_db = bd.Database('premise_base_auxiliary')
+    if 'premise_auxiliary_for_infrastructure' not in bd.databases:
+        new_db = bd.Database('premise_auxiliary_for_infrastructure')
         new_db.register()
+    if 'premise_auxiliary_for_technosphere_unaltered' not in bd.databases:
+        bd.Database('premise_base').copy('premise_auxiliary_for_technosphere_unaltered')
+    if 'premise_auxiliary_for_technosphere_with_EC' not in bd.databases:
+        bd.Database('premise_auxiliary_for_technosphere_with_EC').register()
+    if 'premise_auxiliary_for_technosphere_without_EC' not in bd.databases:
+        bd.Database('premise_auxiliary_for_technosphere_without_EC')
 
 
 def update_cement_iron_foreground(
@@ -1042,9 +1052,6 @@ def update_cement_iron_foreground(
         new_db = bd.Database('infrastructure (with European steel and concrete)')
         new_db.register()
 
-    # create a copy of premise_base named premise_base_auxiliary, where modifications can be made
-    premise_base_auxiliary()
-
     df = pd.read_excel(file_path, sheet_name='Foreground')
     failed = []
     solved = []
@@ -1052,9 +1059,9 @@ def update_cement_iron_foreground(
         if row['LCI_energy_cap'] in solved:
             continue
         if row['cap_database'] == 'Ecoinvent':
-            database = 'premise_base_auxiliary'
+            database = 'premise_auxiliary_for_infrastructure'
         elif row['cap_database'] == 'premise_base':
-            database = 'premise_base_auxiliary'
+            database = 'premise_auxiliary_for_infrastructure'
         else:
             database = row['cap_database']
         # address wind fleets
@@ -1070,7 +1077,7 @@ def update_cement_iron_foreground(
                         # steel in WindTrace is different. Let's substitute it
                         for ex in sub_act.technosphere():
                             if 'steel, low-alloyed' in ex.input['name']:
-                                ex.input = ws.get_one(bd.Database('premise_base_auxiliary'),
+                                ex.input = ws.get_one(bd.Database('premise_auxiliary_for_infrastructure'),
                                                       ws.equals('name',
                                                                 'steel production, electric, low-alloyed, from DRI-EAF'))
                                 ex.save()
@@ -1079,7 +1086,7 @@ def update_cement_iron_foreground(
                     # steel in WindTrace is different. Let's substitute it
                     for ex in act.technosphere():
                         if 'steel, low-alloyed' in ex.input['name']:
-                            ex.input = ws.get_one(bd.Database('premise_base_auxiliary'),
+                            ex.input = ws.get_one(bd.Database('premise_auxiliary_for_infrastructure'),
                                                   ws.equals('name',
                                                             'steel production, electric, low-alloyed, from DRI-EAF'), )
                             ex.save()
@@ -1113,20 +1120,20 @@ def cement_iron_steel_subs(act):
     for ex in act.technosphere():
         # substitute iron
         if ex.input['name'] == 'market for cast iron' or ex.input['name'] == 'cast iron production':
-            ex.input = ws.get_one(bd.Database('premise_base_auxiliary'),
+            ex.input = ws.get_one(bd.Database('premise_auxiliary_for_infrastructure'),
                                   ws.equals('name', 'iron production, from DRI'))
             ex.save()
         # substitute steel
         elif any(name == ex.input['name'] for name in steel_list.keys()):
             try:
-                ex.input = ws.get_one(bd.Database('premise_base_auxiliary'),
+                ex.input = ws.get_one(bd.Database('premise_auxiliary_for_infrastructure'),
                                       ws.equals('name', steel_list[ex.input['name']]),
                                       ws.equals('location', 'RER'))
                 ex.save()
             except Exception:
                 pass
             try:
-                ex.input = ws.get_one(bd.Database('premise_base_auxiliary'),
+                ex.input = ws.get_one(bd.Database('premise_auxiliary_for_infrastructure'),
                                       ws.equals('name', steel_list[ex.input['name']]),
                                       ws.equals('location', 'Europe without Switzerland and Austria'))
                 ex.save()
@@ -1135,7 +1142,7 @@ def cement_iron_steel_subs(act):
         # substitute concrete
         elif 'concrete' in act['name']:
             try:
-                ex.input = ws.get_one(bd.Database('premise_base_auxiliary'),
+                ex.input = ws.get_one(bd.Database('premise_auxiliary_for_infrastructure'),
                                       ws.equals('name', 'market for concrete, normal strength'),
                                       ws.equals('location', 'CH'))
                 ex.save()
@@ -1180,67 +1187,75 @@ def deletable_exchanges(act):
     return infrastructure, electricity, heat
 
 
-def delete_methanol_infrastructure(biosphere_technosphere_disaggregation: bool):
+def delete_methanol_infrastructure():
     """
         It creates a copy of the methanol syntheses activities and deletes its infrastructure (tier 1 and 2)
     """
-    create_additional_acts_db()
-    is_in_additional_acts = ws.get_many(bd.Database('additional_acts'),
-                                        ws.equals('name',
-                                                  'methanol distillation, hydrogen from electrolysis, CO2 from DAC'))
-    if len(list(is_in_additional_acts)) == 0:
-        from_wood_act = ws.get_one(bd.Database('additional_acts'),
-                                   ws.equals('name', 'methanol distillation, from wood, without CCS')
-                                   )
-        original_from_hydrogen_act = ws.get_one(
-            bd.Database('premise_base'),
-            ws.equals('name', 'methanol distillation, hydrogen from electrolysis, CO2 from DAC')
-        )
-        from_hydrogen_act = original_from_hydrogen_act.copy(database='additional_acts')
-        for act in [from_wood_act, from_hydrogen_act]:
-            infrastructure_ex = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
-            methanol_synthesis_act = \
-                [e.input for e in act.technosphere() if e.input._data['reference product'] == 'methanol, unpurified'][0]
-            methanol_synthesis_ex = [e for e in methanol_synthesis_act.technosphere() if
-                                     e.input._data['unit'] == 'unit']
-            for e in infrastructure_ex:
-                e.delete()
-            for e in methanol_synthesis_ex:
-                e.delete()
-            if biosphere_technosphere_disaggregation:
-                technosphere_biosphere_disaggregation(activity=act)
+    from_wood_act = ws.get_one(bd.Database('additional_acts'),
+                               ws.equals('name', 'methanol distillation, from wood, without CCS')
+                               )
+    original_from_hydrogen_act = ws.get_one(
+        bd.Database('premise_base'),
+        ws.equals('name', 'methanol distillation, hydrogen from electrolysis, CO2 from DAC')
+    )
+    from_hydrogen_act = original_from_hydrogen_act.copy(database='additional_acts')
+    for act in [from_wood_act, from_hydrogen_act]:
+        infrastructure_ex = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
+        methanol_synthesis_act = \
+            [e.input for e in act.technosphere() if e.input._data['reference product'] == 'methanol, unpurified'][0]
+        methanol_synthesis_ex = [e for e in methanol_synthesis_act.technosphere() if
+                                 e.input._data['unit'] == 'unit']
+        for e in infrastructure_ex:
+            e.delete()
+        for e in methanol_synthesis_ex:
+            e.delete()
 
 
-def delete_kerosene_infrastructure(biosphere_technosphere_disaggregation: bool):
+def delete_kerosene_infrastructure():
     """
-    It creates a copy of the kerosene production and diesel production activities and deletes
+    It creates a copy of the kerosene production production activities and deletes
     its infrastructure (tier 2)
     """
-    create_additional_acts_db()
-    kerosene_already_in_additional_acts = ws.get_many(
-        bd.Database('additional_acts'),
+    original_kerosene = ws.get_many(
+        bd.Database('premise_base'),
         ws.contains('name',
                     'kerosene production, synthetic, from Fischer Tropsch process, '),
         ws.contains('name', 'energy allocation'),
         ws.exclude(ws.contains('name', 'coal')),
-        ws.exclude(ws.contains('name', 'CCS')))
-    if len(list(kerosene_already_in_additional_acts)) == 0:
-        original_kerosene = ws.get_many(bd.Database('premise_base'),
-                                        ws.contains('name',
-                                                    'kerosene production, synthetic, from Fischer Tropsch process, '),
-                                        ws.contains('name', 'energy allocation'),
-                                        ws.exclude(ws.contains('name', 'coal')),
-                                        ws.exclude(ws.contains('name', 'CCS')))
-        for act in original_kerosene:
-            kerosene = act.copy(database='additional_acts')
-            kerosene_synthetic_act = \
-                [e.input for e in kerosene.technosphere() if
-                 e.input._data['reference product'] == 'kerosene, synthetic'][0]
-            infrastructure_ex = [e for e in kerosene_synthetic_act.technosphere() if e.input._data['unit'] == 'unit']
-            for e in infrastructure_ex:
-                e.delete()
-            if biosphere_technosphere_disaggregation:
-                technosphere_biosphere_disaggregation(activity=act)
+        ws.exclude(ws.contains('name', 'CCS'))
+    )
+    for act in original_kerosene:
+        # create a copy to unaltered database
+        act.copy(database='O&M (unaltered)')
+        # create a copy to databases for characterization
+        biosphere_act_1 = act.copy(database='O&M (biosphere)')
+        technosphere_EC_act = act.copy(database='O&M (technosphere with EC)')
+        # create a copy to databases for enbios
+        biosphere_act_2 = act.copy(database='O&M (biosphere), for enbios')
+        technosphere_no_EC_act = act.copy(database='O&M (technosphere without EC), for enbios')
+
+        # delete all flows on the biosphere acts
+        biosphere_act_1.techosphere().delete()
+        biosphere_act_2.techosphere().delete()
+        biosphere_act_1.biosphere().delete()
+        biosphere_act_2.biosphere().delete()
+
+        # reconstruct biosphere
+        biosphere_flows, biosphere_exchanges = collect_biosphere_flows(
+            activity=technosphere_EC_act, tier_limit=3,
+            specific_inputs=[
+                'kerosene production, synthetic, Fischer Tropsch process, hydrogen from wood gasification, energy allocation',
+                'syngas, RWGS, Production, for Fischer Tropsch process, hydrogen from wood gasification',
+                'carbon monoxide, from RWGS, for Fischer Tropsch process, hydrogen from wood gasification'])
+        aggregate_biosphere_flows = aggregate_flows(biosphere_flows)
+        for biosphere_act in [biosphere_act_1, biosphere_act_2]:
+            for flow in aggregate_biosphere_flows:
+                new_ex = biosphere_act.new_exchange(input=flow[0], type='biosphere', amount=flow[1])
+                new_ex.save()
+
+        # technosphere (with EC) should be the whole technosphere (no technosphere)
+        for ex in technosphere_no_EC_act:
+            pass
 
 
 def delete_diesel_infrastructure(biosphere_technosphere_disaggregation: bool):
@@ -1272,13 +1287,11 @@ def delete_diesel_infrastructure(biosphere_technosphere_disaggregation: bool):
             infrastructure_ex = [e for e in diesel_synthetic_act.technosphere() if e.input._data['unit'] == 'unit']
             for e in infrastructure_ex:
                 e.delete()
-            if biosphere_technosphere_disaggregation:
-                technosphere_biosphere_disaggregation(activity=act)
 
 
 def delete_infrastructure_main(
         file_path: str = r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx',
-        biosphere_technosphere_disaggregation: bool = True, delete_heat_and_electricity: bool = False
+        biosphere_technosphere_disaggregation: bool = True
 ):
     """
     It takes all the activities in 'technology_map_clean.xlsx', finds the exact activity
@@ -1286,6 +1299,7 @@ def delete_infrastructure_main(
     locations in Calliope), creates a copy of them in 'additional_acts'
     (only if the activities were not already in 'additional_acts'), and deletes the inputs that are infrastructure,
     heat or electricity to avoid double accounting.
+    # TODO: change description
     """
     # delete infrastructure
     df = pd.read_excel(file_path, sheet_name='Foreground')
@@ -1305,6 +1319,7 @@ def delete_infrastructure_main(
             database = 'premise_base'
 
         # delete infrastructure for methanol, diesel and kerosene production (special cases)
+        # TODO: check copy in databases for these functions
         if 'methanol distillation' in name:
             delete_methanol_infrastructure(biosphere_technosphere_disaggregation)
             continue
@@ -1324,31 +1339,7 @@ def delete_infrastructure_main(
                                      ws.exclude(ws.contains('name', 'renewable energy products')),
                                      ws.equals('location', loc),
                                      ws.contains('reference product', reference_product))
-                    if database != 'additional_acts':
-                        try:
-                            new_act = act.copy(database='additional_acts')
-                            infrastructure, electricity, heat = deletable_exchanges(new_act)
-                            for e in infrastructure:
-                                e.delete()
-                            if delete_heat_and_electricity:
-                                for e in electricity:
-                                    e.delete()
-                                for e in heat:
-                                    e.delete()
-                            technosphere_biosphere_disaggregation(new_act)
-                        # if the act has already been copied to the database
-                        except Exception as e:
-                            print(f"The was previously copied in the 'additional_acts' database: {act._data['name']}")
-                    else:
-                        infrastructure, electricity, heat = deletable_exchanges(new_act)
-                        for e in infrastructure:
-                            e.delete()
-                        if delete_heat_and_electricity:
-                            for e in electricity:
-                                e.delete()
-                            for e in heat:
-                                e.delete()
-                        technosphere_biosphere_disaggregation(new_act)
+                    operation_and_maintenance_handling(act)
                     print(f'Activity: {name}. Location: {loc}. Ref product: {reference_product}')
                     found_activity = True
                     continue
@@ -1364,35 +1355,10 @@ def delete_infrastructure_main(
                                          ws.exclude(ws.contains('name', 'renewable energy products')),
                                          ws.equals('location', fallback_loc),
                                          ws.contains('reference product', reference_product))
-                        if act:  # If any activities are found in the fallback location
-                            if database != 'additional_acts':
-                                try:
-                                    new_act = act.copy(database='additional_acts')
-                                    infrastructure, electricity, heat = deletable_exchanges(new_act)
-                                    for e in infrastructure:
-                                        e.delete()
-                                    if delete_heat_and_electricity:
-                                        for e in electricity:
-                                            e.delete()
-                                        for e in heat:
-                                            e.delete()
-                                    technosphere_biosphere_disaggregation(new_act)
-                                # if the act has already been copied to the database
-                                except Exception as e:
-                                    print(act._data['name'], e)
-                            else:
-                                infrastructure, electricity, heat = deletable_exchanges(new_act)
-                                for e in infrastructure:
-                                    e.delete()
-                                if delete_heat_and_electricity:
-                                    for e in electricity:
-                                        e.delete()
-                                    for e in heat:
-                                        e.delete()
-                                technosphere_biosphere_disaggregation(new_act)
-                            print(f'Activity: {name}. Location: {fallback_loc}. Ref product: {reference_product}. ')
-                            found_activity = True
-                            break
+                        operation_and_maintenance_handling(act)
+                        print(f'Activity: {name}. Location: {fallback_loc}. Ref product: {reference_product}. ')
+                        found_activity = True
+                        break
                     except Exception as e:
                         print(f'No activity ({name}) in ({fallback_loc}).')
                 if not found_activity:
@@ -1408,34 +1374,66 @@ def delete_infrastructure_main(
                 act = ws.get_one(bd.Database(database), ws.contains('name', name),
                                  ws.exclude(ws.contains('name', 'renewable energy products')),
                                  ws.equals('location', location))
-                if database != 'additional_acts':
-                    try:
-                        new_act = act.copy(database='additional_acts')
-                        infrastructure, electricity, heat = deletable_exchanges(new_act)
-                        for e in infrastructure:
-                            e.delete()
-                        if delete_heat_and_electricity:
-                            for e in electricity:
-                                e.delete()
-                            for e in heat:
-                                e.delete()
-                        technosphere_biosphere_disaggregation(new_act)
-                    # if the act has already been copied to the database
-                    except Exception as e:
-                        print(act._data['name'], e)
-                else:
-                    infrastructure, electricity, heat = deletable_exchanges(new_act)
-                    for e in infrastructure:
-                        e.delete()
-                    if delete_heat_and_electricity:
-                        for e in electricity:
-                            e.delete()
-                        for e in heat:
-                            e.delete()
-                    technosphere_biosphere_disaggregation(act)
+                operation_and_maintenance_handling(act)
                 print(f'Activity found for {name} in location: {location}')
             except Exception as e:
                 print(f'No activity ({name}) in location: {location}.')
+
+
+def delete_infrastructure():
+    # create databases for: O&M (unaltered), O&M (biosphere), O&M (technosphere with EC), and O&M (unaltered).
+    # These are databases that will be useful to characterize the foregreound.
+    if 'O&M (unaltered)' not in bd.databases:
+        new_db = bd.Database('O&M (unaltered)')
+        new_db.register()
+    if 'O&M (biosphere)' not in bd.databases:
+        new_db = bd.Database('O&M (biosphere)')
+        new_db.register()
+    if 'O&M (technosphere with EC)' not in bd.databases:
+        new_db = bd.Database('O&M (technosphere with EC)')
+        new_db.register()
+
+    # create databases for: 'O&M (biosphere), for enbios', and 'O&M (technosphere without EC), for enbios'.
+    # These are databases that will be useful to characterize the foregreound.
+    if 'O&M (biosphere), for enbios' not in bd.databases:
+        new_db = bd.Database('O&M (biosphere), for enbios')
+        new_db.register()
+    if 'O&M (technosphere without EC), for enbios' not in bd.databases:
+        new_db = bd.Database('O&M (technosphere without EC), for enbios')
+        new_db.register()
+
+
+def operation_and_maintenance_handling(act):
+    """
+    1. Create a copy of the activity to all new databases that are going to be used either to characterize the
+    foreground or in ENBIOS.
+    2. Delete technosphere for the databases that should only contain the biosphere ('O&M (biosphere)',
+    'O&M (biosphere), for enbios')
+    3. Delete biosphere and infrastructure for the databases that should not have infrastructure
+    ('O&M (technosphere with EC)', 'O&M (technosphere without EC), for enbios')
+
+    Note that after we run this function 'O&M (technosphere without EC), for enbios' database still contains the EC,
+    until we apply the avoid_double_accounting() function.
+    """
+    # create a copy to unaltered database
+    act.copy(database='O&M (unaltered)')
+    # create a copy to databases for characterization
+    biosphere_act_1 = act.copy(database='O&M (biosphere)')
+    technosphere_EC_act = act.copy(database='O&M (technosphere with EC)')
+    # create a copy to databases for enbios
+    biosphere_act_2 = act.copy(database='O&M (biosphere), for enbios')
+    technosphere_no_EC_act = act.copy(database='O&M (technosphere without EC), for enbios')
+
+    # delete technosphere from biosphere_act databases
+    biosphere_act_1.techosphere().delete()
+    biosphere_act_2.techosphere().delete()
+
+    # delete biosphere and infrastructure from technosphere_acts
+    for act in [technosphere_EC_act, technosphere_no_EC_act]:
+        act.biosphere().delete()
+        infrastructure, electricity, heat = deletable_exchanges(act)
+        for e in infrastructure:
+            e.delete()
 
 
 ##### individual changes #####
@@ -1453,7 +1451,6 @@ def unaltered_infrastructure_db(
         new_db = bd.Database('infrastructure (unaltered)')
         new_db.register()
 
-    # TODO: make common function for this and cement_iron_foreground
     df = pd.read_excel(file_path, sheet_name='Foreground')
     failed = []
     solved = []
@@ -1713,36 +1710,34 @@ def hydro_reservoir_update(location: str, db_hydro_name: str):
     :return: transfers land use and emissions from flooding operations to infrastructure instead of operation in
     run-of-river power plants.
     """
-    electricity_reservoir = ws.get_many(
+    electricity_reservoir = ws.get_one(
         bd.Database(db_hydro_name),
-        ws.contains('name', 'electricity production, hydro, reservoir, non-alpine regions'),
+        ws.contains('name', 'electricity production, hydro, reservoir, non-alpine region'),
         ws.equals('location', location)
     )
     create_additional_acts_db()
-    for act in electricity_reservoir:
-        new_elec_act = act.copy(database='additional_acts')
-        infrastructure_act = [e.input for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
-        new_infrastructure_act = infrastructure_act.copy(database='additional_acts')
-        infrastructure_amount = [e.amount for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
-        land = [e for e in new_elec_act.biosphere() if
-                any(keyword in e.input._data['name'] for keyword in ['Occupation', 'occupied', 'Transformation'])]
-        emissions = [e for e in new_elec_act.biosphere() if
-                     any(keyword in e.input._data['name'] for keyword in ['Carbon dioxide', 'monoxide', 'Methane'])]
-        for e in land:
-            new_amount = e.amount / infrastructure_amount
-            biosphere_act = e.input
-            e.delete()
-            new_ex = new_infrastructure_act.new_exchange(input=biosphere_act, type='biosphere', amount=new_amount)
-            new_ex.save()
-        for e in emissions:
-            new_amount = e.amount / infrastructure_amount
-            biosphere_act = e.input
-            e.delete()
-            new_ex = new_infrastructure_act.new_exchange(input=biosphere_act, type='biosphere', amount=new_amount)
-            new_ex.save()
-        infrastructure_ex = [e for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
-        infrastructure_ex.delete()
-        technosphere_biosphere_disaggregation(new_elec_act)
+    new_elec_act = electricity_reservoir.copy(database='additional_acts')
+    infrastructure_act = [e.input for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
+    new_infrastructure_act = infrastructure_act.copy(database='additional_acts')
+    infrastructure_amount = [e.amount for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
+    land = [e for e in new_elec_act.biosphere() if
+            any(keyword in e.input._data['name'] for keyword in ['Occupation', 'occupied', 'Transformation'])]
+    emissions = [e for e in new_elec_act.biosphere() if
+                 any(keyword in e.input._data['name'] for keyword in ['Carbon dioxide', 'monoxide', 'Methane'])]
+    for e in land:
+        new_amount = e.amount / infrastructure_amount
+        biosphere_act = e.input
+        e.delete()
+        new_ex = new_infrastructure_act.new_exchange(input=biosphere_act, type='biosphere', amount=new_amount)
+        new_ex.save()
+    for e in emissions:
+        new_amount = e.amount / infrastructure_amount
+        biosphere_act = e.input
+        e.delete()
+        new_ex = new_infrastructure_act.new_exchange(input=biosphere_act, type='biosphere', amount=new_amount)
+        new_ex.save()
+    infrastructure_ex = [e for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
+    infrastructure_ex.delete()
 
 
 def hydro_run_of_river_update(db_hydro_name: str):
@@ -2565,20 +2560,6 @@ def hydrogen_production_update(db_hydrogen_production_name: str, soec_share: flo
     for act, share in tech_acts.items():
         new_ex = new_act.new_exchange(input=act, type='technosphere', amount=share)
         new_ex.save()
-
-
-def technosphere_biosphere_disaggregation(activity):
-    create_additional_acts_db()
-    for sphere in ['biosphere', 'technosphere']:
-        # biosphere
-        act = activity.copy(database='additional_acts')
-        if sphere == 'biosphere':
-            act.technosphere().delete()
-        else:
-            act.biosphere().delete()
-        act['name'] = f'{act["name"]}, {sphere}'
-        act['reference product'] = f'{act["reference product"]}, {sphere}'
-        act.save()
 
 
 # 2. all value chain
