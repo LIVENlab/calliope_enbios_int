@@ -1226,8 +1226,9 @@ def delete_infrastructure_main(
     """
     It takes all the activities in 'technology_map_clean.xlsx', finds the exact activity
     (or activities in plural if it has multiple options, i.e., those activities that exist for all
-    locations in Calliope), creates a copy of them in 'additional_acts'
-    (only if the activities were not already in 'additional_acts'), and deletes the inputs that are infrastructure.
+    locations in Calliope), and deletes the inputs that are infrastructure. Then, it creates a copy of the activity in
+    additional_acts (adding ', biosphere' at the end of the name), and it removes the technosphere, handling the
+    exceptions of hydrogen, diesel and kerosene.
     """
     # delete infrastructure
     df = pd.read_excel(file_path, sheet_name='Foreground')
@@ -1258,6 +1259,7 @@ def delete_infrastructure_main(
                     infrastructure = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
                     for e in infrastructure:
                         e.delete()
+                    om_biosphere(act)
                     print(f'Activity: {name}. Location: {loc}. Ref product: {reference_product}')
                     found_activity = True
                     continue
@@ -1276,6 +1278,7 @@ def delete_infrastructure_main(
                         infrastructure = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
                         for e in infrastructure:
                             e.delete()
+                        om_biosphere(act)
                         print(f'Activity: {name}. Location: {fallback_loc}. Ref product: {reference_product}. ')
                         found_activity = True
                         break
@@ -1297,6 +1300,7 @@ def delete_infrastructure_main(
                 infrastructure = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
                 for e in infrastructure:
                     e.delete()
+                om_biosphere(act)
                 print(f'Activity found for {name} in location: {location}')
             except Exception as e:
                 print(f'No activity ({name}) in location: {location}.')
@@ -1335,6 +1339,87 @@ def delete_infrastructure_main(
     for ex in liquid_storage_act.upstream():
         if any(fuel in ex.output['name'] for fuel in ['hydrogen', 'carbon dioxide', 'methanol']):
             ex.delete()
+
+
+def om_biosphere(act):
+    """
+    Creates a copy of the activity and deletes the technosphere.
+    """
+    biosphere_act = act.copy(database='additional_acts')
+    biosphere_act['name'] = f"{biosphere_act['name']}, biosphere"
+    biosphere_act.save()
+    biosphere_act.technosphere().delete()
+    # handle special cases: hydrogen fleet, diesel and kerosene
+    if biosphere_act['name'] == 'hydrogen production, from electrolyser fleet, for enbios, biosphere':
+        bioflows, bioexchanges = collect_biosphere_flows(
+            activity=act,
+            tier_limit=1,
+            specific_inputs=['hydrogen production, gaseous, 30 bar, from PEM electrolysis, from grid electricity',
+                             'hydrogen production, gaseous, 1 bar, from SOEC electrolysis, from grid electricity',
+                             'hydrogen production, gaseous, 20 bar, from AEC electrolysis, from grid electricity'
+                             ]
+        )
+        bioflows_gruped = aggregate_flows(bioflows)
+        biosphere_act.technosphere().delete()
+        for flow in bioflows_gruped:
+            new_ex = biosphere_act.new_exchange(input=flow[0], type='biosphere', amount=flow[1])
+            new_ex.save()
+    elif biosphere_act['name'] == 'diesel production, synthetic, from Fischer Tropsch process, hydrogen from wood gasification, energy allocation, at fuelling station':
+        bioflows, bioexchanges = collect_biosphere_flows(
+            activity=act,
+            tier_limit=3,
+            specific_inputs=[
+                'diesel production, synthetic, Fischer Tropsch process, hydrogen from wood gasification, energy allocation',
+                'syngas, RWGS, Production, for Fischer Tropsch process, hydrogen from wood gasification',
+                'carbon monoxide, from RWGS, for Fischer Tropsch process, hydrogen from wood gasification'
+            ]
+        )
+        bioflows_gruped = aggregate_flows(bioflows)
+        biosphere_act.technosphere().delete()
+        for flow in bioflows_gruped:
+            new_ex = biosphere_act.new_exchange(input=flow[0], type='biosphere', amount=flow[1])
+            new_ex.save()
+    elif biosphere_act['name'] == 'diesel production, synthetic, from Fischer Tropsch process, hydrogen from electrolysis, energy allocation, at fuelling station':
+        bioflows, bioexchanges = collect_biosphere_flows(
+            activity=act,
+            tier_limit=1,
+            specific_inputs=[
+                'diesel production, synthetic, Fischer Tropsch process, hydrogen from electrolysis, energy allocation',
+                ]
+        )
+        bioflows_gruped = aggregate_flows(bioflows)
+        biosphere_act.technosphere().delete()
+        for flow in bioflows_gruped:
+            new_ex = biosphere_act.new_exchange(input=flow[0], type='biosphere', amount=flow[1])
+            new_ex.save()
+    elif biosphere_act['name'] == 'kerosene production, synthetic, from Fischer Tropsch process, hydrogen from wood gasification, energy allocation, at fuelling station':
+        bioflows, bioexchanges = collect_biosphere_flows(
+            activity=act,
+            tier_limit=3,
+            specific_inputs=[
+                'kerosene production, synthetic, Fischer Tropsch process, hydrogen from wood gasification, energy allocation',
+                'syngas, RWGS, Production, for Fischer Tropsch process, hydrogen from wood gasification',
+                'carbon monoxide, from RWGS, for Fischer Tropsch process, hydrogen from wood gasification'
+            ]
+        )
+        bioflows_gruped = aggregate_flows(bioflows)
+        biosphere_act.technosphere().delete()
+        for flow in bioflows_gruped:
+            new_ex = biosphere_act.new_exchange(input=flow[0], type='biosphere', amount=flow[1])
+            new_ex.save()
+    elif biosphere_act['name'] == 'kerosene production, synthetic, from Fischer Tropsch process, hydrogen from electrolysis, energy allocation, at fuelling station':
+        bioflows, bioexchanges = collect_biosphere_flows(
+            activity=act,
+            tier_limit=1,
+            specific_inputs=[
+                'kerosene production, synthetic, Fischer Tropsch process, hydrogen from electrolysis, energy allocation',
+                ]
+        )
+        bioflows_gruped = aggregate_flows(bioflows)
+        biosphere_act.technosphere().delete()
+        for flow in bioflows_gruped:
+            new_ex = biosphere_act.new_exchange(input=flow[0], type='biosphere', amount=flow[1])
+            new_ex.save()
 
 
 ##### individual changes #####

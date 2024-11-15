@@ -78,9 +78,11 @@ def install_and_update_databases():
     # 'infrastructure (with European steel and concrete)' operating.
     update_cement_iron_foreground()
 
-    # O&M activities in premise_base and additional_acts now do not have infrastructure inputs now.
+    # O&M activities in premise_base and additional_acts do not have infrastructure inputs after running this function.
     delete_infrastructure_main(
         file_path=r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx')
+
+    # O&M biosphere
 
     # avoid double accounting
     # TODO: applied ONLY to those databases used in ENBIOS!
