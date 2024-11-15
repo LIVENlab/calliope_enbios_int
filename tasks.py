@@ -1221,7 +1221,8 @@ def iam_location_equivalence():
 
 
 def delete_infrastructure_main(
-        file_path: str = r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx'
+        file_path: str = r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx',
+        om_spheres_separation: bool = True
 ):
     """
     It takes all the activities in 'technology_map_clean.xlsx', finds the exact activity
@@ -1230,14 +1231,15 @@ def delete_infrastructure_main(
     additional_acts (adding ', biosphere' at the end of the name), and it removes the technosphere, handling the
     exceptions of hydrogen, diesel and kerosene.
     """
+    # TODO: recheck that it works properly
     # delete infrastructure
     df = pd.read_excel(file_path, sheet_name='Foreground')
     for name, location, database, reference_product in (
-            zip(df['LCI_operation_and_maintenance'], df['prod_location'], df['initial_database'],
+            zip(df['LCI_operation_and_maintenance'], df['prod_location'], df['prod_database'],
                 df['reference product'])):
         print('NEXT ACTIVITY')
         # Skip if any of the following conditions are met
-        if name == '-' or name == 'No activity found' or location == '-' or location == 'FR, DE':
+        if name == '-' or name == 'No activity found' or location == '-':
             continue
         print(f'Name: {name}')
         print(f'Location: {location}')
@@ -1259,7 +1261,8 @@ def delete_infrastructure_main(
                     infrastructure = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
                     for e in infrastructure:
                         e.delete()
-                    om_biosphere(act)
+                    if om_spheres_separation:
+                        om_biosphere(act)
                     print(f'Activity: {name}. Location: {loc}. Ref product: {reference_product}')
                     found_activity = True
                     continue
@@ -1278,7 +1281,8 @@ def delete_infrastructure_main(
                         infrastructure = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
                         for e in infrastructure:
                             e.delete()
-                        om_biosphere(act)
+                        if om_spheres_separation:
+                            om_biosphere(act)
                         print(f'Activity: {name}. Location: {fallback_loc}. Ref product: {reference_product}. ')
                         found_activity = True
                         break
@@ -1300,7 +1304,8 @@ def delete_infrastructure_main(
                 infrastructure = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
                 for e in infrastructure:
                     e.delete()
-                om_biosphere(act)
+                if om_spheres_separation:
+                    om_biosphere(act)
                 print(f'Activity found for {name} in location: {location}')
             except Exception as e:
                 print(f'No activity ({name}) in location: {location}.')
@@ -1350,6 +1355,7 @@ def om_biosphere(act):
     biosphere_act.save()
     biosphere_act.technosphere().delete()
     # handle special cases: hydrogen fleet, diesel and kerosene
+    # TODO: check why electricity input disappears from the input
     if biosphere_act['name'] == 'hydrogen production, from electrolyser fleet, for enbios, biosphere':
         bioflows, bioexchanges = collect_biosphere_flows(
             activity=act,
@@ -1379,6 +1385,7 @@ def om_biosphere(act):
         for flow in bioflows_gruped:
             new_ex = biosphere_act.new_exchange(input=flow[0], type='biosphere', amount=flow[1])
             new_ex.save()
+    # TODO: check why it does not work!
     elif biosphere_act['name'] == 'diesel production, synthetic, from Fischer Tropsch process, hydrogen from electrolysis, energy allocation, at fuelling station':
         bioflows, bioexchanges = collect_biosphere_flows(
             activity=act,
@@ -1420,6 +1427,18 @@ def om_biosphere(act):
         for flow in bioflows_gruped:
             new_ex = biosphere_act.new_exchange(input=flow[0], type='biosphere', amount=flow[1])
             new_ex.save()
+
+
+def om_technosphere(act):
+    """
+    Creates a copy of the activity and deletes the biosphere.
+    """
+    biosphere_act = act.copy(database='additional_acts')
+    biosphere_act['name'] = f"{biosphere_act['name']}, technosphere"
+    biosphere_act.save()
+    biosphere_act.biosphere().delete()
+    # TODO: handle exceptions. Those exceptions are: HYDROGEN PRODUCTION, DIESEL, KEROSENE AND METHANOL. Then, add the
+    #  function to delete_infrastructure_main
 
 
 ##### individual changes #####

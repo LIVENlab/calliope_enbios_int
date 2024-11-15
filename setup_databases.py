@@ -19,12 +19,14 @@ def install_and_update_databases():
     2. 'apos391'
     3. 'premise_original'
     4. 'premise_base': will contain the updated background and foreground. Infrastructure deletion,
-    and fuel input deletion (double accounting avoided)
-    5. Auxiliary databases:
+    and fuel input deletion (double accounting avoided).
+    5. 'additional_acts':
+    6. Auxiliary databases:
         - 'premise_auxiliary_for_infrastructure' will be the base for 'infrastructure (with European steel and concrete)'
-    6. Final databases (all of them come WITH background changes):
+    7. Final databases (all of them come WITH background changes):
         - 'infrastructure (with European steel and concrete)': infrastructure activities WITH European markets for
           steel and concrete.
+    # TODO: maybe after all the treatments, we can create a database 'O&M biosphere' with all the corresponding activities. Same for 'O&M technosphere'. In this way, we would have all needed activities well classified in three separated databases.
     """
     # setup_databases
     bd.projects.set_current(PROJECT_NAME)
@@ -79,10 +81,10 @@ def install_and_update_databases():
     update_cement_iron_foreground()
 
     # O&M activities in premise_base and additional_acts do not have infrastructure inputs after running this function.
+    # Moreover, now we have activities (with ', biosphere' and ', technosphere' at the end of the name indicated in the
+    # mapping file) in additional_acts.
     delete_infrastructure_main(
         file_path=r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx')
-
-    # O&M biosphere
 
     # avoid double accounting
     # TODO: applied ONLY to those databases used in ENBIOS!
@@ -164,6 +166,8 @@ def update_foreground():
     airborne_wind_lci(bd_airborne_name='premise_base')
     # 2.2 create fleets
     create_fleets()
+    # TODO: think if I should aggregate infrastructure in the different tiers in one single activity for
+    #  kerosene, diesel, and methanol.
 
 
 def create_fleets():
