@@ -18,25 +18,13 @@ def install_and_update_databases():
     1. 'original_cutoff391'
     2. 'apos391'
     3. 'premise_original'
-    4. 'premise_base': will contain the updated background and foreground. No infrastructure deletion nor
-    biosphere/technosphere disaggregation is applied to this database. It will be used as the base for 'O&M (biosphere)'
+    4. 'premise_base': will contain the updated background and foreground. Infrastructure deletion,
+    and fuel input deletion (double accounting avoided)
     5. Auxiliary databases:
         - 'premise_auxiliary_for_infrastructure' will be the base for 'infrastructure (with European steel and concrete)'
-        - 'premise_auxiliary_for_technosphere_unaltered' will be the base for 'O&M (unaltered)'
-        - 'premise_auxiliary_for_technosphere_with_EC' will be the base for 'O&M (technosphere with EC)'
-        - 'premise_auxiliary_for_technosphere_without_EC' will be the base for 'O&M (technosphere without EC)'
     6. Final databases (all of them come WITH background changes):
-        · Infrastructure:
-            - 'infrastructure (unaltered)': infrastructure activities WITHOUT European markets for steel and concrete.
-            - 'infrastructure (with European steel and concrete)': infrastructure activities WITH European markets for
-              steel and concrete. TO BE USED IN ENBIOS.
-        · O&M (all of them come WITHOUT infrastructure):
-            - 'O&M (unaltered)': no changes.
-            - 'O&M (biosphere)': WITHOUT technosphere. TO BE USED IN ENBIOS.
-            - 'O&M (technosphere with EC)': WITHOUT biosphere, but WITH Energy Carriers.
-            - 'O&M (technosphere without EC)': WITHOUT biosphere AND WITHOUT Energy Carriers. TO BE USED IN ENBIOS.
-
-    Avoid double accounting function applied ONLY to those databases used in ENBIOS!
+        - 'infrastructure (with European steel and concrete)': infrastructure activities WITH European markets for
+          steel and concrete.
     """
     # setup_databases
     bd.projects.set_current(PROJECT_NAME)
@@ -87,14 +75,12 @@ def install_and_update_databases():
     # foreground changes
     update_foreground()
 
-    # infrastructure database handling. It leaves 'infrastructure (unaltered)' and
     # 'infrastructure (with European steel and concrete)' operating.
-    infrastructure_databases()
+    update_cement_iron_foreground()
 
-    # O&M: delete infrastructure (no biosphere/technosphere separation)
-    # TODO: I am currently here
+    # O&M activities in premise_base and additional_acts now do not have infrastructure inputs now.
     delete_infrastructure_main(
-             file_path=r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx')
+        file_path=r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx')
 
     # avoid double accounting
     # TODO: applied ONLY to those databases used in ENBIOS!
@@ -176,21 +162,6 @@ def update_foreground():
     airborne_wind_lci(bd_airborne_name='premise_base')
     # 2.2 create fleets
     create_fleets()
-
-
-def infrastructure_databases():
-    """
-    Creates two databases:
-    1. 'infrastructure (unaltered)': it is based on 'premise_base'. It includes the infrastructure WITH background
-    changes and WITHOUT European markets for steel and concrete.
-    2. 'infrastructure (with European steel and concrete)': it is based on 'premise_auxiliary_for_infrastructure'. It
-    includes the infrastructure WITH background changes and WITHOUT European markets for steel and concrete.
-    """
-    # 'infrastructure (unaltered)' -> contains a copy of all infrastructures in technology_mapping_clean.xlsx
-    unaltered_infrastructure_db()
-    # 'infrastructure (with European steel and concrete)' -> contains a copy of all infrastructures, but their steel and
-    # cement input is change to the recently created European markets with new synthetic routes
-    update_cement_iron_foreground()
 
 
 def create_fleets():
