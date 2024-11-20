@@ -166,8 +166,9 @@ def update_foreground():
     airborne_wind_lci(bd_airborne_name='premise_base')
     # 2.2 create fleets
     create_fleets()
-    # TODO: think if I should aggregate infrastructure in the different tiers in one single activity for
-    #  kerosene, diesel, and methanol.
+    # restructure methanol, kerosene, and diesel activities
+    rebuild_methanol_act()
+    rebuild_kerosene_and_diesel_acts()
 
 
 def create_fleets():

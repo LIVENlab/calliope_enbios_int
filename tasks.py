@@ -8,7 +8,7 @@ import WindTrace.WindTrace_onshore
 import WindTrace.WindTrace_offshore
 import consts
 import wurst
-from auxiliary_functions import *
+from collections import defaultdict
 
 
 #### BACKGROUND #####
@@ -1262,6 +1262,7 @@ def delete_infrastructure_main(
                         e.delete()
                     if om_spheres_separation:
                         om_biosphere(act)
+                        om_technosphere(act)
                     print(f'Activity: {name}. Location: {loc}. Ref product: {reference_product}')
                     found_activity = True
                     continue
@@ -1282,6 +1283,7 @@ def delete_infrastructure_main(
                             e.delete()
                         if om_spheres_separation:
                             om_biosphere(act)
+                            om_technosphere(act)
                         print(f'Activity: {name}. Location: {fallback_loc}. Ref product: {reference_product}. ')
                         found_activity = True
                         break
@@ -1305,6 +1307,7 @@ def delete_infrastructure_main(
                     e.delete()
                 if om_spheres_separation:
                     om_biosphere(act)
+                    om_technosphere(act)
                 print(f'Activity found for {name} in location: {location}')
             except Exception as e:
                 print(f'No activity ({name}) in location: {location}.')
@@ -1353,7 +1356,7 @@ def om_biosphere(act):
     biosphere_act['name'] = f"{biosphere_act['name']}, biosphere"
     biosphere_act.save()
     biosphere_act.technosphere().delete()
-    # handle special cases: hydrogen fleet, diesel and kerosene
+    # handle special cases: hydrogen fleet
     if biosphere_act['name'] == 'hydrogen production, from electrolyser fleet, for enbios, biosphere':
         bioflows, bioexchanges = collect_biosphere_flows(
             activity=act,
@@ -1362,62 +1365,6 @@ def om_biosphere(act):
                              'hydrogen production, gaseous, 1 bar, from SOEC electrolysis, from grid electricity',
                              'hydrogen production, gaseous, 20 bar, from AEC electrolysis, from grid electricity'
                              ]
-        )
-        bioflows_gruped = aggregate_flows(bioflows)
-        biosphere_act.biosphere().delete()
-        for flow in bioflows_gruped:
-            new_ex = biosphere_act.new_exchange(input=flow[0], type='biosphere', amount=flow[1])
-            new_ex.save()
-    elif biosphere_act['name'] == 'diesel production, synthetic, from Fischer Tropsch process, hydrogen from wood gasification, energy allocation, at fuelling station, biosphere':
-        bioflows, bioexchanges = collect_biosphere_flows(
-            activity=act,
-            tier_limit=3,
-            specific_inputs=[
-                'diesel production, synthetic, Fischer Tropsch process, hydrogen from wood gasification, energy allocation',
-                'syngas, RWGS, Production, for Fischer Tropsch process, hydrogen from wood gasification',
-                'carbon monoxide, from RWGS, for Fischer Tropsch process, hydrogen from wood gasification'
-            ]
-        )
-        bioflows_gruped = aggregate_flows(bioflows)
-        biosphere_act.biosphere().delete()
-        for flow in bioflows_gruped:
-            new_ex = biosphere_act.new_exchange(input=flow[0], type='biosphere', amount=flow[1])
-            new_ex.save()
-    elif biosphere_act['name'] == 'diesel production, synthetic, from Fischer Tropsch process, hydrogen from electrolysis, energy allocation, at fuelling station, biosphere':
-        bioflows, bioexchanges = collect_biosphere_flows(
-            activity=act,
-            tier_limit=1,
-            specific_inputs=[
-                'diesel production, synthetic, Fischer Tropsch process, hydrogen from electrolysis, energy allocation',
-                ]
-        )
-        bioflows_gruped = aggregate_flows(bioflows)
-        biosphere_act.biosphere().delete()
-        for flow in bioflows_gruped:
-            new_ex = biosphere_act.new_exchange(input=flow[0], type='biosphere', amount=flow[1])
-            new_ex.save()
-    elif biosphere_act['name'] == 'kerosene production, synthetic, from Fischer Tropsch process, hydrogen from wood gasification, energy allocation, at fuelling station, biosphere':
-        bioflows, bioexchanges = collect_biosphere_flows(
-            activity=act,
-            tier_limit=3,
-            specific_inputs=[
-                'kerosene production, synthetic, Fischer Tropsch process, hydrogen from wood gasification, energy allocation',
-                'syngas, RWGS, Production, for Fischer Tropsch process, hydrogen from wood gasification',
-                'carbon monoxide, from RWGS, for Fischer Tropsch process, hydrogen from wood gasification'
-            ]
-        )
-        bioflows_gruped = aggregate_flows(bioflows)
-        biosphere_act.biosphere().delete()
-        for flow in bioflows_gruped:
-            new_ex = biosphere_act.new_exchange(input=flow[0], type='biosphere', amount=flow[1])
-            new_ex.save()
-    elif biosphere_act['name'] == 'kerosene production, synthetic, from Fischer Tropsch process, hydrogen from electrolysis, energy allocation, at fuelling station, biosphere':
-        bioflows, bioexchanges = collect_biosphere_flows(
-            activity=act,
-            tier_limit=1,
-            specific_inputs=[
-                'kerosene production, synthetic, Fischer Tropsch process, hydrogen from electrolysis, energy allocation',
-                ]
         )
         bioflows_gruped = aggregate_flows(bioflows)
         biosphere_act.biosphere().delete()
@@ -1434,8 +1381,9 @@ def om_technosphere(act):
     biosphere_act['name'] = f"{biosphere_act['name']}, technosphere"
     biosphere_act.save()
     biosphere_act.biosphere().delete()
-    # TODO: handle exceptions. Those exceptions are: HYDROGEN PRODUCTION, DIESEL, KEROSENE AND METHANOL. Then, add the
-    #  function to delete_infrastructure_main
+    if biosphere_act['name'] == 'hydrogen production, from electrolyser fleet, for enbios, biosphere':
+        for ex in biosphere_act.technsophere:
+            ex.input.biosphere().delete()
 
 
 ##### individual changes #####
@@ -2524,6 +2472,281 @@ def hydrogen_production_update(db_hydrogen_production_name: str, soec_share: flo
     for act, share in tech_acts.items():
         new_ex = new_act.new_exchange(input=act, type='technosphere', amount=share)
         new_ex.save()
+
+
+def collect_biosphere_flows(activity, scaling_factor=1, specific_inputs=None, current_tier=0, tier_limit=2):
+    """
+    Collects biosphere flows and biosphere exchanges up to a specified tier depth.
+    Parameters:
+    - activity: Brightway activity whose flows are analyzed.
+    - scaling_factor: Float, used to scale amounts of flows.
+    - specific_inputs: List of names of technosphere inputs to include.
+    - current_tier: Int, depth of recursion.
+    - tier_limit: Int, maximum depth for recursive search.
+    Returns:
+    - biosphere_flows: List of tuples, each containing (biosphere flow, scaled amount).
+    - biosphere_exchanges: List of biosphere exchanges collected.
+    """
+    # Check if the current tier exceeds the limit
+    if current_tier > tier_limit:
+        return [], []
+    biosphere_flows = []
+    biosphere_exchanges = []
+    for exc in activity.exchanges():
+        if exc['type'] == 'biosphere':
+            # Collect biosphere flow with scaling
+            biosphere_flows.append((exc.input, exc.amount * scaling_factor))
+            biosphere_exchanges.append(exc)
+        elif specific_inputs and exc.input['name'] in specific_inputs and exc['type'] == 'technosphere':
+            # If input is in specific_inputs and within tier limit, collect its contributions
+            new_scaling_factor = exc.amount * scaling_factor
+            nested_flows, nested_exchanges = collect_biosphere_flows(
+                exc.input,
+                new_scaling_factor,
+                specific_inputs,
+                current_tier + 1,
+                tier_limit
+            )
+            biosphere_flows.extend(nested_flows)
+            biosphere_exchanges.extend(nested_exchanges)
+    return biosphere_flows, biosphere_exchanges
+
+
+def aggregate_flows(biosphere_flows):
+    # Use defaultdict to sum amounts for each unique biosphere flow
+    aggregated_flows = defaultdict(float)
+    for flow, amount in biosphere_flows:
+        aggregated_flows[flow] += amount
+    # Convert back to list of tuples for final result
+    return list(aggregated_flows.items())
+
+
+def aggregate_technosphere_inputs(activity, scaling_factor=1, specific_inputs=None, current_tier=0, tier_limit=2):
+    """
+    Aggregates technosphere flows up to a specified tier depth, ensuring all inputs
+    from the deepest tier are included, and filtering intermediate tiers by `specific_inputs`.
+    Some inputs (e.g., `always_include`) are added directly to the results if not in tier 0.
+    Parameters:
+    - activity: Brightway activity to analyze.
+    - scaling_factor: Float, scales the amount of flows.
+    - specific_inputs: List of names of technosphere inputs to explore specifically.
+    - current_tier: Int, current depth of recursion.
+    - tier_limit: Int, maximum depth for recursive search.
+    Returns:
+    - aggregated_flows: Dictionary with aggregated inputs and their scaled amounts.
+    """
+    if current_tier > tier_limit:
+        return {}
+    aggregated_flows = {}
+    # List of inputs that must be directly included in the results
+    always_include = [
+        "hydrogen production, gaseous, 30 bar, from PEM electrolysis, from grid electricity",
+        "market group for electricity, low voltage",
+        "hydrogen production, gaseous, 25 bar, from gasification of woody biomass in entrained flow gasifier, "
+        "at gasification plant"
+    ]
+    for exc in activity.exchanges():
+        if exc['type'] == 'technosphere':
+            # Scale the current input amount
+            scaled_amount = exc.amount * scaling_factor
+            if exc.input['name'] in always_include and current_tier != 0:
+                # Add `always_include` inputs directly to results if not in tier 0
+                if exc.input in aggregated_flows:
+                    aggregated_flows[exc.input] += scaled_amount
+                else:
+                    aggregated_flows[exc.input] = scaled_amount
+                continue  # Do not explore these inputs further
+            if current_tier == tier_limit:
+                # Add inputs directly at the last tier
+                if exc.input in aggregated_flows:
+                    aggregated_flows[exc.input] += scaled_amount
+                else:
+                    aggregated_flows[exc.input] = scaled_amount
+            else:
+                # Check if input should be included based on specific_inputs
+                if specific_inputs and exc.input['name'] not in specific_inputs:
+                    print(f"Skipping {exc.input['name']} at tier {current_tier}")
+                    continue
+                print(f"Exploring {exc.input['name']} at tier {current_tier}")
+                # Recursively explore deeper tiers
+                nested_flows = aggregate_technosphere_inputs(
+                    exc.input,
+                    scaling_factor=scaled_amount,
+                    specific_inputs=specific_inputs,
+                    current_tier=current_tier + 1,
+                    tier_limit=tier_limit
+                )
+                # Merge nested flows into aggregated flows
+                for key, value in nested_flows.items():
+                    if key in aggregated_flows:
+                        aggregated_flows[key] += value
+                    else:
+                        aggregated_flows[key] = value
+    return aggregated_flows
+
+
+def rebuild_acts(act, specific_inputs=None, tier_limit=3):
+    """
+    It reconstructs the diesel and kerosene acts, so it includes what previously was in all tiers of
+    fuel production into tier 0.
+    """
+    # TODO: add it to foreground_update and change the name of the database in the mapping file
+
+    # deal with the technosphere
+    updated_act = act.copy(database='additional_acts')
+    print(f'{updated_act["name"]}copy created in additional_acts')
+    for ex in updated_act.technosphere():
+        if ex.input['name'] == specific_inputs[0]:
+            ex.delete()
+            print(f'deleted {ex.input["name"]} input')
+    aggregated_flows = aggregate_technosphere_inputs(
+        activity=act, specific_inputs=specific_inputs, tier_limit=tier_limit)
+    for activity, amount in aggregated_flows.items():
+        new_ex = updated_act.new_exchange(input=activity, amount=amount, type='technosphere')
+        new_ex.save()
+        print(f'adding act: {activity}, amount: {amount}')
+    # deal with the biosphere
+    if act[
+        'name'] == 'diesel production, synthetic, from Fischer Tropsch process, hydrogen from wood gasification, energy allocation, at fuelling station':
+        print('dealing with the biosphere')
+        bioflows, bioexchanges = collect_biosphere_flows(
+            activity=act,
+            tier_limit=3,
+            specific_inputs=[
+                'diesel production, synthetic, Fischer Tropsch process, hydrogen from wood gasification, energy allocation',
+                'syngas, RWGS, Production, for Fischer Tropsch process, hydrogen from wood gasification',
+                'carbon monoxide, from RWGS, for Fischer Tropsch process, hydrogen from wood gasification'
+            ]
+        )
+        bioflows_gruped = aggregate_flows(bioflows)
+        updated_act.biosphere().delete()
+        print('biosphere deleted')
+        for flow in bioflows_gruped:
+            new_ex = updated_act.new_exchange(input=flow[0], type='biosphere', amount=flow[1])
+            new_ex.save()
+            print(f'adding flow: {flow[0]["name"]}, amount: {flow[1]}')
+    elif act[
+        'name'] == 'diesel production, synthetic, from Fischer Tropsch process, hydrogen from electrolysis, energy allocation, at fuelling station':
+        bioflows, bioexchanges = collect_biosphere_flows(
+            activity=act,
+            tier_limit=1,
+            specific_inputs=[
+                'diesel production, synthetic, Fischer Tropsch process, hydrogen from electrolysis, energy allocation',
+            ]
+        )
+        bioflows_gruped = aggregate_flows(bioflows)
+        updated_act.biosphere().delete()
+        for flow in bioflows_gruped:
+            new_ex = updated_act.new_exchange(input=flow[0], type='biosphere', amount=flow[1])
+            new_ex.save()
+    elif act[
+        'name'] == 'kerosene production, synthetic, from Fischer Tropsch process, hydrogen from wood gasification, energy allocation, at fuelling station':
+        bioflows, bioexchanges = collect_biosphere_flows(
+            activity=act,
+            tier_limit=3,
+            specific_inputs=[
+                'kerosene production, synthetic, Fischer Tropsch process, hydrogen from wood gasification, energy allocation',
+                'syngas, RWGS, Production, for Fischer Tropsch process, hydrogen from wood gasification',
+                'carbon monoxide, from RWGS, for Fischer Tropsch process, hydrogen from wood gasification'
+            ]
+        )
+        bioflows_gruped = aggregate_flows(bioflows)
+        updated_act.biosphere().delete()
+        for flow in bioflows_gruped:
+            new_ex = updated_act.new_exchange(input=flow[0], type='biosphere', amount=flow[1])
+            new_ex.save()
+    elif act[
+        'name'] == 'kerosene production, synthetic, from Fischer Tropsch process, hydrogen from electrolysis, energy allocation, at fuelling station':
+        bioflows, bioexchanges = collect_biosphere_flows(
+            activity=act,
+            tier_limit=1,
+            specific_inputs=[
+                'kerosene production, synthetic, Fischer Tropsch process, hydrogen from electrolysis, energy allocation',
+            ]
+        )
+        bioflows_gruped = aggregate_flows(bioflows)
+        updated_act.biosphere().delete()
+        for flow in bioflows_gruped:
+            new_ex = updated_act.new_exchange(input=flow[0], type='biosphere', amount=flow[1])
+            new_ex.save()
+
+
+def rebuild_kerosene_and_diesel_acts():
+    """
+    diesel and kerosene at fuelling station is produced from hydrogen, which is synthesised either via wood gasification
+    or electrolysis. The process involves several steps, separated into different activities in premise_base. These
+    include carbon monoxide production, followed by syngas production, followed by kerosene production and finally
+    kerosene at fuelling station. This function puts all the value chain together (both technosphere and biosphere) in
+    one single activity, which will be located in additional_acts.
+    """
+    diesel_wood = ws.get_one(
+        bd.Database('premise_base'),
+        ws.equals('name', 'diesel production, synthetic, from Fischer Tropsch process, '
+                          'hydrogen from wood gasification, energy allocation, at fuelling station')
+    )
+    diesel_electrolysis = ws.get_one(
+        bd.Database('premise_base'),
+        ws.equals('name', 'diesel production, synthetic, from Fischer Tropsch process, '
+                          'hydrogen from electrolysis, energy allocation, at fuelling station')
+    )
+    kerosene_wood = ws.get_one(
+        bd.Database('premise_base'),
+        ws.equals('name', 'kerosene production, synthetic, from Fischer Tropsch process, '
+                          'hydrogen from wood gasification, energy allocation, at fuelling station')
+    )
+    kerosene_electrolysis = ws.get_one(
+        bd.Database('premise_base'),
+        ws.equals('name', 'kerosene production, synthetic, from Fischer Tropsch process, '
+                          'hydrogen from electrolysis, energy allocation, at fuelling station')
+    )
+    for act in [diesel_wood, diesel_electrolysis, kerosene_wood, kerosene_electrolysis]:
+        if act['name'] == ('diesel production, synthetic, from Fischer Tropsch process, '
+                           'hydrogen from wood gasification, energy allocation, at fuelling station'):
+            rebuild_acts(act, [
+                'diesel production, synthetic, Fischer Tropsch process, hydrogen from wood gasification, energy allocation',
+                'syngas, RWGS, Production, for Fischer Tropsch process, hydrogen from wood gasification',
+                'carbon monoxide, from RWGS, for Fischer Tropsch process, hydrogen from wood gasification'
+            ])
+        elif act['name'] == ('diesel production, synthetic, from Fischer Tropsch process, '
+                             'hydrogen from electrolysis, energy allocation, at fuelling station'):
+            rebuild_acts(act, [
+                'diesel production, synthetic, Fischer Tropsch process, hydrogen from electrolysis, energy allocation',
+                'syngas, RWGS, Production, for Fischer Tropsch process, hydrogen from electrolysis',
+                'carbon monoxide, from RWGS, for Fischer Tropsch process, hydrogen from electrolysis'
+            ])
+        elif act['name'] == ('kerosene production, synthetic, from Fischer Tropsch process, '
+                             'hydrogen from wood gasification, energy allocation, at fuelling station'):
+            rebuild_acts(act, [
+                'kerosene production, synthetic, Fischer Tropsch process, hydrogen from wood gasification, energy allocation',
+                'syngas, RWGS, Production, for Fischer Tropsch process, hydrogen from wood gasification',
+                'carbon monoxide, from RWGS, for Fischer Tropsch process, hydrogen from wood gasification'
+            ])
+        elif act['name'] == ('kerosene production, synthetic, from Fischer Tropsch process, '
+                             'hydrogen from electrolysis, energy allocation, at fuelling station'):
+            rebuild_acts(act, [
+                'kerosene production, synthetic, Fischer Tropsch process, hydrogen from electrolysis, energy allocation',
+                'syngas, RWGS, Production, for Fischer Tropsch process, hydrogen from electrolysis',
+                'carbon monoxide, from RWGS, for Fischer Tropsch process, hydrogen from electrolysis'
+            ])
+
+
+def rebuild_methanol_act():
+    """
+    methanol production in premise_base consists of methanol synthesis (which produces unpurified methanol), followed by
+    methanol synthesis, which purifies this methanol. This function puts these to activities together in a single one
+    and leaves it in 'additional_acts'.
+    """
+    inner_technosphere = []
+    methanol_act = ws.get_one(bd.Database('additional_acts'),
+                              ws.equals('name', 'methanol distillation, from wood, without CCS'))
+    for ex in methanol_act.technosphere():
+        if ex.input['name'] == 'methanol synthesis, from wood, without CCS':
+            inner_technosphere = ex.input.technosphere()
+            ex.delete()
+    if inner_technosphere:
+        for ex in inner_technosphere:
+            ex.output = methanol_act
+            ex.save()
 
 
 # 2. all value chain
