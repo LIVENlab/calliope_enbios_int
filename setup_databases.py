@@ -53,7 +53,7 @@ def install_and_update_databases():
     )
     ndb.write_db_to_brightway(name='premise_original')
 
-    # premise with cement update
+    # premise with cement and biomass update
     ndb = NewDatabase(
         scenarios=[
             {"model": "image", "pathway": "SSP2-RCP19", "year": 2020},
@@ -63,6 +63,7 @@ def install_and_update_databases():
         key='tUePmX_S5B8ieZkkM7WUU2CnO8SmShwmAeWK9x2rTFo='
     )
     ndb.update('cement')
+    ndb.update('biomass')
     ndb.write_db_to_brightway(name='premise_cement')
 
     # create premise_original copy named 'premise_base)
@@ -152,6 +153,7 @@ def update_background():
 def update_foreground():
     # 2. set the foreground
     # 2.1 update inventories
+    create_additional_acts_db()
     update_methanol_facility()
     chp_waste_update(db_waste_name='apos391', db_original_name='premise_base',
                      locations=['CH'])

@@ -282,8 +282,6 @@ def cement_update():
                               ws.equals('location', location),
                               ws.equals('reference product', ex.input['reference product']))
         ex.save()
-    # delete premise_cement, as we won't need it anymore
-    del bd.databases['premise_cement']
     # substitute upstream of clinker production in Europe for clinker production with CCS
     for location in ['Europe without Switzerland', 'CH']:
         cement_original = ws.get_one(
@@ -322,6 +320,53 @@ def train_update(db_name: str = 'premise_base'):
         ex_electric['amount'] = 1
         ex_electric.save()
         ex_diesel.delete()
+
+
+def biomass_update(residues_share: float = 1.0):
+    """
+    Calliope assumes biomass as all coming from forest and waste residues (ref:
+    https://www.sciencedirect.com/science/article/pii/S2542435120303366#sectitle0125).
+    """
+    market_biomass = ws.get_one(
+        bd.Database('premise_cement'),
+        ws.equals('name', 'market for biomass, used as fuel'),
+        ws.equals('location', 'WEU')
+    )
+    biomass_act = market_biomass.copy(database='additional_acts')
+    # change amounts AND relink inputs
+    for ex_input in biomass_act.technosphere():
+        if 'residue' in ex_input.input['reference product']:
+            ex_input['amount'] = residues_share
+            new_input = ex_input.input.copy(database='additional_acts')
+            ex_input.input = new_input
+            ex_input.save()
+            for ex in new_input.technosphere():
+                ex.input = ws.get_one(bd.Database('premise_base'), ws.equals('name', ex.input['name']),
+                                      ws.equals('location', ex.input['location']),
+                                      ws.equals('reference product', ex.input['reference product']))
+                ex.save()
+        else:
+            ex_input['amount'] = 1 - residues_share
+            ex_input.input = ws.get_one(bd.Database('premise_base'), ws.equals('name', ex_input.input['name']),
+                                        ws.equals('location', ex_input.input['location']),
+                                        ws.equals('reference product', ex_input.input['reference product']))
+            ex_input.save()
+    # change upstream
+    # TODO: finish this. It does not work at the moment.
+    failed = []
+    for ex in market_biomass.upstream():
+        try:
+            ex.output = ws.get_one(bd.Database('premise_base'), ws.equals('name', ex.output['name']),
+                                   ws.equals('location', ex.output['location']),
+                                   ws.equals('reference product', ex.output['reference product']))
+            ex.save()
+        except Exception:
+            failed.append(ex)
+    return failed
+
+
+    # delete premise_cement, as we won't need it anymore
+    #del bd.databases['premise_cement']
 
 
 # 1.2.3 steel update
@@ -2590,8 +2635,6 @@ def rebuild_acts(act, specific_inputs=None, tier_limit=3):
     It reconstructs the diesel and kerosene acts, so it includes what previously was in all tiers of
     fuel production into tier 0.
     """
-    # TODO: add it to foreground_update and change the name of the database in the mapping file
-
     # deal with the technosphere
     updated_act = act.copy(database='additional_acts')
     print(f'{updated_act["name"]}copy created in additional_acts')
@@ -2746,6 +2789,18 @@ def rebuild_methanol_act():
     if inner_technosphere:
         for ex in inner_technosphere:
             ex.output = methanol_act
+            ex.save()
+    methanol_act_electrolysis = ws.get_one(
+        bd.Database('premise_base'),
+        ws.equals('name', 'methanol distillation, hydrogen from electrolysis, CO2 from DAC'))
+    methanol_act_2 = methanol_act_electrolysis.copy(database='additional_acts')
+    for ex in methanol_act_2.technosphere():
+        if ex.input['name'] == 'methanol synthesis, hydrogen from electrolysis, CO2 from DAC':
+            inner_technosphere = ex.input.technosphere()
+            ex.delete()
+    if inner_technosphere:
+        for ex in inner_technosphere:
+            ex.output = methanol_act_2
             ex.save()
 
 

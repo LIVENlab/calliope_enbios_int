@@ -18,11 +18,11 @@ def monopile_parameters(new_db, cutoff391,
                         electricity_mix_steel: Optional[Literal['Europe', 'Poland', 'Norway']] = None,
                         ):
     """
-        All credits to Sacchi et al.
+        All credits to Sacchi et al. We readjusted penetration depth.
     """
     #### NOTE: power in kW
     power = power * 1000
-    penetration_depth = 19.4002294 * power / 1000 + 0.000944015847  # penetration in the seabed
+    penetration_depth = 3 * power / 1000  # penetration in the seabed (less than in Sacchi et al!!)
     pile_length = 9 + penetration_depth + sea_depth  # 9m added to the
 
     # transition piece, grout and scour masses
