@@ -135,6 +135,14 @@ def unlink_biomass(db_name: str = 'premise_base'):
         if any(ref_prod in e.output['reference product'] for ref_prod in
                ['heat,', 'electricity,', 'methanol,', 'methane,', 'kerosene,', 'diesel,']):
             e.delete()
+    # market for biomass, used as fuel
+    biomass_as_fuel_act = ws.get_one(
+        bd.Database(db_name),
+        ws.equals('name', 'market for biomass, used as fuel'),
+        ws.equals('location', 'RER')
+    )
+    for e in biomass_as_fuel_act.upstream():
+        e.delete()
     for location in ['Europe without Switzerland', 'CH', 'RER']:
         # wood chips, dry; wood chips, wet; wood chips, post-consumer
         chips_acts = ws.get_many(
@@ -327,6 +335,7 @@ def biomass_update(residues_share: float = 1.0):
     Calliope assumes biomass as all coming from forest and waste residues (ref:
     https://www.sciencedirect.com/science/article/pii/S2542435120303366#sectitle0125).
     """
+    create_additional_acts_db()
     market_biomass = ws.get_one(
         bd.Database('premise_cement'),
         ws.equals('name', 'market for biomass, used as fuel'),
@@ -352,21 +361,16 @@ def biomass_update(residues_share: float = 1.0):
                                         ws.equals('reference product', ex_input.input['reference product']))
             ex_input.save()
     # change upstream
-    # TODO: finish this. It does not work at the moment.
-    failed = []
     for ex in market_biomass.upstream():
-        try:
-            ex.output = ws.get_one(bd.Database('premise_base'), ws.equals('name', ex.output['name']),
-                                   ws.equals('location', ex.output['location']),
-                                   ws.equals('reference product', ex.output['reference product']))
-            ex.save()
-        except Exception:
-            failed.append(ex)
-    return failed
-
-
+        ex.input = biomass_act
+        ex.output = ws.get_one(bd.Database('premise_base'), ws.equals('name', ex.output['name']),
+                               ws.equals('location', ex.output['location']),
+                               ws.equals('reference product', ex.output['reference product']))
+        ex.save()
+    biomass_act['location'] = 'RER'
+    biomass_act.save()
     # delete premise_cement, as we won't need it anymore
-    #del bd.databases['premise_cement']
+    del bd.databases['premise_cement']
 
 
 # 1.2.3 steel update
@@ -1274,7 +1278,8 @@ def delete_infrastructure_main(
     (or activities in plural if it has multiple options, i.e., those activities that exist for all
     locations in Calliope), and deletes the inputs that are infrastructure. Then, it creates a copy of the activity in
     additional_acts (adding ', biosphere' at the end of the name), and it removes the technosphere, handling the
-    exceptions to hydrogen, diesel and kerosene.
+    exceptions to hydrogen, diesel and kerosene. Moreover, it creates another copy of the activity in
+    additional_acts (adding ', technosphere' at the end of the name), and it removes the biosphere.
     """
     # delete infrastructure
     df = pd.read_excel(file_path, sheet_name='Foreground')
@@ -1296,57 +1301,35 @@ def delete_infrastructure_main(
         # If the location is 'country', start checking for activities
         if location == 'country':
             for loc in consts.LOCATION_EQUIVALENCE.values():
-                found_activity = False
                 try:
                     act = ws.get_one(bd.Database(database), ws.contains('name', name),
                                      ws.exclude(ws.contains('name', 'renewable energy products')),
                                      ws.equals('location', loc),
                                      ws.contains('reference product', reference_product))
-                    infrastructure = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
-                    for e in infrastructure:
-                        e.delete()
+                    # we do not want to delete the maintenance of offshore and onshore wind (which have 'unit' as units),
+                    # and that is why we add this conditional.
+                    if not any(wind_name for wind_name in ['onshore', 'offshore']):
+                        infrastructure = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
+                        for e in infrastructure:
+                            e.delete()
                     if om_spheres_separation:
                         om_biosphere(act)
                         om_technosphere(act)
                     print(f'Activity: {name}. Location: {loc}. Ref product: {reference_product}')
-                    found_activity = True
                     continue
                 except Exception as e:
                     print(f'No activity ({name}) in ({loc}). '
                           f'Starting ["CH", "FR", "DE"]')
-
-                # If no activity found in the equivalence list, check fallback locations
-                for fallback_loc in ['CH', 'FR', 'DE']:
-                    try:
-                        # Try to find activities in the fallback location
-                        act = ws.get_one(bd.Database(database), ws.contains('name', name),
-                                         ws.exclude(ws.contains('name', 'renewable energy products')),
-                                         ws.equals('location', fallback_loc),
-                                         ws.contains('reference product', reference_product))
-                        infrastructure = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
-                        for e in infrastructure:
-                            e.delete()
-                        if om_spheres_separation:
-                            om_biosphere(act)
-                            om_technosphere(act)
-                        print(f'Activity: {name}. Location: {fallback_loc}. Ref product: {reference_product}. ')
-                        found_activity = True
-                        break
-                    except Exception as e:
-                        print(f'No activity ({name}) in ({fallback_loc}).')
-                if not found_activity:
-                    print(f'No activity found for {name}. Quitting')
-                    sys.exit()
-
-                # Continue the outer loop as soon as we find a valid activity
-                if found_activity:
+                    # there is no need to create copy after copy
                     continue
+
         else:
             # If location is not 'country', proceed with regular activity lookup
             try:
                 act = ws.get_one(bd.Database(database), ws.contains('name', name),
                                  ws.exclude(ws.contains('name', 'renewable energy products')),
-                                 ws.equals('location', location))
+                                 ws.equals('location', location),
+                                 ws.contains('reference product', reference_product))
                 infrastructure = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
                 for e in infrastructure:
                     e.delete()
