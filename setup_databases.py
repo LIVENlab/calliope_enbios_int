@@ -5,13 +5,6 @@ import bw2data as bd
 from consts import *
 
 
-# TODO:
-#  2. Plot background changes with current electricity mix and with only wind
-#  3. Put database flow at test in a new project
-#  4. Do infrastructure analysis at all steps
-#  5. Carefully document everything
-#  6. Think about implementation of material indicators (contrast NEW TOOL with my own functions).
-
 def install_and_update_databases():
     """
     Databases:
@@ -106,6 +99,7 @@ def avoid_double_accounting():
     might be producing electricity in the background (e.g., coal is not used in Calliope, but is in the background of
     Ecoinvent). Thus, they should not be accounted either. (delete links from shifted demand from Ecoinvent to Calliope)
     """
+    # TODO: check 'additional_acts' database!
     # 1.1.1 Electricity
     unlink_electricity()
     # 1.1.2 Heat
@@ -135,7 +129,7 @@ def update_background():
     # 1.2.2 make European freight trains 100% electric
     train_update()
     # 1.2.3. biomass
-    # TODO: waiting for Calliope assumptions
+    biomass_update()
     # 1.2.4. steel
     steel_update()
     # 1.2.5. plastics
