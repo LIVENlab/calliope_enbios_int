@@ -276,7 +276,7 @@ windtrace_folder = os.path.join(cwd, 'WindTrace')
 VESTAS_FILE = os.path.join(windtrace_folder, 'clean_data.xlsx')
 
 # variables to be set by the user
-PROJECT_NAME = 'calliope_enbios'
+PROJECT_NAME = 'first_test'
 NEW_DB_NAME = 'additional_acts'
 SPOLDS_CUTOFF = r"C:\ecoinvent_data\3.9.1\cutoff\datasets"
 SPOLDS_APOS = r"C:\ecoinvent_data\3.9.1\apos\datasets"
