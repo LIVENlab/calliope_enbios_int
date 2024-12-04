@@ -360,18 +360,24 @@ def biomass_update(residues_share: float = 1.0):
                                         ws.equals('location', ex_input.input['location']),
                                         ws.equals('reference product', ex_input.input['reference product']))
             ex_input.save()
+
+    upstream_activity_amount_dict = {}
     # change upstream
     for ex in market_biomass.upstream():
         ex.input = biomass_act
+        upstream_activity_amount_dict[ex.output] = ex['amount']
         ex.output = ws.get_one(bd.Database('premise_base'), ws.equals('name', ex.output['name']),
                                ws.equals('location', ex.output['location']),
                                ws.equals('reference product', ex.output['reference product']))
         ex.save()
     biomass_act['location'] = 'RER'
     biomass_act.save()
-    # delete premise_cement, as we won't need it anymore
-    del bd.databases['premise_cement']
 
+    # delete wood chips inputs to avoid duplicates
+    for act, amount in upstream_activity_amount_dict.items():
+        for e in act.technosphere():
+            if e['amount'] == amount:
+                e.delete()
 
 # 1.2.3 steel update
 def iron_steel_h2_dri_eaf():
@@ -1306,33 +1312,38 @@ def delete_infrastructure_main(
                                      ws.exclude(ws.contains('name', 'renewable energy products')),
                                      ws.equals('location', loc),
                                      ws.contains('reference product', reference_product))
-                    # we do not want to delete the maintenance of offshore and onshore wind (which have 'unit' as units),
-                    # and that is why we add this conditional.
-                    if not any(wind_name for wind_name in ['onshore', 'offshore']):
-                        infrastructure = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
-                        for e in infrastructure:
-                            e.delete()
+                    infrastructure = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
+                    for e in infrastructure:
+                        e.delete()
                     if om_spheres_separation:
                         om_biosphere(act)
                         om_technosphere(act)
                     print(f'Activity: {name}. Location: {loc}. Ref product: {reference_product}')
                     continue
                 except Exception as e:
-                    print(f'No activity ({name}) in ({loc}). '
-                          f'Starting ["CH", "FR", "DE"]')
+                    print(f'No activity ({name}) in ({loc})')
                     # there is no need to create copy after copy
                     continue
 
         else:
             # If location is not 'country', proceed with regular activity lookup
             try:
-                act = ws.get_one(bd.Database(database), ws.contains('name', name),
-                                 ws.exclude(ws.contains('name', 'renewable energy products')),
-                                 ws.equals('location', location),
-                                 ws.contains('reference product', reference_product))
-                infrastructure = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
-                for e in infrastructure:
-                    e.delete()
+                if 'wind' in name:
+                    act = ws.get_one(bd.Database(database), ws.contains('name', name),
+                                     ws.exclude(ws.contains('name', 'renewable energy products')),
+                                     ws.equals('location', location)
+                                     )
+                else:
+                    act = ws.get_one(bd.Database(database), ws.contains('name', name),
+                                     ws.exclude(ws.contains('name', 'renewable energy products')),
+                                     ws.equals('location', location),
+                                     ws.contains('reference product', reference_product))
+                # we do not want to delete the maintenance of offshore and onshore wind (which have 'unit' as units),
+                # and that is why we add this conditional.
+                if not any(wind_name for wind_name in ['onshore', 'offshore']):
+                    infrastructure = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
+                    for e in infrastructure:
+                        e.delete()
                 if om_spheres_separation:
                     om_biosphere(act)
                     om_technosphere(act)
