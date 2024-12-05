@@ -81,7 +81,6 @@ def install_and_update_databases():
         file_path=r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx')
 
     # avoid double accounting
-    # TODO: applied ONLY to those databases used in ENBIOS!
     avoid_double_accounting()
 
 
@@ -99,27 +98,28 @@ def avoid_double_accounting():
     might be producing electricity in the background (e.g., coal is not used in Calliope, but is in the background of
     Ecoinvent). Thus, they should not be accounted either. (delete links from shifted demand from Ecoinvent to Calliope)
     """
-    # TODO: check 'additional_acts' database!
-    # 1.1.1 Electricity
-    unlink_electricity()
-    # 1.1.2 Heat
-    unlink_heat()
-    # 1.1.3 CO2
-    unlink_co2()
-    # 1.1.4 Hydrogen
-    unlink_hydrogen()
-    # 1.1.5 Waste
-    # In cutoff it comes without any environmental burdens, so there is no need to apply any unlinks
-    # 1.1.6 Biomass
-    unlink_biomass()
-    # 1.1.7 Methane
-    unlink_methane()
-    # 1.1.8 Methanol
-    unlink_methanol()
-    # 1.1.9 Kerosene
-    unlink_kerosene()
-    # 1.1.10 Diesel
-    unlink_diesel()
+    for name in ['premise_base', 'additional_acts',
+                 'premise_auxiliary_for_infrastructure', 'infrastructure (with European steel and concrete)']:
+        # 1.1.1 Electricity
+        unlink_electricity(db_name=name)
+        # 1.1.2 Heat
+        unlink_heat(db_name=name)
+        # 1.1.3 CO2
+        unlink_co2(db_name=name)
+        # 1.1.4 Hydrogen
+        unlink_hydrogen(db_name=name)
+        # 1.1.5 Waste
+        # In cutoff it comes without any environmental burdens, so there is no need to apply any unlinks
+        # 1.1.6 Biomass
+        unlink_biomass(db_name=name)
+        # 1.1.7 Methane
+        unlink_methane(db_name=name)
+        # 1.1.8 Methanol
+        unlink_methanol(db_name=name)
+        # 1.1.9 Kerosene
+        unlink_kerosene(db_name=name)
+        # 1.1.10 Diesel
+        unlink_diesel(db_name=name)
 
 
 def update_background():

@@ -11,9 +11,6 @@ import wurst
 from collections import defaultdict
 
 
-#### BACKGROUND #####
-# 1.1. Unlink carrier activities
-# 1.1.1 Electricity
 def unlink_electricity(db_name: str = 'premise_base'):
     market_group_locations = ['ENSTO-E', 'UCTE', 'Europe without Switzerland', 'RER']
     for location in market_group_locations:
@@ -35,7 +32,6 @@ def unlink_electricity(db_name: str = 'premise_base'):
                 e.delete()
 
 
-# 1.1.2 Heat
 def unlink_heat(db_name: str = 'premise_base'):
     """
     It gets the market groups for heat ('central or small-scale, biomethane', 'central or small-scale, natural gas',
@@ -76,12 +72,11 @@ def unlink_heat(db_name: str = 'premise_base'):
             ws.contains('name', 'market for heat,'),
             ws.equals('location', location)
         )
-        for act in heat_production_acts:
+        for act in market_for_heat_acts:
             for e in act.upstream():
                 e.delete()
 
 
-# 1.1.3 CO2
 def unlink_co2(db_name: str = 'premise_base'):
     """
      It deletes CO2 inputs for methane production, methanol production and syngas production.
@@ -96,11 +91,10 @@ def unlink_co2(db_name: str = 'premise_base'):
             e.delete()
 
 
-# 1.1.4 Hydrogen
 def unlink_hydrogen(db_name: str = 'premise_base'):
     """
-    It deletes input for syngas, carbon monoxide production, methanol production, kerosene, diesel, gasoline, and
-    ammonia production
+    It deletes hydrogen outputs for syngas, carbon monoxide production, methanol production, kerosene, diesel, gasoline,
+    and ammonia production
     """
     for source in ['electrolysis', 'woody biomass']:
         hydrogen_acts = ws.get_many(
@@ -113,10 +107,6 @@ def unlink_hydrogen(db_name: str = 'premise_base'):
                 e.delete()
 
 
-# 1.1.5 Waste
-# In cutoff it comes without any environmental burdens, so there is no need to apply any unlinks
-
-# 1.1.6 Biomass
 def unlink_biomass(db_name: str = 'premise_base'):
     """
     To avoid double accounting, we want to delete the upstream of those biomass activities that are used as
@@ -167,7 +157,6 @@ def unlink_biomass(db_name: str = 'premise_base'):
                     e.delete()
 
 
-# 1.1.7 Methane
 def unlink_methane(db_name: str = 'premise_base'):
     """
         To avoid double accounting, we want to delete the upstream of those biomass activities that are used as
@@ -213,7 +202,6 @@ def unlink_methane(db_name: str = 'premise_base'):
                     e.delete()
 
 
-# 1.1.8 Methanol
 def unlink_methanol(db_name: str = 'premise_base'):
     """
     Because methanol can be used as a feedstock, we want to delete the entire upstream (unless in gives service to
@@ -231,7 +219,6 @@ def unlink_methanol(db_name: str = 'premise_base'):
                     e.delete()
 
 
-# 1.1.9 Kerosene
 def unlink_kerosene(db_name: str = 'premise_base'):
     for location in ['RER', 'Europe without Switzerland', 'CH']:
         kerosene_acts = ws.get_many(
@@ -246,7 +233,6 @@ def unlink_kerosene(db_name: str = 'premise_base'):
                     e.delete()
 
 
-# 1.1.10
 def unlink_diesel(db_name: str = 'premise_base'):
     for location in ['RER', 'Europe without Switzerland', 'CH']:
         diesel_acts = ws.get_many(
