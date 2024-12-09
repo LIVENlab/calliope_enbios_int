@@ -1079,6 +1079,7 @@ def update_cement_iron_foreground(
     - Batteries and PV panels won't be produced in Europe! Their iron, steel and cement in the first tier is not updated
     - Vehicles are left out of these analysis.
     """
+    # TODO: address it so it does not break when reaching the end of the document!
     # create infrastructure database
     if 'infrastructure (with European steel and concrete)' not in bd.databases:
         new_db = bd.Database('infrastructure (with European steel and concrete)')
@@ -1428,27 +1429,37 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
     create_additional_acts_db()
     for location in locations:
         try:
-            waste_original = ws.get_one(bd.Database(db_waste_name),
+            waste_electricity_original = ws.get_one(bd.Database(db_waste_name),
                                         ws.equals('name',
                                                   'treatment of municipal solid waste, incineration'),
                                         ws.equals('location', location),
                                         ws.contains('reference product', 'electricity')
                                         )
             print(f'original_location: {location}, assigned location: {location}')
-            waste_act = waste_original.copy(database='additional_acts')
+            waste_act = waste_electricity_original.copy(database='additional_acts')
             print(f'creating copy of {waste_act._data["name"]}')
             waste_act.technosphere().delete()
             print(f'deleting technosphere')
-        # if we do not find the location, Germany is chosen by default.
+            waste_original_heat = ws.get_one(bd.Database(db_waste_name),
+                                             ws.equals('name',
+                                                       'treatment of municipal solid waste, incineration'),
+                                             ws.equals('location', location),
+                                             ws.contains('reference product', 'heat')
+                                             )
+            waste_heat_act = waste_original_heat.copy(database='additional_acts')
+            print(f'creating copy of {waste_act._data["name"]}')
+            waste_heat_act.technosphere().delete()
+            print(f'deleting technosphere')
+        # if we do not find the location, CH is chosen by default.
         except wurst.errors.NoResults:
-            waste_original = ws.get_one(bd.Database(db_waste_name),
+            waste_electricity_original = ws.get_one(bd.Database(db_waste_name),
                                         ws.equals('name',
                                                   'treatment of municipal solid waste, incineration'),
                                         ws.equals('location', 'CH'),
                                         ws.contains('reference product', 'electricity')
                                         )
             print(f'original_location: {location}, assigned location: CH')
-            waste_act = waste_original.copy(database='additional_acts')
+            waste_act = waste_electricity_original.copy(database='additional_acts')
             print(f'copy of {waste_act._data["name"]} created in "additional_acts"')
             print('changing location')
             waste_act['location'] = location
@@ -1456,6 +1467,17 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
             waste_act.save()
             waste_act.technosphere().delete()
             print(f'deleting technosphere')
+            waste_heat_original = ws.get_one(bd.Database(db_waste_name),
+                                        ws.equals('name',
+                                                  'treatment of municipal solid waste, incineration'),
+                                        ws.equals('location', 'CH'),
+                                        ws.contains('reference product', 'electricity')
+                                        )
+            waste_heat_act = waste_heat_original.copy(database='additional_acts')
+            waste_heat_act['location'] = location
+            waste_heat_act['comment'] = waste_act['comment'] + '\n' + 'Taken dataset from CH'
+            waste_heat_act.save()
+            waste_heat_act.technosphere().delete()
 
     # create municipal solid waste incinerator
     incinerator_parts = ['furnace production, wood chips, with silo, 5000kW',
