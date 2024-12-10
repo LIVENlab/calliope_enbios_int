@@ -1591,14 +1591,14 @@ def trucks_and_bus_update(db_truck_name: str):
     # light truck
     light_truck_original = ws.get_one(bd.Database(db_truck_name),
                                       ws.equals('name',
-                                                'light duty truck, fuel cell electric, 3.5t gross weight, '
+                                                'light duty truck, battery electric, 3.5t gross weight, '
                                                 'long haul'),
                                       )
     create_additional_acts_db()
     light_truck_act = light_truck_original.copy(database='additional_acts')
     light_truck_technosphere = list(light_truck_act.technosphere())
     keep_inputs = ['converter', 'inverter', 'fuel tank', 'power electronics', 'other components', 'electric motor',
-                   'fuel cell system', 'electricity storage capacity']
+                   'fuel cell system', 'battery capacity']
     for ex in light_truck_technosphere:
         if not any(input_name in ex.input['name'] for input_name in keep_inputs):
             ex.delete()
@@ -1606,7 +1606,7 @@ def trucks_and_bus_update(db_truck_name: str):
     # medium truck
     medium_truck_original = ws.get_one(bd.Database(db_truck_name),
                                        ws.equals('name',
-                                                 'medium duty truck, fuel cell electric, 26t gross weight, '
+                                                 'medium duty truck, battery electric, 26t gross weight, '
                                                  'long haul'),
                                        )
     medium_truck_act = medium_truck_original.copy(database='additional_acts')
@@ -1625,7 +1625,7 @@ def trucks_and_bus_update(db_truck_name: str):
     bus_act = bus_original.copy(database='additional_acts')
     bus_technosphere = list(bus_act.technosphere())
     keep_inputs = ['converter', 'inverter', 'power electronics', 'other components', 'electric motor',
-                   'electricity storage capacity', 'power distribution']
+                   'battery capacity', 'power distribution']
     for ex in bus_technosphere:
         if not any(input_name in ex.input['name'] for input_name in keep_inputs):
             ex.delete()
