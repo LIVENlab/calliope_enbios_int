@@ -1,4 +1,5 @@
 import bw2io as bi
+import wurst.errors
 from premise import *
 from tasks import *
 import bw2data as bd
@@ -100,26 +101,53 @@ def avoid_double_accounting():
     """
     for name in ['premise_base', 'additional_acts',
                  'premise_auxiliary_for_infrastructure', 'infrastructure (with European steel and concrete)']:
-        # 1.1.1 Electricity
-        unlink_electricity(db_name=name)
-        # 1.1.2 Heat
-        unlink_heat(db_name=name)
-        # 1.1.3 CO2
-        unlink_co2(db_name=name)
-        # 1.1.4 Hydrogen
-        unlink_hydrogen(db_name=name)
+        try:
+            # 1.1.1 Electricity
+            unlink_electricity(db_name=name)
+        except wurst.errors.NoResults:
+            print(f'electricity not available in {name}')
+        try:
+            # 1.1.2 Heat
+            unlink_heat(db_name=name)
+        except wurst.errors.NoResults:
+            print(f'heat not available in {name}')
+        try:
+            # 1.1.3 CO2
+            unlink_co2(db_name=name)
+        except wurst.errors.NoResults:
+            print(f'co2 not available in {name}')
+        try:
+            # 1.1.4 Hydrogen
+            unlink_hydrogen(db_name=name)
+        except wurst.errors.NoResults:
+            print(f'hydrogen not available in {name}')
         # 1.1.5 Waste
         # In cutoff it comes without any environmental burdens, so there is no need to apply any unlinks
-        # 1.1.6 Biomass
-        unlink_biomass(db_name=name)
-        # 1.1.7 Methane
-        unlink_methane(db_name=name)
-        # 1.1.8 Methanol
-        unlink_methanol(db_name=name)
-        # 1.1.9 Kerosene
-        unlink_kerosene(db_name=name)
-        # 1.1.10 Diesel
-        unlink_diesel(db_name=name)
+        try:
+            # 1.1.6 Biomass
+            unlink_biomass(db_name=name)
+        except wurst.errors.NoResults:
+            print(f'biomass not available in {name}')
+        try:
+            # 1.1.7 Methane
+            unlink_methane(db_name=name)
+        except wurst.errors.NoResults:
+            print(f'methane not available in {name}')
+        try:
+            # 1.1.8 Methanol
+            unlink_methanol(db_name=name)
+        except wurst.errors.NoResults:
+            print(f'methanol not available in {name}')
+        try:
+            # 1.1.9 Kerosene
+            unlink_kerosene(db_name=name)
+        except wurst.errors.NoResults:
+            print(f'kerosene not available in {name}')
+        try:
+            # 1.1.10 Diesel
+            unlink_diesel(db_name=name)
+        except wurst.errors.NoResults:
+            print(f'diesel not available in {name}')
 
 
 def update_background():
