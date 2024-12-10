@@ -1327,7 +1327,7 @@ def delete_infrastructure_main(
                                      ws.contains('reference product', reference_product))
                 # we do not want to delete the maintenance of offshore and onshore wind (which have 'unit' as units),
                 # and that is why we add this conditional.
-                if not any(wind_name for wind_name in ['onshore', 'offshore']):
+                if not any(wind_name in act['name'] for wind_name in ['onshore', 'offshore']):
                     infrastructure = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
                     for e in infrastructure:
                         e.delete()
