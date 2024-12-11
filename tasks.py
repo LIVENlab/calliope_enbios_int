@@ -365,6 +365,7 @@ def biomass_update(residues_share: float = 1.0):
             if e['amount'] == amount:
                 e.delete()
 
+
 # 1.2.3 steel update
 def iron_steel_h2_dri_eaf():
     """
@@ -1430,11 +1431,11 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
     for location in locations:
         try:
             waste_electricity_original = ws.get_one(bd.Database(db_waste_name),
-                                        ws.equals('name',
-                                                  'treatment of municipal solid waste, incineration'),
-                                        ws.equals('location', location),
-                                        ws.contains('reference product', 'electricity')
-                                        )
+                                                    ws.equals('name',
+                                                              'treatment of municipal solid waste, incineration'),
+                                                    ws.equals('location', location),
+                                                    ws.contains('reference product', 'electricity')
+                                                    )
             print(f'original_location: {location}, assigned location: {location}')
             waste_act = waste_electricity_original.copy(database='additional_acts')
             print(f'creating copy of {waste_act._data["name"]}')
@@ -1453,11 +1454,11 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
         # if we do not find the location, CH is chosen by default.
         except wurst.errors.NoResults:
             waste_electricity_original = ws.get_one(bd.Database(db_waste_name),
-                                        ws.equals('name',
-                                                  'treatment of municipal solid waste, incineration'),
-                                        ws.equals('location', 'CH'),
-                                        ws.contains('reference product', 'electricity')
-                                        )
+                                                    ws.equals('name',
+                                                              'treatment of municipal solid waste, incineration'),
+                                                    ws.equals('location', 'CH'),
+                                                    ws.contains('reference product', 'electricity')
+                                                    )
             print(f'original_location: {location}, assigned location: CH')
             waste_act = waste_electricity_original.copy(database='additional_acts')
             print(f'copy of {waste_act._data["name"]} created in "additional_acts"')
@@ -1468,11 +1469,11 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
             waste_act.technosphere().delete()
             print(f'deleting technosphere')
             waste_heat_original = ws.get_one(bd.Database(db_waste_name),
-                                        ws.equals('name',
-                                                  'treatment of municipal solid waste, incineration'),
-                                        ws.equals('location', 'CH'),
-                                        ws.contains('reference product', 'electricity')
-                                        )
+                                             ws.equals('name',
+                                                       'treatment of municipal solid waste, incineration'),
+                                             ws.equals('location', 'CH'),
+                                             ws.contains('reference product', 'electricity')
+                                             )
             waste_heat_act = waste_heat_original.copy(database='additional_acts')
             waste_heat_act['location'] = location
             waste_heat_act['comment'] = waste_act['comment'] + '\n' + 'Taken dataset from CH'
@@ -1736,6 +1737,43 @@ def hydro_run_of_river_update(db_hydro_name: str):
         new_ex.save()
     infrastructure_ex = [e for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
     infrastructure_ex.delete()
+
+
+def fuels_combustion():
+    # bus
+    bus_act = ws.get_one(
+        bd.Database('premise_base'),
+        ws.equals('name', 'transport, passenger bus, diesel, 13m single deck coach bus, EURO-VI'))
+    # heavy transport
+    heavy_transport_act = ws.get_one(
+        bd.Database('premise_base'),
+        ws.equals('name', 'transport, freight, lorry, diesel, 26t gross weight, EURO-VI, long haul'))
+    # light transport
+    light_transport_act = ws.get_one(
+        bd.Database('premise_base'),
+        ws.equals('name', 'transport, freight, lorry, diesel, 3.5t gross weight, EURO-VI, long haul'))
+    # passenger car
+    passenger_car_act = ws.get_one(
+        bd.Database('premise_base'),
+        ws.equals('name', 'transport, passenger car, diesel, Medium, EURO-6'))
+    # motorcycle
+    motorcycle_act = ws.get_one(
+        bd.Database('premise_base'),
+        ws.equals('name', 'transport, Motorbike, gasoline, 4-11kW, EURO-5'))
+    # air transport
+    air_transport_act = ws.get_one(
+        bd.Database('premise_base'),
+        ws.equals('name', 'transport, freight, aircraft, belly-freight, medium haul'))
+    # sea transport
+    sea_transport_act = ws.get_one(
+        bd.Database('premise_base'),
+        ws.equals('name', 'transport, freight, sea, container ship'),
+        ws.equals('location', 'RER')
+    )
+    for act in [bus_act, heavy_transport_act, light_transport_act, passenger_car_act,
+                motorcycle_act, air_transport_act, sea_transport_act]:
+        act_copy = act.copy(database='additional_acts')
+        act_copy.technosphere().delete()
 
 
 def biofuel_to_methane_infrastructure(db_syn_gas_name: str):

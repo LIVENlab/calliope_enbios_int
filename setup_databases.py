@@ -188,6 +188,7 @@ def update_foreground():
     hydro_run_of_river_update(db_hydro_name='premise_base')
     hydro_reservoir_update(location='ES', db_hydro_name='premise_base')
     airborne_wind_lci(bd_airborne_name='premise_base')
+    fuels_combustion()
     # 2.2 create fleets
     create_fleets()
     # restructure methanol, kerosene, and diesel activities
