@@ -187,6 +187,7 @@ def update_foreground():
     hp_update(db_hp_name='premise_base')
     hydro_run_of_river_update(db_hydro_name='premise_base')
     hydro_reservoir_update(location='ES', db_hydro_name='premise_base')
+    update_chp_hydrogen()
     airborne_wind_lci(bd_airborne_name='premise_base')
     fuels_combustion()
     # 2.2 create fleets
