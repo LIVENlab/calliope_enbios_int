@@ -1140,10 +1140,14 @@ def update_cement_iron_foreground(
                                  )
             act = org_act.copy(database='infrastructure (with European steel and concrete)')
             # 'if' statements to deal with EXCEPTIONS
-            # it only affects market for heat pumps.
             if 'market' in act['name'] or 'fuel cell system' in act['name']:
                 for ex in act.technosphere():
                     cement_iron_steel_subs(act=ex.input)
+            # heat pumps
+            elif act['name'] == 'heat pump with heat exchanger, brine-water, 10kW':
+                for ex in act.technosphere():
+                    for exchange in ex.input.technosphere():
+                        cement_iron_steel_subs(act=exchange.input)
             # biomethane factory act contains two infrastructure acts, so their inputs are not being changed. We take
             # the industrial furnace act and substitute it by the equivalent act (production) from CH, which already
             # uses European steel and concrete.
@@ -1546,9 +1550,15 @@ def update_methanol_facility():
 
 
 def update_chp_hydrogen():
-    chp_act = ws.get_one(
+    chp_elect_act = ws.get_one(
         bd.Database('premise_base'),
         ws.equals('name', 'electricity, residential, by conversion of hydrogen using fuel cell, '
+                          'PEM, allocated by exergy, distributed by pipeline, produced by Electrolysis, '
+                          'PEM using electricity from grid')
+    )
+    chp_heat_act = ws.get_one(
+        bd.Database('premise_base'),
+        ws.equals('name', 'heat, residential, by conversion of hydrogen using fuel cell, '
                           'PEM, allocated by exergy, distributed by pipeline, produced by Electrolysis, '
                           'PEM using electricity from grid')
     )
@@ -1566,10 +1576,11 @@ def update_chp_hydrogen():
                 ws.equals('name', 'hydrogen production, gaseous, 30 bar, from PEM electrolysis, '
                                   'from grid electricity'))
             ex.save()
-    for ex in chp_act.technosphere():
-        if 'hydrogen' in ex.input['reference product']:
-            ex.input = hydrogen_europe_act
-            ex.save()
+    for act in [chp_elect_act, chp_heat_act]:
+        for ex in act.technosphere():
+            if 'hydrogen' in ex.input['reference product']:
+                ex.input = hydrogen_europe_act
+                ex.save()
 
 
 def biofuel_to_methanol_update(db_methanol_name: str):
@@ -2847,6 +2858,26 @@ def rebuild_kerosene_and_diesel_acts():
             ])
 
 
+def methanol_distillation_update():
+    """
+    Change steam input in methanol acts and make it European.
+    """
+    methanol_act = ws.get_one(bd.Database('additional_acts'),
+                              ws.equals('name', 'methanol distillation, from wood, without CCS'))
+    methanol_act_electrolysis = ws.get_one(
+        bd.Database('premise_base'),
+        ws.equals('name', 'methanol distillation, hydrogen from electrolysis, CO2 from DAC'))
+    for act in [methanol_act, methanol_act_electrolysis]:
+        for ex in act.technosphere():
+            # change steam input to make it European
+            if 'steam' in ex.input['name']:
+                ex.input = ws.get_one(
+                    bd.Database('premise_base'),
+                    ws.equals('name', ex.input['name']),
+                    ws.equals('location', 'RER'))
+                ex.save()
+
+
 def rebuild_methanol_act():
     """
     methanol production in premise_base consists of methanol synthesis (which produces unpurified methanol), followed by
@@ -2857,12 +2888,6 @@ def rebuild_methanol_act():
     methanol_act = ws.get_one(bd.Database('additional_acts'),
                               ws.equals('name', 'methanol distillation, from wood, without CCS'))
     for ex in methanol_act.technosphere():
-        # change steam input to make it European
-        if 'steam' in ex.input['name']:
-            ex.input = ws.get_one(
-                bd.Database('premise_base'),
-                ws.equals('name', ex.input['name']),
-                ws.equals('location', 'RER'))
         if ex.input['name'] == 'methanol synthesis, from wood, without CCS':
             inner_technosphere = ex.input.technosphere()
             ex.delete()
@@ -2875,12 +2900,6 @@ def rebuild_methanol_act():
         ws.equals('name', 'methanol distillation, hydrogen from electrolysis, CO2 from DAC'))
     methanol_act_2 = methanol_act_electrolysis.copy(database='additional_acts')
     for ex in methanol_act_2.technosphere():
-        # change steam input to make it European
-        if 'steam' in ex.input['name']:
-            ex.input = ws.get_one(
-                bd.Database('premise_base'),
-                ws.equals('name', ex.input['name']),
-                ws.equals('location', 'RER'))
         if ex.input['name'] == 'methanol synthesis, hydrogen from electrolysis, CO2 from DAC':
             inner_technosphere = ex.input.technosphere()
             ex.delete()
