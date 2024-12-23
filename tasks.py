@@ -84,6 +84,7 @@ def unlink_heat(db_name: str = 'premise_base'):
         if 'heat' in ex.input['reference product']:
             ex.delete()
 
+
 def unlink_co2(db_name: str = 'premise_base'):
     """
      It deletes CO2 inputs for methane production, methanol production and syngas production.
@@ -1372,12 +1373,12 @@ def delete_infrastructure_main(
                                       ws.equals('name', 'methanol production facility, construction'))
     methanol_factory_act.upstream().delete()
     # electrolyser
-    electrolyzer_acts = ws.get_many(bd.Database('premise_base'),
-                                    ws.startswith('name', 'electrolyzer production, 1MWe, PEM'))
-    for act in electrolyzer_acts:
-        for ex in act.upstream():
-            if 'hydrogen' not in ex.output['name']:
-                ex.delete()
+    electrolyzer_act = ws.get_one(
+        bd.Database('premise_base'),
+        ws.startswith('name', 'hydrogen production, gaseous, 30 bar, from PEM electrolysis, from grid electricity'))
+    for ex in electrolyzer_act.technosphere():
+        if ex.input._data['unit'] == 'unit':
+            ex.delete()
     # liquid storage tank
     liquid_storage_act = ws.get_one(bd.Database('premise_base'),
                                     ws.equals('name', 'market for liquid storage tank, chemicals, organics'))
@@ -1719,7 +1720,7 @@ def gas_to_liquid_update(db_cobalt_name: str, db_gas_to_liquid_name: str):
 def hydro_reservoir_update(location: str, db_hydro_name: str):
     """
     :return: transfers land use and emissions from flooding operations to infrastructure instead of operation in
-    run-of-river power plants.
+    reservoir power plants.
     """
     electricity_reservoir = ws.get_one(
         bd.Database(db_hydro_name),
@@ -2881,7 +2882,7 @@ def methanol_distillation_update():
 def rebuild_methanol_act():
     """
     methanol production in premise_base consists of methanol synthesis (which produces unpurified methanol), followed by
-    methanol synthesis, which purifies this methanol. This function puts these to activities together in a single one
+    methanol distillation, which purifies this methanol. This function puts these to activities together in a single one
     and leaves it in 'additional_acts'.
     """
     inner_technosphere = []
