@@ -260,8 +260,7 @@ def cement_update():
     """
     1. It creates a copy of the activity clinker production, efficient, with on-site CCS from premise_cement base
     2. It re-links its inputs to those of premise_base
-    3. It deletes premise_cement (as we won't need it anymore)
-    4. It substitutes clinker production (without CCS) upstream for clinker production with CCS in European regions
+    3. It substitutes clinker production (without CCS) upstream for clinker production with CCS in European regions
     NOTE: premise_cement database is a premise database (image_rcp19, 2050) with ndb.update('cement')
     """
     cement_ccs_original = ws.get_one(
@@ -718,7 +717,7 @@ def steel_update():
     """
     1. Executes iron_steel_h2_dri_eaf(), so the iron and steel H2-DRI-EAF inventories are created
     2. Filters the markets for steel (unalloyed, low-alloyed, chromium steel) and in case they give a service to an
-    activity happening in Europe in the upstream, they relink it to the equivalent H2-DRI-EF
+    activity happening in Europe in the upstream, they relink it to the equivalent H2-DRI-EAF
     3. Same process with cast iron act
     """
     chromium_act, steel_act, iron_act = iron_steel_h2_dri_eaf()
@@ -885,7 +884,7 @@ def ammonia_update():
         ex.save()
 
 
-def trucks_update():
+def trucks_update(fleet_electrification_share: float = 0.5):
     """
     1. It improves road transport efficiency by changing EUROX to EURO6.
     2. It makes road transport work with synthetic diesel, from biomass.
@@ -893,6 +892,9 @@ def trucks_update():
     synthetic diesel truck.
     NOTE: it takes 15-20 min.
     """
+    if 0.0 > fleet_electrification_share > 1.0:
+        print(f'An electrification share of {fleet_electrification_share * 100:.1f}% is not possible. Changing to 50%')
+        fleet_electrification_share = 0.5
     freight_lorry_acts = ws.get_many(bd.Database('premise_base'),
                                      ws.startswith('name', 'market for transport, freight, lorry'),
                                      ws.equals('location', 'RER'))
@@ -928,10 +930,10 @@ def trucks_update():
                     input=ws.get_one(
                         bd.Database('premise_base'),
                         ws.equals('name', 'transport, freight, lorry, battery electric, 18t gross weight, long haul')
-                    ), amount=amount / 2, type='technosphere'
+                    ), amount=amount * fleet_electrification_share, type='technosphere'
                 )
                 new_ex.save()
-                ex['amount'] = amount / 2
+                ex['amount'] = amount * (1 - fleet_electrification_share)
                 ex.save()
         elif 'EURO6' not in act['name']:
             print('Dividing service: 50% electric, 50% synthetic diesel')
@@ -951,10 +953,10 @@ def trucks_update():
                         bd.Database('premise_base'),
                         ws.equals('name',
                                   f'transport, freight, lorry, battery electric, {electric_mass}t gross weight, long haul')
-                    ), amount=amount / 2, type='technosphere'
+                    ), amount=amount * fleet_electrification_share, type='technosphere'
                 )
                 new_ex.save()
-                ex['amount'] = amount / 2
+                ex['amount'] = amount * (1 - fleet_electrification_share)
                 ex.save()
         else:
             print('EURO6 vehicle. Adding synthetic diesel')
@@ -976,10 +978,10 @@ def trucks_update():
                         bd.Database('premise_base'),
                         ws.equals('name',
                                   f'transport, freight, lorry, battery electric, {electric_mass}t gross weight, long haul')
-                    ), amount=amount / 2, type='technosphere'
+                    ), amount=amount * fleet_electrification_share, type='technosphere'
                 )
                 new_ex.save()
-                ex['amount'] = amount / 2
+                ex['amount'] = amount * (1 - fleet_electrification_share)
                 ex.save()
 
 
@@ -1051,17 +1053,21 @@ def sea_transport_update():
                 ex.save()
 
 
-def transport_update():
+def transport_update(trucks_electrification: bool = True, fleet_electrification_share: float = 0.5,
+                     sea_transport_syn_diesel: bool = True):
     """
     Updates transport background for the European regions.
     CONSIDERATIONS
     Air transport: Aircraft transport does not give service to any activity in Europe. Left out.
     Road transport (cars): Cars give service to very few activities in the European market, so they are left out.
-    Road transport (trucks): improves efficiency to EURO6, uses synthetic diesel, electrifies half of the fleet
+    Road transport (trucks): improves efficiency to EURO6, uses synthetic diesel, electrifies the specified share of
+    the fleet (half by default)
     Sea transport: uses synthetic diesel instead of heavy fuel oil. No diesel wastes accounted for.
     """
-    trucks_update()
-    sea_transport_update()
+    if trucks_electrification:
+        trucks_update(fleet_electrification_share=fleet_electrification_share)
+    if sea_transport_syn_diesel:
+        sea_transport_update()
 
 
 def premise_base_auxiliary():
