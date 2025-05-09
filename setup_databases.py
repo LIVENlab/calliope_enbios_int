@@ -150,26 +150,53 @@ def avoid_double_accounting():
             print(f'diesel not available in {name}')
 
 
-def update_background():
-    # 1.2 substitute background activities
-    # 1.2.1. cement
-    cement_update()
-    # 1.2.2 make European freight trains 100% electric
-    train_update()
-    # 1.2.3. biomass
-    biomass_update()
-    # 1.2.4. steel
-    steel_update()
-    # 1.2.5. plastics
-    # NOTE: aromatics follow today's synthetic route due to lack of data. Olefins produced from methanol, produced
-    # from hydrogen and CO2 (DAC). Assumptions on recycling and improved circular economies could not be matched.
-    plastics_update()
-    # 1.2.6. methanol
-    methanol_update()
-    # 1.2.7. ammonia
-    ammonia_update()
-    # 1.2.8 transport (NOTE: it takes 15-20 min)
-    transport_update()
+def update_background(
+                      ccs_clinker: bool = True,
+                      train_electrification: bool = True,
+                      biomass_from_residues: bool = True,
+                      biomass_from_residues_share: float = 1.0,
+                      h2_iron_and_steel: bool = True,
+                      olefins_from_methanol: bool = True,
+                      methanol_from_electrolysis: bool = True,
+                      ammonia_from_hydrogen: bool = True,
+                      trucks_electrification: bool = True,
+                      trucks_electrification_share: float = 0.5,
+                      sea_transport_syn_diesel: bool = True
+                      ):
+    """
+    This function allows to adapt certain industries according to Calliope's assumptions:
+    - Cement: clinker production with Carbon Capture and Storage
+    - Train: 100% electrification
+    - Biomass: specified share (biomass_from_residues_share) coming from residues
+    - Iron and steel: from hydrogen - direct reduction iron - 50% electric arc furnace synthetic route
+    - Plastics: olefins produced by methanol. Methanol from H2 and CO2 (from Direct Air Capture)
+    - Methanol: Feedstock methanol from electrolysis (Note: aromatics follow today synthetic route due to lack of data.
+                Calliope's assumptions on recycling and improved circular economies could not be matched.)
+    - Ammonia: Feedstock ammonia from hydrogen
+    - Transport: (1) Trucks improved efficiency to EURO6
+                 (2) Trucks fleet share electrified as specified (trucks_electrification_share)
+                 (3) Sea transport using synthetic diesel instead of heavy fuel oil
+    IMPORTANT: Note that the changes are only made in Europe but the rest of the world keeps functioning with the same
+    production structure as today's.
+    """
+    if ccs_clinker:
+        cement_update()
+    if train_electrification:
+        train_update()
+    if biomass_from_residues:
+        biomass_update(biomass_from_residues_share)
+    if h2_iron_and_steel:
+        steel_update()
+    if olefins_from_methanol:
+        plastics_update()
+    if methanol_from_electrolysis:
+        methanol_update()
+    if ammonia_from_hydrogen:
+        ammonia_update()
+    # in case of trucks_electrification=True, it takes 15-20 min!
+    transport_update(trucks_electrification=trucks_electrification,
+                     fleet_electrification_share=trucks_electrification_share,
+                     sea_transport_syn_diesel=sea_transport_syn_diesel)
 
 
 def update_foreground():
