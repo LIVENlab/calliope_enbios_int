@@ -1,6 +1,8 @@
 import bw2io as bi
 import wurst.errors
 from premise import *
+
+import consts
 from tasks import *
 import bw2data as bd
 from consts import *
@@ -36,6 +38,7 @@ def install_and_update_databases():
         ei.apply_strategies()
         ei.write_database()
 
+    # TODO: fix premise version so it does not break
     # premise, without updates (only imported inventories)
     ndb = NewDatabase(
         scenarios=[
@@ -65,12 +68,18 @@ def install_and_update_databases():
 
     # background changes
     update_background()
+    # TODO: allow to have shares of today's and future's industry
+    # TODO: allow the rest of the world to also update their industries (according to IAMs?)
 
     # create a copy for each of the databases that we will have in the project.
     premise_base_auxiliary()
 
     # foreground changes
     update_foreground()
+    # TODO: add variables in update_foreground()
+    # TODO: continue with the next function
+    # TODO: add variables in install_and_update_databases() so we can select if we want to
+    #  update cement and iron foreground, delete infrastructure, avoid double accounting, etc.
 
     # 'infrastructure (with European steel and concrete)' operating.
     update_cement_iron_foreground()
@@ -151,18 +160,18 @@ def avoid_double_accounting():
 
 
 def update_background(
-                      ccs_clinker: bool = True,
-                      train_electrification: bool = True,
-                      biomass_from_residues: bool = True,
-                      biomass_from_residues_share: float = 1.0,
-                      h2_iron_and_steel: bool = True,
-                      olefins_from_methanol: bool = True,
-                      methanol_from_electrolysis: bool = True,
-                      ammonia_from_hydrogen: bool = True,
-                      trucks_electrification: bool = True,
-                      trucks_electrification_share: float = 0.5,
-                      sea_transport_syn_diesel: bool = True
-                      ):
+        ccs_clinker: bool = True,
+        train_electrification: bool = True,
+        biomass_from_residues: bool = True,
+        biomass_from_residues_share: float = 1.0,
+        h2_iron_and_steel: bool = True,
+        olefins_from_methanol: bool = True,
+        methanol_from_electrolysis: bool = True,
+        ammonia_from_hydrogen: bool = True,
+        trucks_electrification: bool = True,
+        trucks_electrification_share: float = 0.5,
+        sea_transport_syn_diesel: bool = True
+):
     """
     This function allows to adapt certain industries according to Calliope's assumptions:
     - Cement: clinker production with Carbon Capture and Storage
@@ -199,115 +208,152 @@ def update_background(
                      sea_transport_syn_diesel=sea_transport_syn_diesel)
 
 
-def update_foreground():
-    # 2. set the foreground
-    # 2.1 update inventories
+def update_foreground(ccs: bool = False, vehicles_as_batteries: bool = True,
+                      soec_electrolyser_share: float = 0.3, aec_electrolyser_share: float = 0.4,
+                      pem_electrolyser_share: float = 0.3,  # electrolyser variables
+                      battery_current_share: bool = False,
+                      battery_technology_share: Optional[Dict[str, float]] = consts.EMERGING_TECH_MODERATE,
+                      # battery variables
+                      open_technology_share: Dict[str, float] = consts.PV_CURRENT_TREND['openground'],
+                      roof_technology_share: Dict[str, float] = consts.PV_CURRENT_TREND["rooftop_power_share"],
+                      roof_3kw_share: Dict[str, float] = consts.PV_CURRENT_TREND["rooftop_3kw"],
+                      roof_93kw_share: Dict[str, float] = consts.PV_CURRENT_TREND["rooftop_93kw"],
+                      roof_156kw_share: Dict[str, float] = consts.PV_CURRENT_TREND["rooftop_156kw"],
+                      roof_280kw_share: Dict[str, float] = consts.PV_CURRENT_TREND["rooftop_280kw"],
+                      # solar pv variables
+                      onshore_wind_fleet: Dict = consts.BALANCED_ON_WIND_FLEET,  # onshore wind variables
+                      offshore_wind_fleet: Dict = consts.OFF_WIND_FLEET  # offshore wind variables
+                      ):
+    """
+    Adapt the foreground activities as follows:
+    - Fixes from premise inventories:
+        (1) re-scale methanol infrastructure (update_methanol_facility())
+        (2) include the cobalt catalyst in gas_to_liquid infrastructure (gas_to_liquid_update())
+    - Fixes from Ecoinvent:
+        (1) hydro reservoir: transfers land use and emissions from flooding operations to infrastructure instead of
+            operation (hydro_reservoir_update()).
+        (2) hydro run-of-river: transfers land use to infrastructure instead of operation (hydro_run_of_river_update()).
+    - Group infrastructure facilities in a single inventory, when needed:
+        (1) biomethane
+        (2) waste
+        (3) heat pumps
+        (4) hydrogen cells
+    - Add necessary inventories:
+        (1) add direct emissions inventory for incinerator
+        (2) add airborne wind inventory
+        (3) add fuel combustion inventories (deleting technosphere)
+    - De-nest inventories for methanol, kerosene and diesel.
+    - VARIABLE DEPENDANT UPDATES:
+        (1) Use of Carbon Capture and Storage in hydrogen for biofuel-to-methanol (default: False)
+        (2) Model vehicles as only the electric and electronic parts (battery, etc) (default: True)
+        (3) Create fleets. Scenarios described in create_fleets().
+    """
     create_additional_acts_db()
+
+    # fixes from premise
     update_methanol_facility()
-    chp_waste_update(db_waste_name='apos391', db_original_name='premise_base',
-                     locations=['CH'])
-    biofuel_to_methanol_update(db_methanol_name='premise_base')
-    trucks_and_bus_update(db_truck_name='premise_base')
-    passenger_car_and_scooter_update(db_passenger_name='premise_base')
     gas_to_liquid_update(db_cobalt_name='premise_base', db_gas_to_liquid_name='premise_base')
-    biofuel_to_methane_infrastructure(db_syn_gas_name='premise_base')
-    hp_update(db_hp_name='premise_base')
+
+    # fixes from Ecoinvent
     hydro_run_of_river_update(db_hydro_name='premise_base')
     hydro_reservoir_update(location='ES', db_hydro_name='premise_base')
+
+    # group infrastructure in a single inventory, when needed
+    biofuel_to_methane_infrastructure(db_syn_gas_name='premise_base')
+    hp_update(db_hp_name='premise_base')
     update_chp_hydrogen()
+    chp_waste_update(db_waste_name='apos391', db_original_name='premise_base',
+                     locations=['CH'])
+
+    # add necessary inventories
     airborne_wind_lci(bd_airborne_name='premise_base')
     fuels_combustion()
-    # 2.2 create fleets
-    create_fleets()
-    # restructure methanol, kerosene, and diesel activities
+
+    # de-nest (restructure) inventories for methanol, kerosene and diesel
     rebuild_methanol_act()
     rebuild_kerosene_and_diesel_acts()
 
+    # variable dependant updates
+    if not ccs:
+        biofuel_to_methanol_update(db_methanol_name='premise_base')
+    if vehicles_as_batteries:
+        trucks_and_bus_update(db_truck_name='premise_base')
+        passenger_car_and_scooter_update(db_passenger_name='premise_base')
 
-def create_fleets():
-    # 2.2 create fleets
-    solar_pv_fleet(db_solar_name='premise_base')
+    # create fleets
+    create_fleets(soec_electrolyser_share=soec_electrolyser_share, aec_electrolyser_share=aec_electrolyser_share,
+                  pem_electrolyser_share=pem_electrolyser_share,
+                  battery_current_share=battery_current_share,
+                  battery_technology_share=battery_technology_share,
+                  open_technology_share=open_technology_share,
+                  roof_technology_share=roof_technology_share,
+                  roof_3kw_share=roof_3kw_share,
+                  roof_93kw_share=roof_93kw_share,
+                  roof_156kw_share=roof_156kw_share,
+                  roof_280kw_share=roof_280kw_share,
+                  onshore_wind_fleet=onshore_wind_fleet,
+                  offshore_wind_fleet=offshore_wind_fleet)
+
+
+def create_fleets(
+        soec_electrolyser_share: float = 0.3, aec_electrolyser_share: float = 0.4,
+        pem_electrolyser_share: float = 0.3,  # electrolyser variables
+        battery_current_share: bool = False,
+        battery_technology_share: Optional[Dict[str, float]] = consts.EMERGING_TECH_MODERATE,  # battery variables
+        open_technology_share: Dict[str, float] = consts.PV_CURRENT_TREND['openground'],
+        roof_technology_share: Dict[str, float] = consts.PV_CURRENT_TREND["rooftop_power_share"],
+        roof_3kw_share: Dict[str, float] = consts.PV_CURRENT_TREND["rooftop_3kw"],
+        roof_93kw_share: Dict[str, float] = consts.PV_CURRENT_TREND["rooftop_93kw"],
+        roof_156kw_share: Dict[str, float] = consts.PV_CURRENT_TREND["rooftop_156kw"],
+        roof_280kw_share: Dict[str, float] = consts.PV_CURRENT_TREND["rooftop_280kw"],  # solar pv variables
+        onshore_wind_fleet: Dict = consts.BALANCED_ON_WIND_FLEET,  # onshore wind variables
+        offshore_wind_fleet: Dict = consts.OFF_WIND_FLEET  # offshore wind variables
+):
+    """
+    Electrolysers:
+    SOEC - Solid Oxide Electrolysis Cell - High efficiency. Not commercially available.
+    AEC - Alkaline Electrolysis Cell - Low current density. Most stablished technology. Commercially mature.
+    PEM - Proton Exchange Membrane - High current density. More expensive. Commercially available (not mature).
+        - REQUIREMENT: (soec_electrolyser_share + aec_electrolyser_share + pem_electrolyser_share) = 1.
+
+    Batteries:
+    - It allows for either the current share or custom-made scenarios:
+        · Current share (from Schlichenmaier & Naegler (2022) https://doi.org/10.1016/j.egyr.2022.11.025):
+            [LFP (40%), NMC111 (24%), NMC622 (13%), Lead-acid (10%), ...]
+        · Manual. Examples of application in consts.py:
+            - EMERGING_TECH_OPTIMISTIC
+            - EMERGING_TECH_CURRENT
+            - EMERGING_TECH_MODERATE
+    - By default we are choosing the EMERGING_TECH_MODERATE scenario.
+
+    Solar pv:
+    - Default scenario based on the current share [Fraunhofer Institute (2024)] defined in consts.py
+
+    Onshore wind:
+    - Scenarios proposed in consts.py (but we could add other hub heights or rotor diameters!):
+        · BIG_ON_WIND_FLEET: 4 MW, 6 MW and 8 MW, equally distributed.
+        · BALANCED_ON_WIND_FLEET (default!): 4 MW, 6 MW and 8 MW, with 30%, 65%, 5% shares, respectively.
+
+    Offshore wind:
+    - One scenario proposed in consts.py:
+        · 14 MW (based on the SG 14-222 DD) and 10 MW (based on the V164-10MW) ->
+          gravity: 5%, monopile: 20%, tripod: 10%, floating (spar-buoy): 15%
+    """
+    # Hydrogen
     hydrogen_from_electrolysis_market(db_hydrogen_name='premise_base',
-                                      soec_share=0.5, aec_share=0.3, pem_share=0.2)  # TODO: propose relevant fleets
-    batteries_fleet(db_batteries_name='premise_base', scenario='tc', technology_share=None)
-    # wind fleets created in Germany
-    wind_onshore_fleet(db_wind_name='original_cutoff391', location='DE', fleet_turbines_definition={'turbine_1': [
-        {
-            'power': 4.0, 'manufacturer': "Vestas", 'rotor_diameter': 125, 'hub_height': 100,
-            'commissioning_year': 2030,
-            'generator_type': "gb_dfig", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4
-        }, 0.333],
-        'turbine_2': [
-            {
-                'power': 6.0, 'manufacturer': 'Vestas', 'rotor_diameter': 145, 'hub_height': 120,
-                'commissioning_year': 2030,
-                'generator_type': "gb_dfig", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4
-            },
-            0.333],
-        'turbine_3': [
-            {
-                'power': 8.0, 'manufacturer': 'Vestas', 'rotor_diameter': 160, 'hub_height': 145,
-                'commissioning_year': 2030,
-                'generator_type': "gb_dfig", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4
-            },
-            0.333]}
-                       )
-    wind_offshore_fleet(db_wind_name='original_cutoff391', location='DE', fleet_turbines_definition={'turbine_1': [
-        {
-            'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
-            'commissioning_year': 2030,
-            'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
-            'offshore_type': 'gravity', 'floating_platform': None, 'sea_depth': 5, 'distance_to_shore': 30
-        }, 0.05],  # based on the SG 14-222 DD
-        'turbine_2': [
-            {
-                'power': 10.0, 'manufacturer': "Vestas", 'rotor_diameter': 164, 'hub_height': 138,
-                'commissioning_year': 2030,
-                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
-                'offshore_type': 'gravity', 'floating_platform': None, 'sea_depth': 5, 'distance_to_shore': 30
-            }, 0.05],  # based on the V164-10MW
-        'turbine_3': [
-            {
-                'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
-                'commissioning_year': 2030,
-                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
-                'offshore_type': 'monopile', 'floating_platform': None, 'sea_depth': 30, 'distance_to_shore': 30
-            }, 0.2],
-        'turbine_4': [
-            {
-                'power': 10.0, 'manufacturer': "Vestas", 'rotor_diameter': 164, 'hub_height': 138,
-                'commissioning_year': 2030,
-                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
-                'offshore_type': 'monopile', 'floating_platform': None, 'sea_depth': 30, 'distance_to_shore': 30
-            }, 0.2],
-        'turbine_5': [
-            {
-                'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
-                'commissioning_year': 2030,
-                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
-                'offshore_type': 'tripod', 'floating_platform': None, 'sea_depth': 45, 'distance_to_shore': 30
-            }, 0.1],
-        'turbine_6': [
-            {
-                'power': 10.0, 'manufacturer': "Vestas", 'rotor_diameter': 164, 'hub_height': 138,
-                'commissioning_year': 2030,
-                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
-                'offshore_type': 'tripod', 'floating_platform': None, 'sea_depth': 45, 'distance_to_shore': 30
-            }, 0.1],
-        'turbine_7': [
-            {
-                'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
-                'commissioning_year': 2030,
-                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
-                'offshore_type': 'floating', 'floating_platform': 'spar_buoy_steel', 'sea_depth': 45,
-                'distance_to_shore': 30
-            }, 0.15],
-        'turbine_8': [
-            {
-                'power': 10.0, 'manufacturer': "Vestas", 'rotor_diameter': 164, 'hub_height': 138,
-                'commissioning_year': 2030,
-                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
-                'offshore_type': 'floating', 'floating_platform': 'spar_buoy_steel', 'sea_depth': 45,
-                'distance_to_shore': 30
-            }, 0.15]
-    })
+                                      soec_share=soec_electrolyser_share,
+                                      aec_share=aec_electrolyser_share, pem_share=pem_electrolyser_share)
+    # Batteries
+    batteries_fleet(db_batteries_name='premise_base', current_share=battery_current_share,
+                    technology_share=battery_technology_share)
+    # Solar photovoltaics
+    solar_pv_fleet(db_solar_name='premise_base', open_technology_share=open_technology_share,
+                   roof_technology_share=roof_technology_share, roof_3kw_share=roof_3kw_share,
+                   roof_93kw_share=roof_93kw_share, roof_156kw_share=roof_156kw_share, roof_280kw_share=roof_280kw_share
+                   )
+
+    # Onshore wind fleets
+    wind_onshore_fleet(db_wind_name='original_cutoff391', location='DE', fleet_turbines_definition=onshore_wind_fleet)
+
+    # Offshore wind fleets
+    wind_offshore_fleet(db_wind_name='original_cutoff391', location='DE', fleet_turbines_definition=offshore_wind_fleet)

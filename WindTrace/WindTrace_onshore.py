@@ -9,6 +9,7 @@ from stats_arrays import NormalUncertainty
 import sys
 import consts
 
+# TODO: update for the newer version after paper reviews.
 
 def steel_turbine(plot_mat: bool = False):
     """

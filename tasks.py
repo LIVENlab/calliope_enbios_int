@@ -1072,7 +1072,7 @@ def transport_update(trucks_electrification: bool = True, fleet_electrification_
 
 def premise_base_auxiliary():
     """
-    It creates a copy of premise_base after all background and foreground changes and before infrastructure deletion
+    It creates a copy of premise_base after all background changes and before infrastructure deletion
     and O&M separation. We want to have these databases because we want to keep premise_base unaltered.
     'premise_auxiliary_for_infrastructure' will be the base for 'infrastructure (with European steel and concrete)'
     """
@@ -1594,7 +1594,7 @@ def biofuel_to_methanol_update(db_methanol_name: str):
     """
     In the background of the methanol production, the function substitutes H2 production with CCS
     for H2 production without CCS.
-    To execute only if we don't want CCS!!!
+    To execute only if we don't want CCS!
     """
 
     # Change name of the methanol distillation activity
@@ -1760,7 +1760,7 @@ def hydro_reservoir_update(location: str, db_hydro_name: str):
 
 def hydro_run_of_river_update(db_hydro_name: str):
     """
-    :return: transfers land use and emissions from flooding operations to infrastructure instead of operation in
+    :return: transfers land use to infrastructure instead of operation in
     run-of-river power plants. Location always CA-QC, as it is the only one with clear info in MW of infrastructure.
     """
     electricity_run_of = ws.get_one(bd.Database(db_hydro_name),
@@ -1773,15 +1773,7 @@ def hydro_run_of_river_update(db_hydro_name: str):
     infrastructure_amount = [e.amount for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
     land = [e for e in new_elec_act.biosphere() if
             any(keyword in e.input._data['name'] for keyword in ['Occupation', 'occupied', 'Transformation'])]
-    emissions = [e for e in new_elec_act.biosphere() if
-                 any(keyword in e.input._data['name'] for keyword in ['Carbon dioxide', 'monoxide', 'Methane'])]
     for e in land:
-        new_amount = e.amount / infrastructure_amount
-        biosphere_act = e.input
-        e.delete()
-        new_ex = new_infrastructure_act.new_exchange(input=biosphere_act, type='biosphere', amount=new_amount)
-        new_ex.save()
-    for e in emissions:
         new_amount = e.amount / infrastructure_amount
         biosphere_act = e.input
         e.delete()
@@ -2403,25 +2395,39 @@ def solar_pv_fleet(db_solar_name: str,
 
 
 # batteries
-def batteries_fleet(db_batteries_name: str, scenario: Optional[Literal['cont', 'tc']],
+def batteries_fleet(db_batteries_name: str, current_share: bool,
                     technology_share: Optional[Dict[str, float]] = None):
     """
-    :return: returns the appropriate battery fleet activity. Either CONT, TC or manual scenario.
+    Premise includes CONT and TC scenarios, which updated shares according to projections in
+    Schlichenmaier & Naegler (2022) https://doi.org/10.1016/j.egyr.2022.11.025. Because we update premise for 2020 (not
+    a year in the future, TC and CONT scenario are exactly the same, which represents the market share in 2021.
+    Therefore, we don't make this distinction.
+
+    Note for manual scenario design:
+        Technologies in order from more to less mature:
+            - Commercially mature: Lead-Acid, LFP, NMC111, NMC523
+            - Commercially available: Vanadium, Sodium-Nickel
+            - Emerging: SiB, NMC622, NMC811, NMC955
+        Proposals in consts.py:
+            - EMERGING_TECH_OPTIMISTIC
+            - EMERGING_TECH_CURRENT
+            - EMERGING_TECH_MODERATE
     """
-    if scenario == 'cont':
+    if current_share and technology_share is not None:
+        print(f'WARNING: It is not possible to use the current share and define a share manually at the same time. '
+              f'Applying the current share by default.')
+        technology_share = None
+
+    if current_share:
         battery_fleet_original = ws.get_one(bd.Database(db_batteries_name),
                                             ws.equals('name',
                                                       'market for battery capacity, stationary (CONT scenario)'))
         battery_fleet = battery_fleet_original.copy(database='additional_acts')
-    elif scenario == 'tc':
-        battery_fleet_original = ws.get_one(bd.Database(db_batteries_name),
-                                            ws.equals('name', 'market for battery capacity, stationary (TC scenario)'))
-        battery_fleet = battery_fleet_original.copy(database='additional_acts')
     else:
         print(f'Manual battery scenario with the following technology shares: {technology_share}')
         # Runtime check to enforce battery types as keys
-        expected_keys = {'LFP', 'NMC111', 'NMC523', 'NMC622', 'NMC811', 'NMC955', 'SiB',
-                         'Vanadium', 'lead', 'Sodium-Nickel'}
+        expected_keys = ['LFP', 'NMC111', 'NMC523', 'NMC622', 'NMC811', 'NMC955', 'SiB',
+                         'Vanadium', 'lead', 'Sodium-Nickel']
         if set(technology_share.keys()) != expected_keys:
             raise ValueError(f"'technology_share' must contain exactly the keys {expected_keys}")
         if sum(technology_share.values()) != 1:
