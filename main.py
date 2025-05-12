@@ -20,29 +20,29 @@ def run(ccs_clinker: bool = True,
         sea_transport_syn_diesel: bool = True,
 
         ccs: bool = False, vehicles_as_batteries: bool = True,
-         soec_electrolyser_share: float = 0.3, aec_electrolyser_share: float = 0.4,
-         pem_electrolyser_share: float = 0.3,  # electrolyser variables
-         battery_current_share: bool = False,
-         battery_technology_share: Optional[Dict[str, float]] = config_parameters.EMERGING_TECH_MODERATE,
-         # battery variables
-         open_technology_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND['openground'],
-         roof_technology_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_power_share"],
-         roof_3kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_3kw"],
-         roof_93kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_93kw"],
-         roof_156kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_156kw"],
-         roof_280kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_280kw"],
-         # solar pv variables
-         onshore_wind_fleet: Dict = config_parameters.BALANCED_ON_WIND_FLEET,  # onshore wind variables
-         offshore_wind_fleet: Dict = config_parameters.OFF_WIND_FLEET,  # offshore wind variables
+        soec_electrolyser_share: float = 0.3, aec_electrolyser_share: float = 0.4,
+        pem_electrolyser_share: float = 0.3,  # electrolyser variables
+        battery_current_share: bool = False,
+        battery_technology_share: Optional[Dict[str, float]] = config_parameters.EMERGING_TECH_MODERATE,
+        # battery variables
+        open_technology_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND['openground'],
+        roof_technology_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_power_share"],
+        roof_3kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_3kw"],
+        roof_93kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_93kw"],
+        roof_156kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_156kw"],
+        roof_280kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_280kw"],
+        # solar pv variables
+        onshore_wind_fleet: Dict = config_parameters.BALANCED_ON_WIND_FLEET,  # onshore wind variables
+        offshore_wind_fleet: Dict = config_parameters.OFF_WIND_FLEET,  # offshore wind variables
 
-         infrastructure_production_in_europe: bool = True,
-         mapping_file_path: str = r'C:\Users\1361185\OneDrive - UAB\Documentos\GitHub\calliope_enbios_int\data\input\tech_mapping_in.xlsx',
-         
-         delete_infrastructure: bool = True,
-         om_spheres_separation: bool = True,
-         avoid_double_counting: bool = True,
-         file_out_path: str = r'C:\Users\1361185\OneDrive - UAB\Documentos\GitHub\calliope_enbios_int\data\output\tech_mapping_out.xlsx'
-         ):
+        infrastructure_production_in_europe: bool = True,
+        mapping_file_path: str = r'C:\Users\1361185\OneDrive - UAB\Documentos\GitHub\calliope_enbios_int\data\input\tech_mapping_in.xlsx',
+
+        delete_infrastructure: bool = True,
+        om_spheres_separation: bool = True,
+        avoid_double_counting: bool = True,
+        file_out_path: str = r'C:\Users\1361185\OneDrive - UAB\Documentos\GitHub\calliope_enbios_int\data\output\tech_mapping_out.xlsx'
+        ):
     """
     Databases:
     1. 'original_cutoff391'
@@ -56,7 +56,6 @@ def run(ccs_clinker: bool = True,
     7. Final databases (all of them come WITH background changes):
         - 'infrastructure (with European steel and concrete)': infrastructure activities WITH European markets for
           steel and concrete.
-    # TODO: maybe after all the treatments, we can create a database 'O&M biosphere' with all the corresponding activities. Same for 'O&M technosphere'. In this way, we would have all needed activities well classified in three separated databases.
     """
     # setup_databases
     bd.projects.set_current(PROJECT_NAME)
@@ -100,20 +99,21 @@ def run(ccs_clinker: bool = True,
         ndb.write_db_to_brightway(name='premise_cement')
 
     # create a premise_original copy named 'premise_base'
-    bd.Database('premise_original').copy(name="premise_base")
+    if 'premise_base' not in bd.databases:
+        bd.Database('premise_original').copy(name="premise_base")
 
     # background changes
     update_background(ccs_clinker=ccs_clinker,
-        train_electrification=train_electrification,
-        biomass_from_residues=biomass_from_residues,
-        biomass_from_residues_share=biomass_from_residues_share,
-        h2_iron_and_steel=h2_iron_and_steel,
-        olefins_from_methanol=olefins_from_methanol,
-        methanol_from_electrolysis=methanol_from_electrolysis,
-        ammonia_from_hydrogen=ammonia_from_hydrogen,
-        trucks_electrification=trucks_electrification,
-        trucks_electrification_share=trucks_electrification_share,
-        sea_transport_syn_diesel=sea_transport_syn_diesel)
+                      train_electrification=train_electrification,
+                      biomass_from_residues=biomass_from_residues,
+                      biomass_from_residues_share=biomass_from_residues_share,
+                      h2_iron_and_steel=h2_iron_and_steel,
+                      olefins_from_methanol=olefins_from_methanol,
+                      methanol_from_electrolysis=methanol_from_electrolysis,
+                      ammonia_from_hydrogen=ammonia_from_hydrogen,
+                      trucks_electrification=trucks_electrification,
+                      trucks_electrification_share=trucks_electrification_share,
+                      sea_transport_syn_diesel=sea_transport_syn_diesel)
     # TODO: allow to have shares of today's and future's industry
     # TODO: allow the rest of the world to also update their industries (according to IAMs?)
 
@@ -144,13 +144,13 @@ def run(ccs_clinker: bool = True,
     # mapping file) in additional_acts.
     if delete_infrastructure:
         delete_infrastructure_main(
-        file_path=mapping_file_path, om_spheres_separation=om_spheres_separation)
+            file_path=mapping_file_path, om_spheres_separation=om_spheres_separation)
 
     # avoid double accounting
     if avoid_double_counting:
         avoid_double_accounting()
 
-    # save output file
+    # save the output file
     if om_spheres_separation:
         create_output_file(file_in=mapping_file_path, file_out=file_out_path)
     else:
@@ -172,7 +172,7 @@ def avoid_double_accounting():
     The following energy carriers are dealt with: electricity, heat, CO2, hydrogen, waste, biomass, methane, methanol,
     kerosene, diesel.
     """
-    print('Avoiding double accounting.')
+    print('Starting avoiding double accounting protocol')
     for name in ['premise_base', 'additional_acts',
                  'premise_auxiliary_for_infrastructure', 'infrastructure (with European steel and concrete)']:
         try:
@@ -223,6 +223,8 @@ def avoid_double_accounting():
         except wurst.errors.NoResults:
             print(f'diesel not available in {name}')
 
+    print('Double accounting protocol successfully completed')
+
 
 def update_background(
         ccs_clinker: bool = True,
@@ -253,16 +255,20 @@ def update_background(
     IMPORTANT: Note that the changes are only made in Europe but the rest of the world keeps functioning with the same
     production structure as today's.
     """
-    print(f'updating background. The following sectors are going to be updated: '
-          f'"Cement with Carbon Capture and Storage" = {ccs_clinker}, '
-          f'"Train electrification" = {train_electrification}, '
-          f'"Biomass from residues" = {biomass_from_residues} with a residues share of: {biomass_from_residues_share},'
-          f'"Iron and steel from hydrogen" = {h2_iron_and_steel}, '
-          f'"Olefins (plastics) from methanol" = {olefins_from_methanol}, '
-          f'"Methanol from electrolysis" = {methanol_from_electrolysis}, '
-          f'"Ammonia from hydrogen" = {ammonia_from_hydrogen}, '
-          f'"Trucks electrification" = {trucks_electrification} with an electrification share of: {trucks_electrification_share}, '
-          f'"Sea transport using synthetic diesel" = {sea_transport_syn_diesel}.')
+    print(
+        f"Updating background. The following sectors are going to be updated:\n"
+        f"  - Cement with Carbon Capture and Storage = {ccs_clinker}\n"
+        f"  - Train electrification = {train_electrification}\n"
+        f"  - Biomass from residues = {biomass_from_residues} "
+        f"(with a residues share of: {biomass_from_residues_share})\n"
+        f"  - Iron and steel from hydrogen = {h2_iron_and_steel}\n"
+        f"  - Olefins (plastics) from methanol = {olefins_from_methanol}\n"
+        f"  - Methanol from electrolysis = {methanol_from_electrolysis}\n"
+        f"  - Ammonia from hydrogen = {ammonia_from_hydrogen}\n"
+        f"  - Trucks electrification = {trucks_electrification} "
+        f"(with an electrification share of: {trucks_electrification_share})\n"
+        f"  - Sea transport using synthetic diesel = {sea_transport_syn_diesel}"
+    )
 
     if ccs_clinker:
         print('Updating cement')
@@ -355,14 +361,17 @@ def update_foreground(ccs: bool = False, vehicles_as_batteries: bool = True,
     airborne_wind_lci(bd_airborne_name='premise_base')
     fuels_combustion()
 
-    # de-nest (restructure) inventories for methanol, kerosene and diesel
-    print('de-esting methanol, kerosene and diesel.')
-    rebuild_methanol_act()
-    rebuild_kerosene_and_diesel_acts()
-
-    # variable dependant updates
     if not ccs:
         biofuel_to_methanol_update(db_methanol_name='premise_base')
+        # de-nest (restructure) inventories for methanol, kerosene and diesel
+        print('De-nesting methanol, kerosene and diesel.')
+        rebuild_methanol_act()
+        # make steam input for methanol European
+        methanol_distillation_update()
+        rebuild_kerosene_and_diesel_acts()
+        # TODO: rewrite rebuild_methanol_act() for when ccs = True
+
+    # variable dependant updates
     if vehicles_as_batteries:
         print('modelling vehicles as batteries')
         trucks_and_bus_update(db_truck_name='premise_base')
@@ -480,4 +489,15 @@ def create_output_file(file_in: str, file_out: str):
 
     print(f"File '{file_out}' created successfully.")
 
-run()
+
+run(ccs_clinker=False,
+        train_electrification=False,
+        biomass_from_residues= False,
+        biomass_from_residues_share= 1.0,
+        h2_iron_and_steel= False,
+        olefins_from_methanol= False,
+        methanol_from_electrolysis= False,
+        ammonia_from_hydrogen= False,
+        trucks_electrification= False,
+        trucks_electrification_share= 0.5,
+        sea_transport_syn_diesel= False)

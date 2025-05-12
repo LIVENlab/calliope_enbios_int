@@ -922,8 +922,9 @@ def trucks_update(fleet_electrification_share: float = 0.5):
                 amount=1, type='technosphere'
             )
             new_ex.save()
-            # divide the service: 50% electric, 50% synthetic diesel
-            print('Dividing service: 50% electric, 50% synthetic diesel')
+            # divide the service: shares according to fleet_electrification_share
+            print(f'Dividing service: {fleet_electrification_share*100}% electric, '
+                  f'{(1-fleet_electrification_share*100)}% synthetic diesel')
             for ex in act.upstream():
                 print(f'changing {ex}')
                 amount = ex['amount']
@@ -937,7 +938,8 @@ def trucks_update(fleet_electrification_share: float = 0.5):
                 ex['amount'] = amount * (1 - fleet_electrification_share)
                 ex.save()
         elif 'EURO6' not in act['name']:
-            print('Dividing service: 50% electric, 50% synthetic diesel')
+            print(f'Dividing service: {fleet_electrification_share*100}% electric, '
+                  f'{(1-fleet_electrification_share*100)}% synthetic diesel')
             for ex in act.upstream():
                 print('updating efficiency to EURO6')
                 # update efficiency to EURO6
@@ -947,7 +949,7 @@ def trucks_update(fleet_electrification_share: float = 0.5):
                                       )
                 ex.save()
                 print(f'changing {ex}')
-                # divide the service: 50% electric, 50% synthetic diesel
+                # divide the service: shares according to fleet_electrification_share
                 amount = ex['amount']
                 new_ex = ex.output.new_exchange(
                     input=ws.get_one(
@@ -970,9 +972,10 @@ def trucks_update(fleet_electrification_share: float = 0.5):
                         ws.equals('name', 'diesel production, synthetic, Fischer Tropsch process, '
                                           'hydrogen from wood gasification, energy allocation'))
                     ex.save()
-            print('Dividing service: 50% electric, 50% synthetic diesel')
+            print(f'Dividing service: {fleet_electrification_share * 100}% electric, '
+                  f'{(1 - fleet_electrification_share * 100)}% synthetic diesel')
             for ex in act.upstream():
-                # divide the service: 50% electric, 50% synthetic diesel
+                # divide the service: shares according to fleet_electrification_share
                 amount = ex['amount']
                 new_ex = ex.output.new_exchange(
                     input=ws.get_one(
@@ -1103,7 +1106,6 @@ def update_cement_iron_foreground(
     - Vehicles are left out of this analysis.
     """
     print('Updating cement and iron for European infrastructure')
-    # TODO: address it so it does not break when reaching the end of the document!
     # create infrastructure database
     if 'infrastructure (with European steel and concrete)' not in bd.databases:
         new_db = bd.Database('infrastructure (with European steel and concrete)')
@@ -1193,6 +1195,7 @@ def update_cement_iron_foreground(
         except Exception:
             failed.append(row['life_cycle_inventory_name'])
 
+    print('Cement and iron for European infrastructure updated successfully')
     return failed
 
 
@@ -1297,7 +1300,7 @@ def delete_infrastructure_main(
     exceptions to hydrogen, diesel and kerosene. Moreover, it creates another copy of the activity in
     additional_acts (adding ', technosphere' at the end of the name), and it removes the biosphere.
     """
-    print('Deleting infrastructure')
+    print('Starting delete infrastructure protocol')
     # delete infrastructure
     df = pd.read_excel(file_path, sheet_name='o&m')
     for name, location, database, reference_product in (
@@ -1390,7 +1393,7 @@ def delete_infrastructure_main(
     for ex in liquid_storage_act.upstream():
         if any(fuel in ex.output['name'] for fuel in ['hydrogen', 'carbon dioxide', 'methanol']):
             ex.delete()
-
+    print('Delete infrastructure protocol completed successfully')
 
 def om_biosphere(act):
     """
@@ -2441,8 +2444,8 @@ def batteries_fleet(db_batteries_name: str, current_share: bool,
     else:
         print(f'Manual battery scenario with the following technology shares: {technology_share}')
         # Runtime check to enforce battery types as keys
-        expected_keys = ['LFP', 'NMC111', 'NMC523', 'NMC622', 'NMC811', 'NMC955', 'SiB',
-                         'Vanadium', 'lead', 'Sodium-Nickel']
+        expected_keys = {'LFP', 'NMC111', 'NMC523', 'NMC622', 'NMC811', 'NMC955', 'SiB',
+                         'Vanadium', 'lead', 'Sodium-Nickel'}
         if set(technology_share.keys()) != expected_keys:
             raise ValueError(f"'technology_share' must contain exactly the keys {expected_keys}")
         if sum(technology_share.values()) != 1:
@@ -2936,4 +2939,3 @@ def rebuild_methanol_act():
         for ex in inner_technosphere:
             ex.output = methanol_act_2
             ex.save()
-
