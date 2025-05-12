@@ -4,9 +4,22 @@ from premise import *
 from config_parameters import *
 from functions import *
 import bw2data as bd
+import shutil
 
 
-def main(ccs: bool = False, vehicles_as_batteries: bool = True,
+def run(ccs_clinker: bool = True,
+        train_electrification: bool = True,
+        biomass_from_residues: bool = True,
+        biomass_from_residues_share: float = 1.0,
+        h2_iron_and_steel: bool = True,
+        olefins_from_methanol: bool = True,
+        methanol_from_electrolysis: bool = True,
+        ammonia_from_hydrogen: bool = True,
+        trucks_electrification: bool = True,
+        trucks_electrification_share: float = 0.5,
+        sea_transport_syn_diesel: bool = True,
+
+        ccs: bool = False, vehicles_as_batteries: bool = True,
          soec_electrolyser_share: float = 0.3, aec_electrolyser_share: float = 0.4,
          pem_electrolyser_share: float = 0.3,  # electrolyser variables
          battery_current_share: bool = False,
@@ -23,7 +36,12 @@ def main(ccs: bool = False, vehicles_as_batteries: bool = True,
          offshore_wind_fleet: Dict = config_parameters.OFF_WIND_FLEET,  # offshore wind variables
 
          infrastructure_production_in_europe: bool = True,
-         mapping_file_path: str = r'C:\Users\1361185\OneDrive - UAB\Documentos\GitHub\calliope_enbios_int\data\tech_mapping.xlsx'
+         mapping_file_path: str = r'C:\Users\1361185\OneDrive - UAB\Documentos\GitHub\calliope_enbios_int\data\input\tech_mapping_in.xlsx',
+         
+         delete_infrastructure: bool = True,
+         om_spheres_separation: bool = True,
+         avoid_double_counting: bool = True,
+         file_out_path: str = r'C:\Users\1361185\OneDrive - UAB\Documentos\GitHub\calliope_enbios_int\data\output\tech_mapping_out.xlsx'
          ):
     """
     Databases:
@@ -55,35 +73,47 @@ def main(ccs: bool = False, vehicles_as_batteries: bool = True,
         ei.write_database()
 
     # TODO: fix premise version so it does not break
-    # premise, without updates (only imported inventories)
-    ndb = NewDatabase(
-        scenarios=[
-            {"model": "image", "pathway": "SSP2-RCP19", "year": 2020},
-        ],
-        source_db="cutoff391",
-        source_version="3.9.1",
-        key='tUePmX_S5B8ieZkkM7WUU2CnO8SmShwmAeWK9x2rTFo='
-    )
-    ndb.write_db_to_brightway(name='premise_original')
+    if 'premise_original' not in bd.databases:
+        # premise, without updates (only imported inventories)
+        ndb = NewDatabase(
+            scenarios=[
+                {"model": "image", "pathway": "SSP2-RCP19", "year": 2020},
+            ],
+            source_db="cutoff391",
+            source_version="3.9.1",
+            key='tUePmX_S5B8ieZkkM7WUU2CnO8SmShwmAeWK9x2rTFo='
+        )
+        ndb.write_db_to_brightway(name='premise_original')
 
-    # premise with cement and biomass update
-    ndb = NewDatabase(
-        scenarios=[
-            {"model": "image", "pathway": "SSP2-RCP19", "year": 2020},
-        ],
-        source_db="cutoff391",
-        source_version="3.9.1",
-        key='tUePmX_S5B8ieZkkM7WUU2CnO8SmShwmAeWK9x2rTFo='
-    )
-    ndb.update('cement')
-    ndb.update('biomass')
-    ndb.write_db_to_brightway(name='premise_cement')
+    if 'premise_cement' not in bd.databases:
+        # premise with cement and biomass update
+        ndb = NewDatabase(
+            scenarios=[
+                {"model": "image", "pathway": "SSP2-RCP19", "year": 2020},
+            ],
+            source_db="cutoff391",
+            source_version="3.9.1",
+            key='tUePmX_S5B8ieZkkM7WUU2CnO8SmShwmAeWK9x2rTFo='
+        )
+        ndb.update('cement')
+        ndb.update('biomass')
+        ndb.write_db_to_brightway(name='premise_cement')
 
-    # create premise_original copy named 'premise_base)
+    # create a premise_original copy named 'premise_base'
     bd.Database('premise_original').copy(name="premise_base")
 
     # background changes
-    update_background()
+    update_background(ccs_clinker=ccs_clinker,
+        train_electrification=train_electrification,
+        biomass_from_residues=biomass_from_residues,
+        biomass_from_residues_share=biomass_from_residues_share,
+        h2_iron_and_steel=h2_iron_and_steel,
+        olefins_from_methanol=olefins_from_methanol,
+        methanol_from_electrolysis=methanol_from_electrolysis,
+        ammonia_from_hydrogen=ammonia_from_hydrogen,
+        trucks_electrification=trucks_electrification,
+        trucks_electrification_share=trucks_electrification_share,
+        sea_transport_syn_diesel=sea_transport_syn_diesel)
     # TODO: allow to have shares of today's and future's industry
     # TODO: allow the rest of the world to also update their industries (according to IAMs?)
 
@@ -104,9 +134,6 @@ def main(ccs: bool = False, vehicles_as_batteries: bool = True,
                       roof_280kw_share=roof_280kw_share,
                       onshore_wind_fleet=onshore_wind_fleet,
                       offshore_wind_fleet=offshore_wind_fleet)
-    # TODO: continue with the next function
-    # TODO: add variables in install_and_update_databases() so we can select if we want to
-    #  update cement and iron foreground, delete infrastructure, avoid double accounting, etc.
 
     # 'infrastructure (with European steel and concrete)' operating.
     if infrastructure_production_in_europe:
@@ -115,15 +142,21 @@ def main(ccs: bool = False, vehicles_as_batteries: bool = True,
     # O&M activities in premise_base and additional_acts do not have infrastructure inputs after running this function.
     # Moreover, now we have activities (with ', biosphere' and ', technosphere' at the end of the name indicated in the
     # mapping file) in additional_acts.
-    delete_infrastructure_main(
-        file_path=r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx')
+    if delete_infrastructure:
+        delete_infrastructure_main(
+        file_path=mapping_file_path, om_spheres_separation=om_spheres_separation)
 
     # avoid double accounting
-    avoid_double_accounting()
+    if avoid_double_counting:
+        avoid_double_accounting()
+
+    # save output file
+    if om_spheres_separation:
+        create_output_file(file_in=mapping_file_path, file_out=file_out_path)
+    else:
+        shutil.copy(mapping_file_path, file_out_path)
 
 
-# 1. set the background
-# 1.1. Unlink carrier activities
 def avoid_double_accounting():
     """
     We use the polluter pays principle to avoid double accounting. There are two possible sources of double accounting.
@@ -133,9 +166,13 @@ def avoid_double_accounting():
     electricity system (e.g., electricity used in electrolysers for hydrogen production), we should not count the
     impacts of this electricity again. (delete internal links)
     2. Calliope assumes electricity is produced with certain technologies. However, in Ecoinvent, other technologies
-    might be producing electricity in the background (e.g., coal is not used in Calliope, but is in the background of
-    Ecoinvent). Thus, they should not be accounted either. (delete links from shifted demand from Ecoinvent to Calliope)
+    might be producing electricity in the background (e.g., coal is not used in Calliope but is in the background of
+    Ecoinvent). Thus, they should not be accounted for either. (delete links from shifted demand from Ecoinvent
+    to Calliope)
+    The following energy carriers are dealt with: electricity, heat, CO2, hydrogen, waste, biomass, methane, methanol,
+    kerosene, diesel.
     """
+    print('Avoiding double accounting.')
     for name in ['premise_base', 'additional_acts',
                  'premise_auxiliary_for_infrastructure', 'infrastructure (with European steel and concrete)']:
         try:
@@ -159,7 +196,7 @@ def avoid_double_accounting():
         except wurst.errors.NoResults:
             print(f'hydrogen not available in {name}')
         # 1.1.5 Waste
-        # In cutoff it comes without any environmental burdens, so there is no need to apply any unlinks
+        # In cutoff it comes without any environmental burdens, so there is no need to apply any unlinking
         try:
             # 1.1.6 Biomass
             unlink_biomass(db_name=name)
@@ -216,24 +253,43 @@ def update_background(
     IMPORTANT: Note that the changes are only made in Europe but the rest of the world keeps functioning with the same
     production structure as today's.
     """
+    print(f'updating background. The following sectors are going to be updated: '
+          f'"Cement with Carbon Capture and Storage" = {ccs_clinker}, '
+          f'"Train electrification" = {train_electrification}, '
+          f'"Biomass from residues" = {biomass_from_residues} with a residues share of: {biomass_from_residues_share},'
+          f'"Iron and steel from hydrogen" = {h2_iron_and_steel}, '
+          f'"Olefins (plastics) from methanol" = {olefins_from_methanol}, '
+          f'"Methanol from electrolysis" = {methanol_from_electrolysis}, '
+          f'"Ammonia from hydrogen" = {ammonia_from_hydrogen}, '
+          f'"Trucks electrification" = {trucks_electrification} with an electrification share of: {trucks_electrification_share}, '
+          f'"Sea transport using synthetic diesel" = {sea_transport_syn_diesel}.')
+
     if ccs_clinker:
+        print('Updating cement')
         cement_update()
     if train_electrification:
+        print('Updating train')
         train_update()
     if biomass_from_residues:
+        print('Updating biomass')
         biomass_update(biomass_from_residues_share)
     if h2_iron_and_steel:
+        print('Updating steel and iron')
         steel_update()
     if olefins_from_methanol:
+        print('updating plastics')
         plastics_update()
     if methanol_from_electrolysis:
+        print('updating methanol')
         methanol_update()
     if ammonia_from_hydrogen:
+        print('updating ammonia')
         ammonia_update()
-    # in case of trucks_electrification=True, it takes 15-20 min!
+    # in the case of trucks_electrification=True, it takes 15-20 min!
     transport_update(trucks_electrification=trucks_electrification,
                      fleet_electrification_share=trucks_electrification_share,
                      sea_transport_syn_diesel=sea_transport_syn_diesel)
+    print('Background update finished.')
 
 
 def update_foreground(ccs: bool = False, vehicles_as_batteries: bool = True,
@@ -274,9 +330,10 @@ def update_foreground(ccs: bool = False, vehicles_as_batteries: bool = True,
     - De-nest inventories for methanol, kerosene and diesel.
     - VARIABLE DEPENDANT UPDATES:
         (1) Use of Carbon Capture and Storage in hydrogen for biofuel-to-methanol (default: False)
-        (2) Model vehicles as only the electric and electronic parts (battery, etc) (default: True)
+        (2) Model vehicles as only the electric and electronic parts (battery, etc.) (default: True)
         (3) Create fleets. Scenarios described in create_fleets().
     """
+    print('Updating foreground.')
     create_additional_acts_db()
 
     # fixes from premise
@@ -294,11 +351,12 @@ def update_foreground(ccs: bool = False, vehicles_as_batteries: bool = True,
     chp_waste_update(db_waste_name='apos391', db_original_name='premise_base',
                      locations=['CH'])
 
-    # add necessary inventories
+    # add the necessary inventories
     airborne_wind_lci(bd_airborne_name='premise_base')
     fuels_combustion()
 
     # de-nest (restructure) inventories for methanol, kerosene and diesel
+    print('de-esting methanol, kerosene and diesel.')
     rebuild_methanol_act()
     rebuild_kerosene_and_diesel_acts()
 
@@ -306,6 +364,7 @@ def update_foreground(ccs: bool = False, vehicles_as_batteries: bool = True,
     if not ccs:
         biofuel_to_methanol_update(db_methanol_name='premise_base')
     if vehicles_as_batteries:
+        print('modelling vehicles as batteries')
         trucks_and_bus_update(db_truck_name='premise_base')
         passenger_car_and_scooter_update(db_passenger_name='premise_base')
 
@@ -322,6 +381,8 @@ def update_foreground(ccs: bool = False, vehicles_as_batteries: bool = True,
                   roof_280kw_share=roof_280kw_share,
                   onshore_wind_fleet=onshore_wind_fleet,
                   offshore_wind_fleet=offshore_wind_fleet)
+
+    print('Foreground updated successfully.')
 
 
 def create_fleets(
@@ -354,7 +415,7 @@ def create_fleets(
             - EMERGING_TECH_OPTIMISTIC
             - EMERGING_TECH_CURRENT
             - EMERGING_TECH_MODERATE
-    - By default we are choosing the EMERGING_TECH_MODERATE scenario.
+    - By default, we are choosing the EMERGING_TECH_MODERATE scenario.
 
     Solar pv:
     - Default scenario based on the current share [Fraunhofer Institute (2024)] defined in consts.py
@@ -387,3 +448,36 @@ def create_fleets(
 
     # Offshore wind fleets
     wind_offshore_fleet(db_wind_name='original_cutoff391', location='DE', fleet_turbines_definition=offshore_wind_fleet)
+
+
+def create_output_file(file_in: str, file_out: str):
+    print('Creating output file')
+    # Load the Excel file with both sheets
+    sheets = pd.read_excel(file_in, sheet_name=None)
+
+    # Extract the sheets
+    o_m_df = sheets['o&m']
+    infrastructure_df = sheets['infrastructure']
+
+    # Create two versions for 'life_cycle_inventory_name'
+    biosphere_df = o_m_df.copy()
+    biosphere_df['life_cycle_inventory_name'] = biosphere_df['life_cycle_inventory_name'] + ', biosphere'
+
+    technosphere_df = o_m_df.copy()
+    technosphere_df['life_cycle_inventory_name'] = technosphere_df['life_cycle_inventory_name'] + ', technosphere'
+
+    # Add the new column right after 'id'
+    biosphere_df.insert(biosphere_df.columns.get_loc('id') + 1, 'geographical_scope', 'onsite')
+    technosphere_df.insert(technosphere_df.columns.get_loc('id') + 1, 'geographical_scope', 'offsite')
+
+    # Concatenate the two dataframes
+    new_o_m_df = pd.concat([biosphere_df, technosphere_df], ignore_index=True)
+
+    # Save to a new Excel file with both sheets
+    with pd.ExcelWriter(file_out, engine='xlsxwriter') as writer:
+        new_o_m_df.to_excel(writer, sheet_name='o&m', index=False)
+        infrastructure_df.to_excel(writer, sheet_name='infrastructure', index=False)
+
+    print(f"File '{file_out}' created successfully.")
+
+run()

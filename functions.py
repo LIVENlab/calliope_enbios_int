@@ -1066,8 +1066,10 @@ def transport_update(trucks_electrification: bool = True, fleet_electrification_
     Sea transport: uses synthetic diesel instead of heavy fuel oil. No diesel wastes accounted for.
     """
     if trucks_electrification:
+        print('Updating trucks')
         trucks_update(fleet_electrification_share=fleet_electrification_share)
     if sea_transport_syn_diesel:
+        print('Updating sea transport')
         sea_transport_update()
 
 
@@ -1082,7 +1084,7 @@ def premise_base_auxiliary():
 
 
 def update_cement_iron_foreground(
-        file_path: str = r'C:\Users\1361185\OneDrive - UAB\Documentos\GitHub\calliope_enbios_int\data\technology_mapping.xlsx'):
+        file_path: str = r'C:\Users\1361185\OneDrive - UAB\Documentos\GitHub\calliope_enbios_int\data\input\tech_mapping_in.xlsx'):
     """
     Because energy infrastructure usually has GLO location, the steel and cement are not updated for them. This function
     does the following to address it:
@@ -1091,32 +1093,32 @@ def update_cement_iron_foreground(
     3. re-links them to the updated activities for Europe (following H2-DRI-EAF pathway). In the case of concrete,
     'concrete, normal strength' in 'CH' is used no matter what was the type of initial concrete.
     4. Stores all these activities in a new database called 'infrastructure (with European steel and concrete)'
+    NOTE:
+    · Wind is dealt with differently in the code due to the inventory structure of WindTrace
+    · Fuel cell, heat-pump, biomethane and municipal solid incinerator are also handled differently, as they have
+      various components inside the infrastructure inventory.
     ASSUMPTIONS:
     - Main: all infrastructures are produced in Europe except for batteries and PV panels.
     - Batteries and PV panels won't be produced in Europe! Their iron, steel and cement in the first tier is not updated
     - Vehicles are left out of this analysis.
     """
+    print('Updating cement and iron for European infrastructure')
     # TODO: address it so it does not break when reaching the end of the document!
     # create infrastructure database
     if 'infrastructure (with European steel and concrete)' not in bd.databases:
         new_db = bd.Database('infrastructure (with European steel and concrete)')
         new_db.register()
 
-    df = pd.read_excel(file_path, sheet_name='Foreground')
-    failed = []
-    solved = []
+    df = pd.read_excel(file_path, sheet_name='infrastructure')
+    solved, failed = [], []
+
     for index, row in df.iterrows():
-        print(row['tech'])
-        if row['LCI_energy_cap'] in solved:
+        print(row['technology_name_calliope'])
+        if row['life_cycle_inventory_name'] in solved:
             continue
-        if row['cap_database'] == 'Ecoinvent':
-            database = 'premise_auxiliary_for_infrastructure'
-        elif row['cap_database'] == 'premise_base':
-            database = 'premise_auxiliary_for_infrastructure'
-        else:
-            database = row['cap_database']
+
         # address wind fleets
-        if 'wind' in row['tech']:
+        if 'wind_' in row['technology_name_calliope']:
             wind_materials_acts = ws.get_many(bd.Database('additional_acts'),
                                               ws.contains('name', '_materials')
                                               )
@@ -1143,9 +1145,9 @@ def update_cement_iron_foreground(
                             ex.save()
 
         try:
-            org_act = ws.get_one(bd.Database(database),
-                                 ws.equals('name', row['LCI_energy_cap']),
-                                 ws.equals('location', row['cap_location'])
+            org_act = ws.get_one(bd.Database('premise_auxiliary_for_infrastructure'),
+                                 ws.equals('name', row['life_cycle_inventory_name']),
+                                 ws.equals('location', row['prod_location'])
                                  )
             act = org_act.copy(database='infrastructure (with European steel and concrete)')
             # 'if' statements to deal with EXCEPTIONS
@@ -1186,10 +1188,10 @@ def update_cement_iron_foreground(
                     new_ex.save()
             else:
                 cement_iron_steel_subs(act=act)
-            solved.append(row['LCI_energy_cap'])
+            solved.append(row['life_cycle_inventory_name'])
 
         except Exception:
-            failed.append(row['LCI_energy_cap'])
+            failed.append(row['life_cycle_inventory_name'])
 
     return failed
 
@@ -1284,7 +1286,7 @@ def iam_location_equivalence():
 
 
 def delete_infrastructure_main(
-        file_path: str = r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx',
+        file_path: str = r'C:\Users\1361185\OneDrive - UAB\Documentos\GitHub\calliope_enbios_int\data\input\tech_mapping_in.xlsx',
         om_spheres_separation: bool = True
 ):
     """
@@ -1295,22 +1297,17 @@ def delete_infrastructure_main(
     exceptions to hydrogen, diesel and kerosene. Moreover, it creates another copy of the activity in
     additional_acts (adding ', technosphere' at the end of the name), and it removes the biosphere.
     """
+    print('Deleting infrastructure')
     # delete infrastructure
-    df = pd.read_excel(file_path, sheet_name='Foreground')
+    df = pd.read_excel(file_path, sheet_name='o&m')
     for name, location, database, reference_product in (
-            zip(df['LCI_operation_and_maintenance'], df['prod_location'], df['prod_database'],
-                df['reference product'])):
+            zip(df['life_cycle_inventory_name'], df['prod_location'], df['prod_database'],
+                df['prod_reference_product'])):
         print('NEXT ACTIVITY')
-        # Skip if any of the following conditions are met
-        if name == '-' or name == 'No activity found' or location == '-':
-            continue
         print(f'Name: {name}')
         print(f'Location: {location}')
         print(f'Database: {database}')
         print(f'Reference product: {reference_product}')
-        # Adjust the database name if needed
-        if database == 'Ecoinvent':
-            database = 'premise_base'
 
         # If the location is 'country', start checking for activities
         if location == 'country':
@@ -1358,7 +1355,7 @@ def delete_infrastructure_main(
                 print(f'Activity found for {name} in location: {location}')
             except Exception:
                 print(f'No activity ({name}) in location: {location}.')
-    # deal with fuels
+    # EXCEPTIONS
     # dac
     dac_acts = ws.get_many(bd.Database('premise_base'),
                            ws.startswith('name', 'direct air capture system'))
@@ -1446,7 +1443,9 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
     variable ``locations``.
     Creates an activity for the municipal solid waste incinerator.
     """
+    print('Updating CHP waste')
     # delete technosphere
+    print("1. deleting technosphere")
     create_additional_acts_db()
     for location in locations:
         try:
@@ -1501,6 +1500,7 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
             waste_heat_act.technosphere().delete()
 
     # create municipal solid waste incinerator
+    print('2. creating municipal solid waste incinerator')
     incinerator_parts = ['furnace production, wood chips, with silo, 5000kW',
                          'heat and power co-generation unit construction, organic Rankine cycle, 1000kW electrical',
                          'dust collector production, electrostatic precipitator, for industrial use']
@@ -1532,6 +1532,7 @@ def update_methanol_facility():
     create the inventories in premise it consists of an adiabatic reactor of 12.6 m3 and an isothermal
     reactor of 8 m3. LT assumed 20 years. Production rate will be 44900000 kg / 20 years / 8000 h = 280 kg/h
     """
+    print('Updating methanol facility')
     methanol_facility_act_original = ws.get_one(
         bd.Database('premise_base'),
         ws.equals('name', 'methanol production facility, construction'))
@@ -1559,6 +1560,7 @@ def update_methanol_facility():
 
 
 def update_chp_hydrogen():
+    print('Updating CHP hydrogen infrastructure')
     chp_elect_act = ws.get_one(
         bd.Database('premise_base'),
         ws.equals('name', 'electricity, residential, by conversion of hydrogen using fuel cell, '
@@ -1598,7 +1600,7 @@ def biofuel_to_methanol_update(db_methanol_name: str):
     for H2 production without CCS.
     To execute only if we don't want CCS!
     """
-
+    print('Removing CCS from H2 for biofuel to methanol')
     # Change name of the methanol distillation activity
     methanol_distillation_original = ws.get_one(bd.Database(db_methanol_name),
                                                 ws.equals('name',
@@ -1713,6 +1715,7 @@ def gas_to_liquid_update(db_cobalt_name: str, db_gas_to_liquid_name: str):
     Creates a copy of 'gas-to-liquid plant construction' in 'additional_acts' and adds 1250000 kg of cobalt
     as input (catalyst).
     """
+    print('Updating gas-to-liquid plant')
     gas_to_liquid_original_act = ws.get_one(bd.Database(db_gas_to_liquid_name),
                                             ws.equals('name', 'gas-to-liquid plant construction'),
                                             )
@@ -1730,6 +1733,7 @@ def hydro_reservoir_update(location: str, db_hydro_name: str):
     :return: transfers land use and emissions from flooding operations to infrastructure instead of operation in
     reservoir power plants.
     """
+    print(f'Updating hydro power plant')
     electricity_reservoir = ws.get_one(
         bd.Database(db_hydro_name),
         ws.contains('name', 'electricity production, hydro, reservoir, non-alpine region'),
@@ -1765,6 +1769,7 @@ def hydro_run_of_river_update(db_hydro_name: str):
     :return: transfers land use to infrastructure instead of operation in
     run-of-river power plants. Location always CA-QC, as it is the only one with clear info in MW of infrastructure.
     """
+    print('Updating hydro run-of-river power plant')
     electricity_run_of = ws.get_one(bd.Database(db_hydro_name),
                                     ws.contains('name', 'electricity production, hydro, run-of-river'),
                                     ws.equals('location', 'CA-QC'))
@@ -1786,6 +1791,7 @@ def hydro_run_of_river_update(db_hydro_name: str):
 
 
 def fuels_combustion():
+    print('Updating fuels for combustion')
     # bus
     bus_act = ws.get_one(
         bd.Database('premise_base'),
@@ -1826,6 +1832,7 @@ def biofuel_to_methane_infrastructure(db_syn_gas_name: str):
     """
     It creates a biomethane factory that includes 1 synthetic gas factory and 7.11 industrial furnaces.
     """
+    print('Updating biofuel infrastructure')
     syn_gas_factory = ws.get_one(bd.Database(db_syn_gas_name),
                                  ws.equals('name', 'synthetic gas factory construction'),
                                  ws.equals('location', 'CH'))
@@ -1846,6 +1853,7 @@ def biofuel_to_methane_infrastructure(db_syn_gas_name: str):
 
 
 def hp_update(db_hp_name: str):
+    print('Updating heat pumps')
     heat_exchanger = ws.get_one(bd.Database(db_hp_name),
                                 ws.equals('name', 'market for borehole heat exchanger, 150m'),
                                 ws.equals('location', 'GLO'))
@@ -1875,6 +1883,7 @@ def airborne_wind_lci(bd_airborne_name: str):
     Life-cycle phases: materials, manufacturing, installation. No EoL. No transport (it can't be as much
     as reported in the paper!). Maintenance in a different inventory.
     """
+    print('Updating airborne wind')
     input_data = {
         'steel': [{'market for steel, low-alloyed': 'GLO', 'hot rolling, steel': 'Europe without Austria'}, 73455],
         'iron': [{'cast iron production': 'RER', 'hot rolling, steel': 'Europe without Austria'}, 21165],
@@ -1978,6 +1987,7 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
     0.5], # where this 0.5 is the share of turbine_2
     }
     """
+    print('create onshore wind fleet')
     create_additional_acts_db()
 
     expected_keys = {'power', 'manufacturer', 'rotor_diameter', 'hub_height', 'commissioning_year',
@@ -2088,6 +2098,7 @@ def wind_offshore_fleet(db_wind_name: str, location: str,
     0.5], # where this 0.5 is the share of turbine_2
     }
     """
+    print('Creating offshore wind fleet')
     create_additional_acts_db()
 
     expected_keys = {'power', 'manufacturer', 'rotor_diameter', 'hub_height', 'commissioning_year',
@@ -2197,7 +2208,7 @@ def wind_offshore_fleet(db_wind_name: str, location: str,
 
 # solar_pv
 def solar_pv_fleet(db_solar_name: str,
-                   open_technology_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND['opeground'],
+                   open_technology_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND['openground'],
                    roof_technology_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_power_share"],
                    roof_3kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_3kw"],
                    roof_93kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_93kw"],
@@ -2227,6 +2238,7 @@ def solar_pv_fleet(db_solar_name: str,
     Note: it deliberately avoids 1.3 MWp inventories and technologies stored in a different format
     (i.e., perovskite-on-silicon and GaAs). It also avoids laminated installations (all integrated).
     """
+    print('Creating solar pv fleet')
     # TODO: add maintenance (tap water, wastewater and water to air)
     create_additional_acts_db()
     # test technology shares
@@ -2415,6 +2427,7 @@ def batteries_fleet(db_batteries_name: str, current_share: bool,
             - EMERGING_TECH_CURRENT
             - EMERGING_TECH_MODERATE
     """
+    print('Creating battery fleets')
     if current_share and technology_share is not None:
         print(f'WARNING: It is not possible to use the current share and define a share manually at the same time. '
               f'Applying the current share by default.')
@@ -2466,6 +2479,7 @@ def hydrogen_from_electrolysis_market(db_hydrogen_name: str, soec_share: float, 
     The function creates a market activity in 'additional_acts' with the shares of hydrogen production from
     soec, aec and pem technologies named 'hydrogen production, gaseous, for enbios'.
     """
+    print('Creating electrolyser fleets')
     if (soec_share + aec_share + pem_share) != 1:
         print(f'your inputs for soc ({soec_share}), aec ({aec_share}) and pem ({pem_share}) do not sum 1. '
               f'They sum {soec_share + aec_share + pem_share}. Try a combination that sums 1)')
@@ -2923,91 +2937,3 @@ def rebuild_methanol_act():
             ex.output = methanol_act_2
             ex.save()
 
-
-# 2. all value chain
-def solve_lci(activity):
-    """
-    :return: a list of tuples, where each tuple is (activity name, amount, unit, category)
-    """
-    lca = activity.lca(amount=1)
-    lca.lci()
-    array = lca.inventory.sum(axis=1)
-    if hasattr(lca, 'dicts'):
-        mapping = lca.dicts.biosphere
-    else:
-        mapping = lca.biosphere_dict
-    data = []
-    for key, row in mapping.items():
-        data.append((bd.get_activity(key).get('name'), array[row, 0], bd.get_activity(key).get('unit'),
-                     bd.get_activity(key).get('categories')))
-    df = pd.DataFrame([{
-        'name': name,
-        'amount': amount,
-        'unit': unit,
-        'categories': categories,
-    } for name, amount, unit, categories in data
-    ])
-    return df
-
-
-def natural_resources(activity):
-    """
-    :return: filters solved activities, so it only includes the corresponding categories to natural resources
-    """
-    df = solve_lci(activity=activity)
-    nat_res = df.loc[df['categories'].apply(lambda x: x[3] == 'natural resource')]
-    return nat_res
-
-
-def total_materials(activity):
-    """
-    :return: all material extraction amounts through the entire life-cycle (solved inventory).
-    """
-    df = solve_lci(activity=activity)
-    total_mat = df.loc[
-        df['categories'].apply(lambda x: x[3] == 'natural resource, in ground' and x[2] == 'kilogram')]
-    return total_mat['amount'].sum()
-
-
-##### land use as indicator #####
-# 1. foreground
-def foreground_land(activity):
-    """
-    :return: square meters of transformation, and square meters per year of occupation in the foreground
-    """
-    transformation = [ex.amount for ex in activity.biosphere() if 'Transformation, from' in ex._data['name']]  # in m2
-    occupation = [ex.amount for ex in activity.biosphere() if 'Occupation,' in ex._data['name']]  # in m2*year
-    return sum(transformation), sum(occupation)
-
-
-# 2. all value chain
-def total_land(activity):
-    """
-    :return: returns the total amount of square meters, and occupation (m2*year) of an activity through its life-cycle
-    """
-    nat_res = natural_resources(activity=activity)
-    total_squared_meters = nat_res.loc[nat_res['name'].apply(lambda x: x[1] == 'Transformation, from')]
-    total_occupation = nat_res.loc[nat_res['name'].apply(lambda x: x[1] == 'Occupation,')]
-    return total_squared_meters['amount'].sum(), total_occupation['amount'].sum()
-
-
-##### get the emissions of the biosphere only ####
-def direct_emissions(activity, method=('EF v3.1', 'climate change', 'global warming potential (GWP100)')):
-    """
-    :return: gwp EF v3.1 direct emissions of an activity
-    """
-    direct_emissions_db = bd.Database('direct_emissions_db')
-    if 'direct_emissions_db' not in bd.databases:
-        direct_emissions_db.register()
-    new_act = activity.copy(database='direct_emissions_db')
-    new_act.technosphere().delete()
-    lca = new_act.lca(amount=1, method=method)
-    return lca.score
-
-
-def get_co2_emissions_only(activity):
-    """
-    :return: CO2 emissions (not CO2-eq) in kg of an activity. Needed to get DAC carbon intake capacity.
-    """
-    co2 = [ex.amount for ex in activity.biosphere() if 'Carbon dioxide' in ex._data['name']]
-    return sum(co2)
