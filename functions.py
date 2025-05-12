@@ -1,4 +1,4 @@
-from typing import Literal, Optional, Dict, Any, List, Union
+from typing import Optional, Dict, Any, List, Union
 import pandas as pd
 from premise.geomap import Geomap
 import wurst.searching as ws
@@ -6,6 +6,7 @@ import sys
 import bw2data as bd
 import WindTrace.WindTrace_onshore
 import WindTrace.WindTrace_offshore
+import config_parameters
 import consts
 import wurst
 from collections import defaultdict
@@ -1081,7 +1082,7 @@ def premise_base_auxiliary():
 
 
 def update_cement_iron_foreground(
-        file_path: str = r'C:\Users\mique\OneDrive - UAB\PhD_ICTA_Miquel\research stay Delft\technology_mapping_clean.xlsx'):
+        file_path: str = r'C:\Users\1361185\OneDrive - UAB\Documentos\GitHub\calliope_enbios_int\data\technology_mapping.xlsx'):
     """
     Because energy infrastructure usually has GLO location, the steel and cement are not updated for them. This function
     does the following to address it:
@@ -1091,8 +1092,9 @@ def update_cement_iron_foreground(
     'concrete, normal strength' in 'CH' is used no matter what was the type of initial concrete.
     4. Stores all these activities in a new database called 'infrastructure (with European steel and concrete)'
     ASSUMPTIONS:
+    - Main: all infrastructures are produced in Europe except for batteries and PV panels.
     - Batteries and PV panels won't be produced in Europe! Their iron, steel and cement in the first tier is not updated
-    - Vehicles are left out of these analysis.
+    - Vehicles are left out of this analysis.
     """
     # TODO: address it so it does not break when reaching the end of the document!
     # create infrastructure database
@@ -1186,7 +1188,7 @@ def update_cement_iron_foreground(
                 cement_iron_steel_subs(act=act)
             solved.append(row['LCI_energy_cap'])
 
-        except Exception as e:
+        except Exception:
             failed.append(row['LCI_energy_cap'])
 
     return failed
@@ -1326,7 +1328,7 @@ def delete_infrastructure_main(
                         om_technosphere(act)
                     print(f'Activity: {name}. Location: {loc}. Ref product: {reference_product}')
                     continue
-                except Exception as e:
+                except Exception:
                     print(f'No activity ({name}) in ({loc})')
                     # there is no need to create copy after copy
                     continue
@@ -1354,7 +1356,7 @@ def delete_infrastructure_main(
                     om_biosphere(act)
                     om_technosphere(act)
                 print(f'Activity found for {name} in location: {location}')
-            except Exception as e:
+            except Exception:
                 print(f'No activity ({name}) in location: {location}.')
     # deal with fuels
     # dac
@@ -2195,12 +2197,12 @@ def wind_offshore_fleet(db_wind_name: str, location: str,
 
 # solar_pv
 def solar_pv_fleet(db_solar_name: str,
-                   open_technology_share: Dict[str, float] = consts.OPEN_TECHNOLOGY_SHARE,
-                   roof_technology_share: Dict[str, float] = consts.ROOF_TECHNOLOGY_SHARE,
-                   roof_3kw_share: Dict[str, float] = consts.ROOF_3KW_SHARE,
-                   roof_93kw_share: Dict[str, float] = consts.ROOF_93KW_SHARE,
-                   roof_156kw_share: Dict[str, float] = consts.ROOF_156KW_SHARE,
-                   roof_280kw_share: Dict[str, float] = consts.ROOF_280KW_SHARE):
+                   open_technology_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND['opeground'],
+                   roof_technology_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_power_share"],
+                   roof_3kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_3kw"],
+                   roof_93kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_93kw"],
+                   roof_156kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_156kw"],
+                   roof_280kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_280kw"]):
     """
     For open-ground, it creates a fleet of 570 kWp with the following technologies
     ('CdTe', 'CIS', 'micro-Si', 'multi-Si', 'single-Si').

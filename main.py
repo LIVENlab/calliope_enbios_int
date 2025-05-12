@@ -1,14 +1,30 @@
 import bw2io as bi
 import wurst.errors
 from premise import *
-
-import consts
-from tasks import *
+from config_parameters import *
+from functions import *
 import bw2data as bd
-from consts import *
 
 
-def install_and_update_databases():
+def main(ccs: bool = False, vehicles_as_batteries: bool = True,
+         soec_electrolyser_share: float = 0.3, aec_electrolyser_share: float = 0.4,
+         pem_electrolyser_share: float = 0.3,  # electrolyser variables
+         battery_current_share: bool = False,
+         battery_technology_share: Optional[Dict[str, float]] = config_parameters.EMERGING_TECH_MODERATE,
+         # battery variables
+         open_technology_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND['openground'],
+         roof_technology_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_power_share"],
+         roof_3kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_3kw"],
+         roof_93kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_93kw"],
+         roof_156kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_156kw"],
+         roof_280kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_280kw"],
+         # solar pv variables
+         onshore_wind_fleet: Dict = config_parameters.BALANCED_ON_WIND_FLEET,  # onshore wind variables
+         offshore_wind_fleet: Dict = config_parameters.OFF_WIND_FLEET,  # offshore wind variables
+
+         infrastructure_production_in_europe: bool = True,
+         mapping_file_path: str = r'C:\Users\1361185\OneDrive - UAB\Documentos\GitHub\calliope_enbios_int\data\tech_mapping.xlsx'
+         ):
     """
     Databases:
     1. 'original_cutoff391'
@@ -75,14 +91,26 @@ def install_and_update_databases():
     premise_base_auxiliary()
 
     # foreground changes
-    update_foreground()
-    # TODO: add variables in update_foreground()
+    update_foreground(ccs=ccs, vehicles_as_batteries=vehicles_as_batteries,
+                      soec_electrolyser_share=soec_electrolyser_share, aec_electrolyser_share=aec_electrolyser_share,
+                      pem_electrolyser_share=pem_electrolyser_share,
+                      battery_current_share=battery_current_share,
+                      battery_technology_share=battery_technology_share,
+                      open_technology_share=open_technology_share,
+                      roof_technology_share=roof_technology_share,
+                      roof_3kw_share=roof_3kw_share,
+                      roof_93kw_share=roof_93kw_share,
+                      roof_156kw_share=roof_156kw_share,
+                      roof_280kw_share=roof_280kw_share,
+                      onshore_wind_fleet=onshore_wind_fleet,
+                      offshore_wind_fleet=offshore_wind_fleet)
     # TODO: continue with the next function
     # TODO: add variables in install_and_update_databases() so we can select if we want to
     #  update cement and iron foreground, delete infrastructure, avoid double accounting, etc.
 
     # 'infrastructure (with European steel and concrete)' operating.
-    update_cement_iron_foreground()
+    if infrastructure_production_in_europe:
+        update_cement_iron_foreground(file_path=mapping_file_path)
 
     # O&M activities in premise_base and additional_acts do not have infrastructure inputs after running this function.
     # Moreover, now we have activities (with ', biosphere' and ', technosphere' at the end of the name indicated in the
@@ -212,17 +240,18 @@ def update_foreground(ccs: bool = False, vehicles_as_batteries: bool = True,
                       soec_electrolyser_share: float = 0.3, aec_electrolyser_share: float = 0.4,
                       pem_electrolyser_share: float = 0.3,  # electrolyser variables
                       battery_current_share: bool = False,
-                      battery_technology_share: Optional[Dict[str, float]] = consts.EMERGING_TECH_MODERATE,
+                      battery_technology_share: Optional[Dict[str, float]] = config_parameters.EMERGING_TECH_MODERATE,
                       # battery variables
-                      open_technology_share: Dict[str, float] = consts.PV_CURRENT_TREND['openground'],
-                      roof_technology_share: Dict[str, float] = consts.PV_CURRENT_TREND["rooftop_power_share"],
-                      roof_3kw_share: Dict[str, float] = consts.PV_CURRENT_TREND["rooftop_3kw"],
-                      roof_93kw_share: Dict[str, float] = consts.PV_CURRENT_TREND["rooftop_93kw"],
-                      roof_156kw_share: Dict[str, float] = consts.PV_CURRENT_TREND["rooftop_156kw"],
-                      roof_280kw_share: Dict[str, float] = consts.PV_CURRENT_TREND["rooftop_280kw"],
+                      open_technology_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND['openground'],
+                      roof_technology_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND[
+                          "rooftop_power_share"],
+                      roof_3kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_3kw"],
+                      roof_93kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_93kw"],
+                      roof_156kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_156kw"],
+                      roof_280kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_280kw"],
                       # solar pv variables
-                      onshore_wind_fleet: Dict = consts.BALANCED_ON_WIND_FLEET,  # onshore wind variables
-                      offshore_wind_fleet: Dict = consts.OFF_WIND_FLEET  # offshore wind variables
+                      onshore_wind_fleet: Dict = config_parameters.BALANCED_ON_WIND_FLEET,  # onshore wind variables
+                      offshore_wind_fleet: Dict = config_parameters.OFF_WIND_FLEET  # offshore wind variables
                       ):
     """
     Adapt the foreground activities as follows:
@@ -238,7 +267,7 @@ def update_foreground(ccs: bool = False, vehicles_as_batteries: bool = True,
         (2) waste
         (3) heat pumps
         (4) hydrogen cells
-    - Add necessary inventories:
+    - Add the necessary inventories:
         (1) add direct emissions inventory for incinerator
         (2) add airborne wind inventory
         (3) add fuel combustion inventories (deleting technosphere)
@@ -299,15 +328,16 @@ def create_fleets(
         soec_electrolyser_share: float = 0.3, aec_electrolyser_share: float = 0.4,
         pem_electrolyser_share: float = 0.3,  # electrolyser variables
         battery_current_share: bool = False,
-        battery_technology_share: Optional[Dict[str, float]] = consts.EMERGING_TECH_MODERATE,  # battery variables
-        open_technology_share: Dict[str, float] = consts.PV_CURRENT_TREND['openground'],
-        roof_technology_share: Dict[str, float] = consts.PV_CURRENT_TREND["rooftop_power_share"],
-        roof_3kw_share: Dict[str, float] = consts.PV_CURRENT_TREND["rooftop_3kw"],
-        roof_93kw_share: Dict[str, float] = consts.PV_CURRENT_TREND["rooftop_93kw"],
-        roof_156kw_share: Dict[str, float] = consts.PV_CURRENT_TREND["rooftop_156kw"],
-        roof_280kw_share: Dict[str, float] = consts.PV_CURRENT_TREND["rooftop_280kw"],  # solar pv variables
-        onshore_wind_fleet: Dict = consts.BALANCED_ON_WIND_FLEET,  # onshore wind variables
-        offshore_wind_fleet: Dict = consts.OFF_WIND_FLEET  # offshore wind variables
+        battery_technology_share: Optional[Dict[str, float]] = config_parameters.EMERGING_TECH_MODERATE,
+        # battery variables
+        open_technology_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND['openground'],
+        roof_technology_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_power_share"],
+        roof_3kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_3kw"],
+        roof_93kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_93kw"],
+        roof_156kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_156kw"],
+        roof_280kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_280kw"],  # solar pv variables
+        onshore_wind_fleet: Dict = config_parameters.BALANCED_ON_WIND_FLEET,  # onshore wind variables
+        offshore_wind_fleet: Dict = config_parameters.OFF_WIND_FLEET  # offshore wind variables
 ):
     """
     Electrolysers:
