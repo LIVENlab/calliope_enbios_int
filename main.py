@@ -71,14 +71,13 @@ def run(ccs_clinker: bool = True,
         ei.apply_strategies()
         ei.write_database()
 
-    # TODO: fix premise version so it does not break
     if 'premise_original' not in bd.databases:
         # premise, without updates (only imported inventories)
         ndb = NewDatabase(
             scenarios=[
                 {"model": "image", "pathway": "SSP2-RCP19", "year": 2020},
             ],
-            source_db="cutoff391",
+            source_db="original_cutoff391",
             source_version="3.9.1",
             key='tUePmX_S5B8ieZkkM7WUU2CnO8SmShwmAeWK9x2rTFo='
         )
@@ -90,7 +89,7 @@ def run(ccs_clinker: bool = True,
             scenarios=[
                 {"model": "image", "pathway": "SSP2-RCP19", "year": 2020},
             ],
-            source_db="cutoff391",
+            source_db="original_cutoff391",
             source_version="3.9.1",
             key='tUePmX_S5B8ieZkkM7WUU2CnO8SmShwmAeWK9x2rTFo='
         )
@@ -490,14 +489,4 @@ def create_output_file(file_in: str, file_out: str):
     print(f"File '{file_out}' created successfully.")
 
 
-run(ccs_clinker=False,
-        train_electrification=False,
-        biomass_from_residues= False,
-        biomass_from_residues_share= 1.0,
-        h2_iron_and_steel= False,
-        olefins_from_methanol= False,
-        methanol_from_electrolysis= False,
-        ammonia_from_hydrogen= False,
-        trucks_electrification= False,
-        trucks_electrification_share= 0.5,
-        sea_transport_syn_diesel= False)
+run()

@@ -13,6 +13,10 @@ from collections import defaultdict
 
 
 def unlink_electricity(db_name: str = 'premise_base'):
+    """
+    NOTE: markets for electricity won't make sense (they have recurrent inputs of itselves which are
+    deleted with this code). But it does not matter, because we are not using them.
+    """
     market_group_locations = ['ENSTO-E', 'UCTE', 'Europe without Switzerland', 'RER']
     for location in market_group_locations:
         # get the market groups for electricity high voltage, medium voltage, low voltage.
@@ -924,7 +928,7 @@ def trucks_update(fleet_electrification_share: float = 0.5):
             new_ex.save()
             # divide the service: shares according to fleet_electrification_share
             print(f'Dividing service: {fleet_electrification_share*100}% electric, '
-                  f'{(1-fleet_electrification_share*100)}% synthetic diesel')
+                  f'{(1-fleet_electrification_share)*100}% synthetic diesel')
             for ex in act.upstream():
                 print(f'changing {ex}')
                 amount = ex['amount']
@@ -939,7 +943,7 @@ def trucks_update(fleet_electrification_share: float = 0.5):
                 ex.save()
         elif 'EURO6' not in act['name']:
             print(f'Dividing service: {fleet_electrification_share*100}% electric, '
-                  f'{(1-fleet_electrification_share*100)}% synthetic diesel')
+                  f'{(1-fleet_electrification_share)*100}% synthetic diesel')
             for ex in act.upstream():
                 print('updating efficiency to EURO6')
                 # update efficiency to EURO6
@@ -973,7 +977,7 @@ def trucks_update(fleet_electrification_share: float = 0.5):
                                           'hydrogen from wood gasification, energy allocation'))
                     ex.save()
             print(f'Dividing service: {fleet_electrification_share * 100}% electric, '
-                  f'{(1 - fleet_electrification_share * 100)}% synthetic diesel')
+                  f'{(1 - fleet_electrification_share) * 100}% synthetic diesel')
             for ex in act.upstream():
                 # divide the service: shares according to fleet_electrification_share
                 amount = ex['amount']
@@ -994,7 +998,7 @@ def sea_transport_update():
     1. Takes 'transport, freight, sea' activities (which have GLO locations only) and creates a RER location for them
     2. Substitutes heavy oil for synthetic diesel (from biomass) with the same demand amount. Plus, it deletes heavy oil
     wastes.
-    3. Re-links all exchanges where GLO  transport act was giving a service to any European location. Now the service is
+    3. Re-links all exchanges where GLO transport act was giving a service to any European location. Now the service is
     provided by the RER act.
     4. Takes 'market for transport, freight, sea' activities. It creates the RER market, changing its inputs to the
     RER 'transport, freight, sea' activity.
@@ -1299,6 +1303,7 @@ def delete_infrastructure_main(
     additional_acts (adding ', biosphere' at the end of the name), and it removes the technosphere, handling the
     exceptions to hydrogen, diesel and kerosene. Moreover, it creates another copy of the activity in
     additional_acts (adding ', technosphere' at the end of the name), and it removes the biosphere.
+    Exceptions: it deletes the infrastructure not in tier 1 by removing the upstream of the infrastructure itself.
     """
     print('Starting delete infrastructure protocol')
     # delete infrastructure
@@ -1358,11 +1363,15 @@ def delete_infrastructure_main(
                 print(f'Activity found for {name} in location: {location}')
             except Exception:
                 print(f'No activity ({name}) in location: {location}.')
-    # EXCEPTIONS
+    # Delete the infrastructure that is not in tier 1, by removing the upstream of the infrastructure itself
     # dac
     dac_acts = ws.get_many(bd.Database('premise_base'),
                            ws.startswith('name', 'direct air capture system'))
     for act in dac_acts:
+        act.upstream().delete()
+    dac_acts_waste = ws.get_many(bd.Database('premise_base'),
+                                 ws.startswith('name', 'treatment of direct air capture system'))
+    for act in dac_acts_waste:
         act.upstream().delete()
     # RWGS tank
     rwgs_act = ws.get_one(bd.Database('premise_base'),
@@ -1433,7 +1442,6 @@ def om_technosphere(act):
             ex.input.biosphere().delete()
 
 
-##### individual changes #####
 def create_additional_acts_db():
     if 'additional_acts' not in bd.databases:
         ea_db = bd.Database('additional_acts')
