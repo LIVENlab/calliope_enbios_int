@@ -8,7 +8,7 @@ ENBIOS incorporates life-cycle inventories for energy infrastructure and energy 
 (including operation and maintenance). This workflow ensures that these inventories are consistent with Calliope's 
 assumptions.
 
-![img_2.png](img_2.png)
+![img_2.png](readme_figures/img_2.png)
 
 ## Workflow capabilities
 ### Update the background (sectors other than energy)
@@ -25,6 +25,7 @@ adapting the corresponding life-cycle inventories accordingly, if desired:
 - **Transport**: (1) Trucks improved efficiency to EURO6
              (2) Trucks fleet share electrified as specified (trucks_electrification_share)
              (3) Sea transport using synthetic diesel instead of heavy fuel oil
+
 **IMPORTANT**: Note that the changes are only made for Europe, but the rest of the World keeps functioning with the same
 production structure as today's.
 
@@ -43,7 +44,7 @@ Summary of LCA background adaptations for each sector:
 | Road transport      | share (%) ICE– share (%) electric trucks. ICE trucks efficiency updated to EURO6. Diesel substituted by synthetic diesel | ‘transport, freight, lorry, battery electric, ...’                                                                                  | Adaptation from premise additional inventories |
 
 The concept is exemplified with steel in the Figure below.
-![img_3.png](img_3.png)
+![img_3.png](readme_figures/img_3.png)
 
 In code, update_background() is the function in charge of these adaptations. The assumptions can be implemented 
  separately by choosing the corresponding booleans in the function run(). Example of accepting all assumptions:
@@ -73,4 +74,34 @@ run(ccs_clinker=False,
 ```
 
 ### Adapt the foreground (energy sector inventories)
+Each technology in Calliope is matched with an inventory via the file in folder data/input. 
+Some of these technology inventories need adaptations to match Calliope's.
+Moreover, we introduce the concept of technology fleets for solar photovoltaics, onshore and offshore wind energy, 
+hydrogen, and chemical batteries. Example of the fleet concept applied to openground photovoltaics below:
+![img_5.png](readme_figures/img_5.png)
 
+In code, update_foreground() is the function in charge of these adaptations.
+
+### Separate inventories into onsite and offsite
+The workflow allows increasing the spatial resolution of the inventories by distinguishing between onsite 
+(i.e., in the location where the energy is produced) and offsite (i.e., elsewhere in the value chain) flows. 
+To do so, we separate the life-cycle phases according to where the emissions are happening. Onsite emissions are those 
+direct emissions encompassed during the installation and operation and maintenance, whereas the infrastructure as well 
+as the fuel and auxiliary materials needed during the operation and maintenance have associated emissions offsite. 
+
+### Avoid double accounting
+Previous studies coupling ESM and LCA highlight the importance of dealing with the double accounting problem 
+(Reinert et al., 2021, Blanco et al., 2020, Vandepaert et al., 2020, Volkart et al., 2018, June et al., 2020, 
+de Tomás et al., 2024, Sacchi and Menacho, 2024). This workflow allows to avoid double accounting by using the polluter
+pays principle. 
+There are two possible sources of double accounting. Let's break them down using electricity production as an example:
+    1. Calliope calculates the demand for electricity in Europe. We will calculate the impacts of the technologies that
+    produce electricity to satisfy this demand. Thus, when calculating the impacts of other technologies within the
+    energy system (e.g., electricity used in electrolysers for hydrogen production), we should not count the
+    impacts of this electricity again. (delete internal links)
+    2. Calliope assumes electricity is produced with certain technologies. However, in Ecoinvent, other technologies
+    might be producing electricity in the background (e.g., coal is not used in Calliope but is in the background of
+    Ecoinvent). Thus, they should not be accounted for either. (delete links from shifted demand from Ecoinvent
+    to Calliope)
+The following energy carriers are dealt with: electricity, heat, CO2, hydrogen, waste, biomass, methane, methanol,
+kerosene, diesel.
