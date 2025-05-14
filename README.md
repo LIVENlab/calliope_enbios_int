@@ -8,7 +8,7 @@ ENBIOS incorporates life-cycle inventories for energy infrastructure and energy 
 (including operation and maintenance). This workflow ensures that these inventories are consistent with Calliope's 
 assumptions.
 
-![img_2.png](readme_figures/img_2.png)
+<img alt="img_2.png" src="readme_figures/img_2.png" width="500"/>
 
 ## Workflow capabilities
 ### Update the background (sectors other than energy)
@@ -78,9 +78,10 @@ Each technology in Calliope is matched with an inventory via the file in folder 
 Some of these technology inventories need adaptations to match Calliope's.
 Moreover, we introduce the concept of technology fleets for solar photovoltaics, onshore and offshore wind energy, 
 hydrogen, and chemical batteries. Example of the fleet concept applied to openground photovoltaics below:
-![img_5.png](readme_figures/img_5.png)
+<img alt="img_5.png" src="readme_figures/img_5.png" width="400"/>
 
-In code, update_foreground() is the function in charge of these adaptations.
+In code, update_foreground() is the function in charge of these adaptations. Examples of technology fleets in 
+*config_parameters.py*.
 
 ### Separate inventories into onsite and offsite
 The workflow allows increasing the spatial resolution of the inventories by distinguishing between onsite 
@@ -95,13 +96,14 @@ Previous studies coupling ESM and LCA highlight the importance of dealing with t
 de Tomás et al., 2024, Sacchi and Menacho, 2024). This workflow allows to avoid double accounting by using the polluter
 pays principle. 
 There are two possible sources of double accounting. Let's break them down using electricity production as an example:
-    1. Calliope calculates the demand for electricity in Europe. We will calculate the impacts of the technologies that
+1. Calliope calculates the demand for electricity in Europe. We will calculate the impacts of the technologies that
     produce electricity to satisfy this demand. Thus, when calculating the impacts of other technologies within the
     energy system (e.g., electricity used in electrolysers for hydrogen production), we should not count the
     impacts of this electricity again. (delete internal links)
-    2. Calliope assumes electricity is produced with certain technologies. However, in Ecoinvent, other technologies
-    might be producing electricity in the background (e.g., coal is not used in Calliope but is in the background of
-    Ecoinvent). Thus, they should not be accounted for either. (delete links from shifted demand from Ecoinvent
-    to Calliope)
+2. Calliope assumes electricity is produced with certain technologies. However, in Ecoinvent, other technologies
+might be producing electricity in the background (e.g., coal is not used in Calliope but is in the background of
+Ecoinvent). Thus, they should not be accounted for either. (delete links from shifted demand from Ecoinvent
+to Calliope).
+
 The following energy carriers are dealt with: electricity, heat, CO2, hydrogen, waste, biomass, methane, methanol,
 kerosene, diesel.

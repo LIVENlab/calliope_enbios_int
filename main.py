@@ -162,7 +162,7 @@ def avoid_double_accounting():
     Let's break them down using electricity production as an example:
     1. Calliope calculates the demand for electricity in Europe. We will calculate the impacts of the technologies that
     produce electricity to satisfy this demand. Thus, when calculating the impacts of other technologies within the
-    electricity system (e.g., electricity used in electrolysers for hydrogen production), we should not count the
+    energy system (e.g., electricity used in electrolysers for hydrogen production), we should not count the
     impacts of this electricity again. (delete internal links)
     2. Calliope assumes electricity is produced with certain technologies. However, in Ecoinvent, other technologies
     might be producing electricity in the background (e.g., coal is not used in Calliope but is in the background of
