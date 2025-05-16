@@ -11,4 +11,3 @@ dependencies:
   - activity-browser
   - romainsacchi::premise-bw2
   - geopy
-prefix: C:\Users\1361185\AppData\Local\anaconda3\envs\ab_premise_update
