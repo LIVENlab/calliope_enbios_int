@@ -6,6 +6,10 @@ from functions import *
 import bw2data as bd
 import shutil
 
+# TODO: next seps in the workflow: 1. move project to bw25, 2. check column 'carrier' in tech_mapping_out.xlsx.
+#  I need to name it with Calliope's carrier names. If there is not, use 'default_carrier'. It does not match with
+#  Alex's file. 3. In tech_mapping_out.xlsx, add 'fraction' column as in the example Alex just sent me by email.
+#  4. run sparks: guardat al servidor a l'arxiu testttttt.py.
 
 def run(ccs_clinker: bool = True,
         train_electrification: bool = True,
