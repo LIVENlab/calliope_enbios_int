@@ -12,29 +12,65 @@ import wurst
 from collections import defaultdict
 
 
-def unlink_electricity(db_name: str = 'premise_base'):
+def unlink_electricity(country_codes: Optional[List[str]] = None, db_name: str = 'premise_base'):
     """
-    NOTE: markets for electricity won't make sense (they have recurrent inputs of itselves which are
-    deleted with this code). But it does not matter, because we are not using them.
+    NOTE: markets for electricity won't make sense (they have recurrent inputs of themselves which are
+    deleted with this code). But it does not matter because we are not using them.
     """
-    market_group_locations = ['ENSTO-E', 'UCTE', 'Europe without Switzerland', 'RER']
-    for location in market_group_locations:
-        # get the market groups for electricity high voltage, medium voltage, low voltage.
-        market_groups = ws.get_many(
-            bd.Database(db_name),
-            ws.contains('name', 'market group for electricity'),
-            ws.equals('location', location)
-        )
-        for market_group_act in market_groups:
-            # in the technosphere we have the local markets (per country)
-            technosphere = [e for e in market_group_act.technosphere()]
-            for ex in technosphere:
-                # delete upstream of the local market (country)
-                for e in ex.input.upstream():
+    if country_codes is None:
+        market_group_locations = ['ENSTO-E', 'UCTE', 'Europe without Switzerland', 'RER']
+        for location in market_group_locations:
+            # get the market groups for electricity high voltage, medium voltage, low voltage.
+            market_groups = ws.get_many(
+                bd.Database(db_name),
+                ws.contains('name', 'market group for electricity'),
+                ws.equals('location', location)
+            )
+            for market_group_act in market_groups:
+                # in the technosphere we have the local markets (per country)
+                technosphere = [e for e in market_group_act.technosphere()]
+                for ex in technosphere:
+                    # delete upstream of the local market (country)
+                    for e in ex.input.upstream():
+                        e.delete()
+                # delete market group upstream also
+                for e in market_group_act.upstream():
                     e.delete()
-            # delete market group upstream also
-            for e in market_group_act.upstream():
-                e.delete()
+    else:
+        # for each country in the list, make the high, medium and low voltage markets an empty inventory.
+        for country in country_codes:
+            # high voltage market
+            high_voltage_market = ws.get_one(
+                bd.Database(db_name),
+                ws.equals('name', 'market for electricity, high voltage'),
+                ws.equals('location', country),
+                ws.equals('reference product', 'electricity, high voltage')
+            )
+            # delete biosphere and technosphere
+            high_voltage_market.biosphere().delete()
+            high_voltage_market.technosphere().delete()
+
+            # low voltage market
+            low_voltage_market = ws.get_one(
+                bd.Database(db_name),
+                ws.equals('name', 'market for electricity, low voltage'),
+                ws.equals('location', country),
+                ws.equals('reference product', 'electricity, low voltage')
+            )
+            # delete biosphere and technosphere
+            low_voltage_market.biosphere().delete()
+            low_voltage_market.technosphere().delete()
+
+            # medium voltage market
+            medium_voltage_market = ws.get_one(
+                bd.Database(db_name),
+                ws.equals('name', 'market for electricity, medium voltage'),
+                ws.equals('location', country),
+                ws.equals('reference product', 'electricity, medium voltage')
+            )
+            # delete biosphere and technosphere
+            medium_voltage_market.biosphere().delete()
+            medium_voltage_market.technosphere().delete()
 
 
 def unlink_heat(db_name: str = 'premise_base'):

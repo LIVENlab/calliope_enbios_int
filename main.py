@@ -8,7 +8,7 @@ import shutil
 
 # TODO: next seps in the workflow: 1. move project to bw25, 2. check column 'carrier' in tech_mapping_out.xlsx.
 #  I need to name it with Calliope's carrier names. If there is not, use 'default_carrier'. It does not match with
-#  Alex's file. 3. In tech_mapping_out.xlsx, add 'fraction' column as in the example Alex just sent me by email.
+#  Alex's file.
 #  4. run sparks: guardat al servidor a l'arxiu testttttt.py.
 
 def run(ccs_clinker: bool = True,
@@ -45,7 +45,18 @@ def run(ccs_clinker: bool = True,
         delete_infrastructure: bool = True,
         om_spheres_separation: bool = True,
         avoid_double_counting: bool = True,
-        file_out_path: str = r'C:\Users\1361185\OneDrive - UAB\Documentos\GitHub\calliope_enbios_int\data\output\tech_mapping_out.xlsx'
+        file_out_path: str = r'C:\Users\1361185\OneDrive - UAB\Documentos\GitHub\calliope_enbios_int\data\output\tech_mapping_out.xlsx',
+
+        avoid_electricity: bool = True,
+        avoid_heat: bool = True,
+        avoid_co2: bool = True,
+        avoid_hydrogen: bool = True,
+        avoid_biomass: bool = True,
+        avoid_methane: bool = True,
+        avoid_methanol: bool = True,
+        avoid_kerosene: bool = True,
+        avoid_diesel: bool = True,
+        avoid_countries_list: Optional[List[str]] = None,
         ):
     """
     Databases:
@@ -151,7 +162,10 @@ def run(ccs_clinker: bool = True,
 
     # avoid double accounting
     if avoid_double_counting:
-        avoid_double_accounting()
+        avoid_double_accounting(electricity=avoid_electricity, heat=avoid_heat, co2=avoid_co2,
+                                hydrogen=avoid_hydrogen, biomass=avoid_biomass, methane=avoid_methane,
+                                methanol=avoid_methanol, kerosene=avoid_kerosene, diesel=avoid_diesel,
+                                avoid_countries_list=avoid_countries_list)
 
     # save the output file
     if om_spheres_separation:
@@ -160,7 +174,10 @@ def run(ccs_clinker: bool = True,
         shutil.copy(mapping_file_path, file_out_path)
 
 
-def avoid_double_accounting():
+def avoid_double_accounting(electricity: bool, heat: bool, co2: bool, hydrogen: bool, biomass: bool,
+                            methane: bool, methanol: bool, kerosene: bool, diesel: bool,
+                            avoid_countries_list: Optional[List[str]] = None,
+                            ):
     """
     We use the polluter pays principle to avoid double accounting. There are two possible sources of double accounting.
     Let's break them down using electricity production as an example:
@@ -175,56 +192,67 @@ def avoid_double_accounting():
     The following energy carriers are dealt with: electricity, heat, CO2, hydrogen, waste, biomass, methane, methanol,
     kerosene, diesel.
     """
-    print('Starting avoiding double accounting protocol')
+    print(f'Starting avoiding double accounting protocol. Applied to: electricity: {electricity}, heat: {heat}, '
+          f'CO2: {co2}, hydrogen: {hydrogen}, biomass: {biomass}, methane: {methane}, methanol: {methanol}, '
+          f'kerosene: {kerosene}, diesel: {diesel}')
     for name in ['premise_base', 'additional_acts',
                  'premise_auxiliary_for_infrastructure', 'infrastructure (with European steel and concrete)']:
-        try:
-            # 1.1.1 Electricity
-            unlink_electricity(db_name=name)
-        except wurst.errors.NoResults:
-            print(f'electricity not available in {name}')
-        try:
-            # 1.1.2 Heat
-            unlink_heat(db_name=name)
-        except wurst.errors.NoResults:
-            print(f'heat not available in {name}')
-        try:
-            # 1.1.3 CO2
-            unlink_co2(db_name=name)
-        except wurst.errors.NoResults:
-            print(f'co2 not available in {name}')
-        try:
-            # 1.1.4 Hydrogen
-            unlink_hydrogen(db_name=name)
-        except wurst.errors.NoResults:
-            print(f'hydrogen not available in {name}')
-        # 1.1.5 Waste
+        if electricity:
+            try:
+                # Electricity
+                unlink_electricity(db_name=name, country_codes=avoid_countries_list)
+            except wurst.errors.NoResults:
+                print(f'electricity not available in {name}')
+        if heat:
+            try:
+                # Heat
+                unlink_heat(db_name=name)
+            except wurst.errors.NoResults:
+                print(f'heat not available in {name}')
+        if co2:
+            try:
+                # CO2
+                unlink_co2(db_name=name)
+            except wurst.errors.NoResults:
+                print(f'co2 not available in {name}')
+        if hydrogen:
+            try:
+                # Hydrogen
+                unlink_hydrogen(db_name=name)
+            except wurst.errors.NoResults:
+                print(f'hydrogen not available in {name}')
+        # Waste
         # In cutoff it comes without any environmental burdens, so there is no need to apply any unlinking
-        try:
-            # 1.1.6 Biomass
-            unlink_biomass(db_name=name)
-        except wurst.errors.NoResults:
-            print(f'biomass not available in {name}')
-        try:
-            # 1.1.7 Methane
-            unlink_methane(db_name=name)
-        except wurst.errors.NoResults:
-            print(f'methane not available in {name}')
-        try:
-            # 1.1.8 Methanol
-            unlink_methanol(db_name=name)
-        except wurst.errors.NoResults:
-            print(f'methanol not available in {name}')
-        try:
-            # 1.1.9 Kerosene
-            unlink_kerosene(db_name=name)
-        except wurst.errors.NoResults:
-            print(f'kerosene not available in {name}')
-        try:
-            # 1.1.10 Diesel
-            unlink_diesel(db_name=name)
-        except wurst.errors.NoResults:
-            print(f'diesel not available in {name}')
+        if biomass:
+            try:
+                # Biomass
+                unlink_biomass(db_name=name)
+            except wurst.errors.NoResults:
+                print(f'biomass not available in {name}')
+        if methane:
+            try:
+                # Methane
+                unlink_methane(db_name=name)
+            except wurst.errors.NoResults:
+                print(f'methane not available in {name}')
+        if methanol:
+            try:
+                # Methanol
+                unlink_methanol(db_name=name)
+            except wurst.errors.NoResults:
+                print(f'methanol not available in {name}')
+        if kerosene:
+            try:
+                # Kerosene
+                unlink_kerosene(db_name=name)
+            except wurst.errors.NoResults:
+                print(f'kerosene not available in {name}')
+        if diesel:
+            try:
+                # Diesel
+                unlink_diesel(db_name=name)
+            except wurst.errors.NoResults:
+                print(f'diesel not available in {name}')
 
     print('Double accounting protocol successfully completed')
 
@@ -493,4 +521,16 @@ def create_output_file(file_in: str, file_out: str):
     print(f"File '{file_out}' created successfully.")
 
 
+###### run ######
 run()
+# create backup
+bi.backup_project_directory(config_parameters.PROJECT_NAME)
+
+"""## change venv to bw25!
+# migrate to bw25 (NOTE: using a venv with bw25)
+bd.projects.set_current(config_parameters.PROJECT_NAME)
+bd.projects.migrate_project_25()
+# create bw25 backup to share project
+bi.backup_project_directory(config_parameters.PROJECT_NAME)
+# restore bw25 project (change dbfile)
+bi.restore_project_directory('dbfile')"""
