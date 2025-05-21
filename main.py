@@ -6,10 +6,8 @@ from functions import *
 import bw2data as bd
 import shutil
 
-# TODO: next seps in the workflow: 1. move project to bw25, 2. check column 'carrier' in tech_mapping_out.xlsx.
-#  I need to name it with Calliope's carrier names. If there is not, use 'default_carrier'. It does not match with
-#  Alex's file.
-#  4. run sparks: guardat al servidor a l'arxiu testttttt.py.
+# TODO: next seps in the workflow: run sparks: guardat al servidor a l'arxiu testttttt.py.
+# TODO: check options to include Regioinvent
 
 def run(ccs_clinker: bool = True,
         train_electrification: bool = True,
@@ -128,8 +126,9 @@ def run(ccs_clinker: bool = True,
                       trucks_electrification=trucks_electrification,
                       trucks_electrification_share=trucks_electrification_share,
                       sea_transport_syn_diesel=sea_transport_syn_diesel)
-    # TODO: allow to have shares of today's and future's industry
+    # TODO: allow to have shares of today's and future's industry!!!!
     # TODO: allow the rest of the world to also update their industries (according to IAMs?)
+    # TODO: allow to change Europe's electricity mix in case we apply the code to only one country
 
     # create a copy for each of the databases that we will have in the project.
     premise_base_auxiliary()
