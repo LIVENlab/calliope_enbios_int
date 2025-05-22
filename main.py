@@ -199,7 +199,7 @@ def avoid_double_accounting(electricity: bool, heat: bool, co2: bool, hydrogen: 
         if electricity:
             try:
                 # Electricity
-                unlink_electricity(db_name=name, country_codes=avoid_countries_list)
+                unlink_electricity(db_name=name, country_codes_list=avoid_countries_list)
             except wurst.errors.NoResults:
                 print(f'electricity not available in {name}')
         if heat:
@@ -379,13 +379,15 @@ def update_foreground(ccs: bool = False, vehicles_as_batteries: bool = True,
     # fixes from Ecoinvent
     hydro_run_of_river_update(db_hydro_name='premise_base')
     hydro_reservoir_update(location='ES', db_hydro_name='premise_base')
+    pumped_hydro_update(location='ES', db_pump_name='premise_base')
 
     # group infrastructure in a single inventory, when needed
     biofuel_to_methane_infrastructure(db_syn_gas_name='premise_base')
     hp_update(db_hp_name='premise_base')
     update_chp_hydrogen()
     chp_waste_update(db_waste_name='apos391', db_original_name='premise_base',
-                     locations=['CH'])
+                     locations=['ES'])
+    biogas_update(db_biogas_name='premise_base')  # necessary if we need biogas infrastructure like in Spain
 
     # add the necessary inventories
     airborne_wind_lci(bd_airborne_name='premise_base')
@@ -483,10 +485,11 @@ def create_fleets(
                    )
 
     # Onshore wind fleets
-    wind_onshore_fleet(db_wind_name='original_cutoff391', location='DE', fleet_turbines_definition=onshore_wind_fleet)
+    wind_onshore_fleet(db_wind_name='original_cutoff391', location='ES', fleet_turbines_definition=onshore_wind_fleet)
 
     # Offshore wind fleets
-    wind_offshore_fleet(db_wind_name='original_cutoff391', location='DE', fleet_turbines_definition=offshore_wind_fleet)
+    # TODO: 1. offshore per kWh, 2. maintenance emissions are onsite!
+    wind_offshore_fleet(db_wind_name='original_cutoff391', location='ES', fleet_turbines_definition=offshore_wind_fleet)
 
 
 def create_output_file(file_in: str, file_out: str):

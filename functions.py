@@ -12,12 +12,12 @@ import wurst
 from collections import defaultdict
 
 
-def unlink_electricity(country_codes: Optional[List[str]] = None, db_name: str = 'premise_base'):
+def unlink_electricity(country_codes_list: Optional[List[str]] = None, db_name: str = 'premise_base'):
     """
     NOTE: markets for electricity won't make sense (they have recurrent inputs of themselves which are
     deleted with this code). But it does not matter because we are not using them.
     """
-    if country_codes is None:
+    if country_codes_list is None:
         market_group_locations = ['ENSTO-E', 'UCTE', 'Europe without Switzerland', 'RER']
         for location in market_group_locations:
             # get the market groups for electricity high voltage, medium voltage, low voltage.
@@ -38,7 +38,7 @@ def unlink_electricity(country_codes: Optional[List[str]] = None, db_name: str =
                     e.delete()
     else:
         # for each country in the list, make the high, medium and low voltage markets an empty inventory.
-        for country in country_codes:
+        for country in country_codes_list:
             # high voltage market
             high_voltage_market = ws.get_one(
                 bd.Database(db_name),
@@ -1607,7 +1607,7 @@ def update_methanol_facility():
 
 
 def update_chp_hydrogen():
-    print('Updating CHP hydrogen infrastructure')
+    print('Updating CHP hydrogen supply')
     chp_elect_act = ws.get_one(
         bd.Database('premise_base'),
         ws.equals('name', 'electricity, residential, by conversion of hydrogen using fuel cell, '
@@ -1807,8 +1807,6 @@ def hydro_reservoir_update(location: str, db_hydro_name: str):
         e.delete()
         new_ex = new_infrastructure_act.new_exchange(input=biosphere_act, type='biosphere', amount=new_amount)
         new_ex.save()
-    infrastructure_ex = [e for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
-    infrastructure_ex.delete()
 
 
 def hydro_run_of_river_update(db_hydro_name: str):
@@ -1833,8 +1831,37 @@ def hydro_run_of_river_update(db_hydro_name: str):
         e.delete()
         new_ex = new_infrastructure_act.new_exchange(input=biosphere_act, type='biosphere', amount=new_amount)
         new_ex.save()
-    infrastructure_ex = [e for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
-    infrastructure_ex.delete()
+
+
+def pumped_hydro_update(db_pump_name: str, location: str):
+    """
+    :return: transfers land use to infrastructure instead of operation in pumped hydro power plants.
+    """
+    print('Updating pumped hydro power plant')
+    electricity_pumped = ws.get_one(bd.Database(db_pump_name),
+                                    ws.contains('name', 'electricity production, hydro, reservoir, non-alpine region'),
+                                    ws.equals('location', location))
+    create_additional_acts_db()
+    new_elec_act = electricity_pumped.copy(database='additional_acts')
+    infrastructure_act = [e.input for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
+    new_infrastructure_act = infrastructure_act.copy(database='additional_acts')
+    infrastructure_amount = [e.amount for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
+    land = [e for e in new_elec_act.biosphere() if
+            any(keyword in e.input._data['name'] for keyword in ['Occupation', 'occupied', 'Transformation'])]
+    emissions = [e for e in new_elec_act.biosphere() if
+                 any(keyword in e.input._data['name'] for keyword in ['Carbon dioxide', 'monoxide', 'Methane'])]
+    for e in land:
+        new_amount = e.amount / infrastructure_amount
+        biosphere_act = e.input
+        e.delete()
+        new_ex = new_infrastructure_act.new_exchange(input=biosphere_act, type='biosphere', amount=new_amount)
+        new_ex.save()
+    for e in emissions:
+        new_amount = e.amount / infrastructure_amount
+        biosphere_act = e.input
+        e.delete()
+        new_ex = new_infrastructure_act.new_exchange(input=biosphere_act, type='biosphere', amount=new_amount)
+        new_ex.save()
 
 
 def fuels_combustion():
@@ -1873,6 +1900,27 @@ def fuels_combustion():
                 motorcycle_act, air_transport_act, sea_transport_act]:
         act_copy = act.copy(database='additional_acts')
         act_copy.technosphere().delete()
+
+
+def biogas_update(db_biogas_name: str):
+    """
+    It creates a biogas infrastructure
+    """
+    print('Updating biogas infrastructure')
+    components = ws.get_many(bd.Database(db_biogas_name),
+                                 ws.startswith('name', 'heat and power co-generation unit construction, 160kW electrical,'),
+                                 ws.equals('location', 'RER'))
+    create_additional_acts_db()
+    new_act = bd.Database('additional_acts').new_activity(name='biogas infrastructure, 160kW',
+                                                          code='biogas infrastructure, 160kW',
+                                                          location='RER', unit='unit')
+    new_act['reference product'] = 'biogas infrastructure, 160kW'
+    new_act.save()
+    new_ex = new_act.new_exchange(input=new_act.key, type='production', amount=1)
+    new_ex.save()
+    for act in components:
+        new_ex = new_act.new_exchange(input=act, type='technosphere', amount=1)
+        new_ex.save()
 
 
 def biofuel_to_methane_infrastructure(db_syn_gas_name: str):
@@ -2072,6 +2120,25 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
             recycled_share_steel=turbine_parameters['recycled_share_steel'],
             lifetime=turbine_parameters['lifetime'], eol_scenario=turbine_parameters['eol_scenario']
         )
+
+        # maintenance activity per kWh
+        turbine_kwh = bd.Database('additional_acts').get(park_name + '_turbine_kwh')
+
+        for ex in turbine_kwh.technosphere():
+            new_single_turbine = ex.input.copy(database='additional_acts')
+            ex.input = new_single_turbine
+            ex.save()
+            for e in new_single_turbine.technosphere():
+                if 'maintenance' in e.input['name']:
+                    new_maintenance_act = e.input.copy(database='additional_acts')
+                    new_maintenance_act['name'] = f'{e.input["name"]}_kwh'
+                    new_maintenance_act['code'] = f'{e.input["name"]}_kwh'
+                    new_maintenance_act.save()
+                    e.input = new_maintenance_act
+                    e.save()
+                else:
+                    e.delete()
+
         maintenance_activity = bd.Database('additional_acts').get(park_name + '_maintenance')
         ex = list(maintenance_activity.upstream())
         for e in ex:
@@ -2099,14 +2166,14 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
                                              amount=share / turbine_parameters["power"])
         new_ex.save()
 
-    # create wind fleet maintenance (per 1 MW)
+    # create wind fleet maintenance (per 1 kWh)
     fleet_activity = bd.Database('additional_acts').new_activity(
-        name=f'onshore wind turbine fleet, 1 MW, maintenance, for enbios, {location}',
-        code=f'onshore wind turbine fleet, 1 MW, maintenance, for enbios, {location}',
+        name=f'onshore wind turbine fleet, 1 kWh, maintenance, for enbios, {location}',
+        code=f'onshore wind turbine fleet, 1 kWh, maintenance, for enbios, {location}',
         unit='unit',
         location=location
     )
-    fleet_activity['reference product'] = 'onshore wind turbine fleet maintenance, 1 MW'
+    fleet_activity['reference product'] = 'onshore wind turbine fleet maintenance, 1 kWh'
     fleet_activity.save()
     new_ex = fleet_activity.new_exchange(input=fleet_activity.key, type='production', amount=1)
     new_ex.save()
@@ -2115,10 +2182,10 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
         share = info[1]
         turbine_parameters = info[0]
         park_name = f'{turbine}_{turbine_parameters["power"]}_{location}'
-        maintenance_activity = bd.Database('additional_acts').get(park_name + '_maintenance')
+        turbine_activity = bd.Database('additional_acts').get(park_name + '_turbine_kwh')
         # to fleet activity (infrastructure)
-        new_ex = fleet_activity.new_exchange(input=maintenance_activity, type='technosphere',
-                                             amount=share / turbine_parameters["power"])
+        new_ex = fleet_activity.new_exchange(input=turbine_activity, type='technosphere',
+                                             amount=1)
         new_ex.save()
 
     return park_names
