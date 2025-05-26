@@ -34,6 +34,9 @@ run(ccs_clinker=False, train_electrification=False, biomass_from_residues=False,
     avoid_methanol=False,
     avoid_kerosene=False,
     avoid_diesel=False,
+
+    mapping_file_path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\data\input\tech_mapping_spain.xlsx',
+    file_out_path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\data\output\tech_mapping_out.xlsx'
     )
 
 # TODO: change WindTrace onshore to new version

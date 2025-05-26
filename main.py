@@ -523,10 +523,10 @@ def create_output_file(file_in: str, file_out: str):
     print(f"File '{file_out}' created successfully.")
 
 
-###### run ######
+"""###### run ######
 run()
 # create backup
-bi.backup_project_directory(config_parameters.PROJECT_NAME)
+bi.backup_project_directory(config_parameters.PROJECT_NAME)"""
 
 """## change venv to bw25!
 # migrate to bw25 (NOTE: using a venv with bw25)

@@ -1335,10 +1335,12 @@ def delete_infrastructure_main(
     """
     It takes all the activities in 'technology_map_clean.xlsx', finds the exact activity
     (or activities in plural if it has multiple options, i.e., those activities that exist for all
-    locations in Calliope), and deletes the inputs that are infrastructure. Then, it creates a copy of the activity in
-    additional_acts (adding ', biosphere' at the end of the name), and it removes the technosphere, handling the
-    exceptions to hydrogen, diesel and kerosene. Moreover, it creates another copy of the activity in
-    additional_acts (adding ', technosphere' at the end of the name), and it removes the biosphere.
+    locations in Calliope), and deletes the inputs that are infrastructure. Note: it first seraches for the activity in
+    'additional_acts' database, and if it is not there, it searches it in 'premise_base'.
+    Then, it creates a copy of the activity in additional_acts (adding ', biosphere' at the end of the name),
+    and it removes the technosphere, handling the exceptions to hydrogen, diesel and kerosene.
+    Moreover, it creates another copy of the activity in additional_acts
+    (adding ', technosphere' at the end of the name), and it removes the biosphere.
     Exceptions: it deletes the infrastructure not in tier 1 by removing the upstream of the infrastructure itself.
     """
     print('Starting delete infrastructure protocol')
@@ -1350,17 +1352,22 @@ def delete_infrastructure_main(
         print('NEXT ACTIVITY')
         print(f'Name: {name}')
         print(f'Location: {location}')
-        print(f'Database: {database}')
         print(f'Reference product: {reference_product}')
 
         # If the location is 'country', start checking for activities
         if location == 'country':
             for loc in consts.LOCATION_EQUIVALENCE.values():
                 try:
-                    act = ws.get_one(bd.Database(database), ws.contains('name', name),
-                                     ws.exclude(ws.contains('name', 'renewable energy products')),
-                                     ws.equals('location', loc),
-                                     ws.contains('reference product', reference_product))
+                    try:
+                        act = ws.get_one(bd.Database('additional_acts'), ws.contains('name', name),
+                                         ws.exclude(ws.contains('name', 'renewable energy products')),
+                                         ws.equals('location', loc),
+                                         ws.contains('reference product', reference_product))
+                    except Exception:
+                        act = ws.get_one(bd.Database('premise_base'), ws.contains('name', name),
+                                         ws.exclude(ws.contains('name', 'renewable energy products')),
+                                         ws.equals('location', loc),
+                                         ws.contains('reference product', reference_product))
                     infrastructure = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
                     for e in infrastructure:
                         e.delete()
@@ -1378,15 +1385,32 @@ def delete_infrastructure_main(
             # If location is not 'country', proceed with regular activity lookup
             try:
                 if 'wind' in name:
-                    act = ws.get_one(bd.Database(database), ws.contains('name', name),
+                    act = ws.get_one(bd.Database('additional_acts'), ws.contains('name', name),
                                      ws.exclude(ws.contains('name', 'renewable energy products')),
                                      ws.equals('location', location)
                                      )
+                # infrastructure activities in hydrogen in tier 1 (not tier 0)
+                elif 'hydrogen production' in name:
+                    act = ws.get_one(bd.Database('additional_acts'),
+                                     ws.equals('name', 'hydrogen production, from electrolyser fleet, for enbios'),
+                                         ws.equals('location', 'RER'),
+                                         ws.contains('reference product', 'hydrogen, gaseous'))
+                    hydrogen_inputs = [ex.input for ex in act.technosphere()]
+                    for a in hydrogen_inputs:
+                        infrastructure = [e for e in a.technosphere() if e.input._data['unit'] == 'unit']
+                        for e in infrastructure:
+                            e.delete()
                 else:
-                    act = ws.get_one(bd.Database(database), ws.contains('name', name),
-                                     ws.exclude(ws.contains('name', 'renewable energy products')),
-                                     ws.equals('location', location),
-                                     ws.contains('reference product', reference_product))
+                    try:
+                        act = ws.get_one(bd.Database('additional_acts'), ws.contains('name', name),
+                                         ws.exclude(ws.contains('name', 'renewable energy products')),
+                                         ws.equals('location', location),
+                                         ws.contains('reference product', reference_product))
+                    except Exception:
+                        act = ws.get_one(bd.Database('premise_base'), ws.contains('name', name),
+                                         ws.exclude(ws.contains('name', 'renewable energy products')),
+                                         ws.equals('location', location),
+                                         ws.contains('reference product', reference_product))
                 # we do not want to delete the maintenance of offshore and onshore wind (which have 'unit' as units),
                 # and that is why we add this conditional.
                 if not any(wind_name in act['name'] for wind_name in ['onshore', 'offshore']):
@@ -1607,6 +1631,9 @@ def update_methanol_facility():
 
 
 def update_chp_hydrogen():
+    """
+    Substitutes hydrogen supply from PEM instead of refinery! (wrong in premise)
+    """
     print('Updating CHP hydrogen supply')
     chp_elect_act = ws.get_one(
         bd.Database('premise_base'),
@@ -1835,33 +1862,23 @@ def hydro_run_of_river_update(db_hydro_name: str):
 
 def pumped_hydro_update(db_pump_name: str, location: str):
     """
-    :return: transfers land use to infrastructure instead of operation in pumped hydro power plants.
+    :return: eliminates land use and emissions from electricity production activity. No need to transfer them
+     to infrastructure because we already ran hydro_reservoir_update(), which does the same.
     """
     print('Updating pumped hydro power plant')
     electricity_pumped = ws.get_one(bd.Database(db_pump_name),
-                                    ws.contains('name', 'electricity production, hydro, reservoir, non-alpine region'),
+                                    ws.contains('name', 'electricity production, hydro, pumped storage'),
                                     ws.equals('location', location))
     create_additional_acts_db()
     new_elec_act = electricity_pumped.copy(database='additional_acts')
-    infrastructure_act = [e.input for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
-    new_infrastructure_act = infrastructure_act.copy(database='additional_acts')
-    infrastructure_amount = [e.amount for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
     land = [e for e in new_elec_act.biosphere() if
             any(keyword in e.input._data['name'] for keyword in ['Occupation', 'occupied', 'Transformation'])]
     emissions = [e for e in new_elec_act.biosphere() if
                  any(keyword in e.input._data['name'] for keyword in ['Carbon dioxide', 'monoxide', 'Methane'])]
     for e in land:
-        new_amount = e.amount / infrastructure_amount
-        biosphere_act = e.input
         e.delete()
-        new_ex = new_infrastructure_act.new_exchange(input=biosphere_act, type='biosphere', amount=new_amount)
-        new_ex.save()
     for e in emissions:
-        new_amount = e.amount / infrastructure_amount
-        biosphere_act = e.input
         e.delete()
-        new_ex = new_infrastructure_act.new_exchange(input=biosphere_act, type='biosphere', amount=new_amount)
-        new_ex.save()
 
 
 def fuels_combustion():
@@ -1891,11 +1908,19 @@ def fuels_combustion():
         bd.Database('premise_base'),
         ws.equals('name', 'transport, freight, aircraft, belly-freight, medium haul'))
     # sea transport
-    sea_transport_act = ws.get_one(
-        bd.Database('premise_base'),
-        ws.equals('name', 'transport, freight, sea, container ship'),
-        ws.equals('location', 'RER')
-    )
+    try:
+        sea_transport_act = ws.get_one(
+            bd.Database('premise_base'),
+            ws.equals('name', 'transport, freight, sea, container ship'),
+            ws.equals('location', 'RER')
+        )
+    except Exception:
+        sea_transport_act = ws.get_one(
+            bd.Database('premise_base'),
+            ws.equals('name', 'transport, freight, sea, container ship'),
+            ws.equals('location', 'GLO')
+        )
+
     for act in [bus_act, heavy_transport_act, light_transport_act, passenger_car_act,
                 motorcycle_act, air_transport_act, sea_transport_act]:
         act_copy = act.copy(database='additional_acts')
