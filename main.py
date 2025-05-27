@@ -514,6 +514,8 @@ def create_output_file(file_in: str, file_out: str):
 
     # Concatenate the two dataframes
     new_o_m_df = pd.concat([biosphere_df, technosphere_df], ignore_index=True)
+    # All activities from 'o&m' should be taken from 'additional_acts'
+    new_o_m_df['prod_database'] = 'additional_acts'
 
     # Save to a new Excel file with both sheets
     with pd.ExcelWriter(file_out, engine='xlsxwriter') as writer:
