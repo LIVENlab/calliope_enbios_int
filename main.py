@@ -9,7 +9,8 @@ import shutil
 # TODO: next seps in the workflow: run sparks: guardat al servidor a l'arxiu testttttt.py.
 # TODO: check options to include Regioinvent
 
-def run(ccs_clinker: bool = True,
+def run(materials: list = [],
+        ccs_clinker: bool = True,
         train_electrification: bool = True,
         biomass_from_residues: bool = True,
         biomass_from_residues_share: float = 1.0,
@@ -73,6 +74,10 @@ def run(ccs_clinker: bool = True,
     # setup_databases
     bd.projects.set_current(PROJECT_NAME)
     bi.bw2setup()
+
+    # set new materials and land use lcia methods (resource accounting)
+    methods = lcia_materials_methods(materials=materials)
+    lcia_land_use()
 
     # Ecoinvent v3.9.1 cutoff and apos
     if 'original_cutoff391' not in bd.databases:

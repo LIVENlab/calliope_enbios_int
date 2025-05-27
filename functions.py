@@ -3077,3 +3077,33 @@ def rebuild_methanol_act():
         for ex in inner_technosphere:
             ex.output = methanol_act_2
             ex.save()
+
+
+def lcia_materials_methods(materials: list) -> list:
+    materials = [s.capitalize() for s in materials]
+    new_method_names = []
+    for material in materials:
+        biosphere3_acts = ws.get_many(bd.Database('biosphere3'), ws.startswith('name', material),
+                                        ws.equals('type', 'natural resource'))
+        cfs = []
+        for b3_act in biosphere3_acts:
+            cfs.append((b3_act, 1))
+        new_method_name = f'{material} (in kg))'
+        new_method = bd.Method((new_method_name,))
+        new_method.register()
+        new_method.write(cfs)
+        new_method_names.append(new_method_name)
+    return new_method_names
+
+
+def lcia_land_use():
+    transformation_acts = ws.get_many(bd.Database('biosphere3'), ws.startswith('name', 'Transformation, to'),
+                                        ws.equals('type', 'natural resource'))
+    cfs = []
+    for b3_act in transformation_acts:
+        cfs.append((b3_act, 1))
+    new_method_name = f'land use (in m2)'
+    new_method = bd.Method((new_method_name,))
+    new_method.register()
+    new_method.write(cfs)
+
