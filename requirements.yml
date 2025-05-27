@@ -1,0 +1,13 @@
+name: ab_premise_update
+channels:
+  - cmutel
+  - conda-forge
+  - defaults
+  - https://repo.anaconda.com/pkgs/main
+  - https://repo.anaconda.com/pkgs/r
+  - https://repo.anaconda.com/pkgs/msys2
+dependencies:
+  - python=3.10
+  - activity-browser
+  - romainsacchi::premise-bw2
+  - geopy

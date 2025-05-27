@@ -8,6 +8,7 @@ from typing import Optional, List, Literal, Tuple
 from stats_arrays import NormalUncertainty
 import sys
 import consts
+import config_parameters
 
 # TODO: update for the newer version after paper reviews.
 
@@ -18,7 +19,7 @@ def steel_turbine(plot_mat: bool = False):
     to the lci) is stored as 'std_dev' also in the same dictionary and corresponds to the standard deviation of the
     residuals. If plot_mat is set to True, all the materials fitting plots will be shown.
     """
-    vestas_data = pd.read_excel(consts.VESTAS_FILE, sheet_name="1_MATERIALS_TURBINE", dtype=None, decimal=";", header=0)
+    vestas_data = pd.read_excel(config_parameters.VESTAS_FILE, sheet_name="1_MATERIALS_TURBINE", dtype=None, decimal=";", header=0)
 
     short_vestas_data = vestas_data[vestas_data['Hub height'] <= 84]
     # Extracting columns
@@ -237,7 +238,7 @@ def materials_mass(generator_type: Literal['dd_eesg', 'dd_pmsg', 'gb_pmsg', 'gb_
     generator_type: it only accepts the models (strings) 'dd_eesg', 'dd_pmsg', 'gb_pmsg', 'gb_dfig'.
     """
     mass_materials = {}
-    materials_polyfits, mat_polyfits_short, intersection = foundations_mat(consts.VESTAS_FILE)
+    materials_polyfits, mat_polyfits_short, intersection = foundations_mat(config_parameters.VESTAS_FILE)
 
     uncertainty = {}
 
@@ -481,8 +482,8 @@ def manipulate_steel_activities(new_db, cutoff391,
         # find primary steel production activity in Ecoinvent
         primary_ei = cutoff391.get(code='89cb4e1a47b707fe43b99135b81fcaba')
         # Create a copy to manipulate them in the new_db database
-        recycled_act = recycled_ei.copy(database=consts.NEW_DB_NAME)
-        primary_act = primary_ei.copy(database=consts.NEW_DB_NAME)
+        recycled_act = recycled_ei.copy(database=config_parameters.NEW_DB_NAME)
+        primary_act = primary_ei.copy(database=config_parameters.NEW_DB_NAME)
         acts = [recycled_act, primary_act]
 
         # Manipulate both the primary and secondary activities in the same way
@@ -560,13 +561,13 @@ def manipulate_steel_activities(new_db, cutoff391,
             if len(ch_act) == 0:
                 ch_steel_act_cutoff = [a for a in cutoff391 if a._data['name'] ==
                                        'market for steel, chromium steel 18/8'][0]
-                ch_steel_act_newdb = ch_steel_act_cutoff.copy(database=consts.NEW_DB_NAME)
+                ch_steel_act_newdb = ch_steel_act_cutoff.copy(database=config_parameters.NEW_DB_NAME)
                 ch_steel_act_newdb._data['name'] = 'market for steel, chromium steel 18/8' + str(electricity_mix)
                 ch_steel_act_newdb.save()
                 ch_steel_electric_input = [e.input for e in ch_steel_act_newdb.technosphere() if
                                            'transport' not in e.input._data['name'] and e.input._data[
                                                'location'] == 'RER'][0]
-                ch_steel_act = ch_steel_electric_input.copy(database=consts.NEW_DB_NAME)
+                ch_steel_act = ch_steel_electric_input.copy(database=config_parameters.NEW_DB_NAME)
                 ch_steel_act._data['name'] = 'steel production, electric, chromium steel 18/8' + str(electricity_mix)
                 ch_steel_act.save()
                 # Calculate the total amount of electricity inputs in the activity
@@ -1413,7 +1414,7 @@ def auxiliary_road_materials(new_db, cutoff391,
 
     if not road_act_in_new_db:
         road_act = cutoff391.get(code='3d1d98819862a4057c75095315820d52')
-        road_new = road_act.copy(database=consts.NEW_DB_NAME)
+        road_new = road_act.copy(database=config_parameters.NEW_DB_NAME)
         technosphere_activities_to_remove = ['bitumen', 'concrete', 'steel']
         for ex in road_new.biosphere():
             if 'Transformation' in ex.input._data['name'] or 'Occupation' in ex.input._data['name']:
