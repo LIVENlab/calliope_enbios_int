@@ -1364,10 +1364,11 @@ def delete_infrastructure_main(
                                          ws.equals('location', loc),
                                          ws.contains('reference product', reference_product))
                     except Exception:
-                        act = ws.get_one(bd.Database('premise_base'), ws.contains('name', name),
+                        org_act = ws.get_one(bd.Database('premise_base'), ws.contains('name', name),
                                          ws.exclude(ws.contains('name', 'renewable energy products')),
                                          ws.equals('location', loc),
                                          ws.contains('reference product', reference_product))
+                        act = org_act.copy(database='additional_acts')
                     infrastructure = [e for e in act.technosphere() if e.input._data['unit'] == 'unit']
                     for e in infrastructure:
                         e.delete()
@@ -1407,10 +1408,11 @@ def delete_infrastructure_main(
                                          ws.equals('location', location),
                                          ws.contains('reference product', reference_product))
                     except Exception:
-                        act = ws.get_one(bd.Database('premise_base'), ws.contains('name', name),
+                        org_act = ws.get_one(bd.Database('premise_base'), ws.contains('name', name),
                                          ws.exclude(ws.contains('name', 'renewable energy products')),
                                          ws.equals('location', location),
                                          ws.contains('reference product', reference_product))
+                        act = org_act.copy(database='additional_acts')
                 # we do not want to delete the maintenance of offshore and onshore wind (which have 'unit' as units),
                 # and that is why we add this conditional.
                 if not any(wind_name in act['name'] for wind_name in ['onshore', 'offshore']):
