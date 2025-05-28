@@ -1344,6 +1344,13 @@ def delete_infrastructure_main(
     Exceptions: it deletes the infrastructure not in tier 1 by removing the upstream of the infrastructure itself.
     """
     print('Starting delete infrastructure protocol')
+    # add carbon capture
+    dac = ws.get_one(bd.Database('premise_base'),
+                     ws.equals('name',
+                               'carbon dioxide, captured from atmosphere and stored, with a sorbent-based direct air capture system, 100ktCO2'),
+                     ws.equals('location', 'RER'))
+    dac.copy(database='additional_acts')
+
     # delete infrastructure
     df = pd.read_excel(file_path, sheet_name='o&m')
     for name, location, database, reference_product in (
