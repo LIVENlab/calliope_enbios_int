@@ -3095,7 +3095,7 @@ def lcia_materials_methods(materials: list) -> list:
         cfs = []
         for b3_act in biosphere3_acts:
             cfs.append((b3_act, 1))
-        new_method_name = f'{material} (in kg))'
+        new_method_name = f'{material} (in kg)'
         new_method = bd.Method((new_method_name,))
         new_method.register()
         new_method.write(cfs)
