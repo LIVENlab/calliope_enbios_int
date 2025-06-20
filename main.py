@@ -6,8 +6,6 @@ from functions import *
 import bw2data as bd
 import shutil
 
-# TODO: next seps in the workflow: run sparks: guardat al servidor a l'arxiu testttttt.py.
-# TODO: check options to include Regioinvent
 
 def run(materials: list = [],
         ccs_clinker: bool = True,
