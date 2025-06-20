@@ -6,6 +6,7 @@ from functions import *
 import bw2data as bd
 import shutil
 
+# TODO: test that it works with the new empty operational pv addition
 
 def run(materials: list = [],
         ccs_clinker: bool = True,
@@ -426,7 +427,26 @@ def update_foreground(ccs: bool = False, vehicles_as_batteries: bool = True,
                   onshore_wind_fleet=onshore_wind_fleet,
                   offshore_wind_fleet=offshore_wind_fleet)
 
+    # create empty pv_operation inventories
+    pv_operation_inventories(pv_db='additional_acts')
     print('Foreground updated successfully.')
+
+
+def pv_operation_inventories(pv_db: str):
+    """
+    empty inventory for pv operation
+    """
+    new_act = bd.Database(pv_db).new_activity(name='electricity production, pv, operation (empty)',
+                                 unit='unit',
+                                 code='electricity production, pv, operation (empty)',
+                                 location='ES'
+                                              )
+    new_act['reference product'] = 'electricty, low voltage'
+    new_act.save()
+    # output
+    new_ex = new_act.new_exchange(input=new_act.key, amount=1, type='production')
+    new_ex.save()
+
 
 
 def create_fleets(
