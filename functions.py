@@ -1545,6 +1545,11 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
                                'Transformation' in e.input['name'] or 'Occupation' in e.input['name']]
             for e in waste_land_use:
                 e.delete()
+            # direct resource extraction for the process of incineration does not make sense conceptually. We are deleting these inputs
+            waste_resource_extraction = [e for e in waste_act.biosphere() if
+                                             e.input['type'] == 'natural resource']
+            for e in waste_resource_extraction:
+                e.delete()
             waste_original_heat = ws.get_one(bd.Database(db_waste_name),
                                              ws.equals('name',
                                                        'treatment of municipal solid waste, incineration'),
@@ -1556,6 +1561,11 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
             waste_land_use = [e for e in waste_heat_act.biosphere() if
                               'Transformation' in e.input['name'] or 'Occupation' in e.input['name']]
             for e in waste_land_use:
+                e.delete()
+            # direct resource extraction for the process of incineration does not make sense conceptually. We are deleting these inputs
+            waste_resource_extraction = [e for e in waste_heat_act.biosphere() if
+                                             e.input['type'] == 'natural resource']
+            for e in waste_resource_extraction:
                 e.delete()
             print(f'creating copy of {waste_heat_act._data["name"]}')
             #waste_heat_act.technosphere().delete()
@@ -1580,6 +1590,10 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
                               'Transformation' in e.input['name'] or 'Occupation' in e.input['name']]
             for e in waste_land_use:
                 e.delete()
+            # direct resource extraction for the process of incineration does not make sense conceptually. We are deleting these inputs
+            waste_resource_extraction = [e for e in waste_act.biosphere() if e.input['type'] == 'natural resource']
+            for e in waste_resource_extraction:
+                e.delete()
             #waste_act.technosphere().delete()
             #print(f'deleting technosphere')
             waste_heat_original = ws.get_one(bd.Database(db_waste_name),
@@ -1590,12 +1604,16 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
                                              )
             waste_heat_act = waste_heat_original.copy(database='additional_acts')
             waste_heat_act['location'] = location
-            waste_heat_act['comment'] = waste_act['comment'] + '\n' + 'Taken dataset from CH'
+            waste_heat_act['comment'] = waste_heat_act['comment'] + '\n' + 'Taken dataset from CH'
             waste_heat_act.save()
             # delete land use (it is during installation)
             waste_land_use = [e for e in waste_heat_act.biosphere() if
                               'Transformation' in e.input['name'] or 'Occupation' in e.input['name']]
             for e in waste_land_use:
+                e.delete()
+            # direct resource extraction for the process of incineration does not make sense conceptually. We are deleting these inputs
+            waste_resource_extraction = [e for e in waste_heat_act.biosphere() if e.input['type'] == 'natural resource']
+            for e in waste_resource_extraction:
                 e.delete()
             #waste_heat_act.technosphere().delete()
 
