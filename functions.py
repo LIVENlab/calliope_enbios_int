@@ -1540,6 +1540,11 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
             print(f'creating copy of {waste_act._data["name"]}')
             #waste_act.technosphere().delete()
             #print(f'deleting technosphere')
+            # delete land use (it is during installation)
+            waste_land_use = [e for e in waste_act.biosphere() if
+                               'Transformation' in e.input['name'] or 'Occupation' in e.input['name']]
+            for e in waste_land_use:
+                e.delete()
             waste_original_heat = ws.get_one(bd.Database(db_waste_name),
                                              ws.equals('name',
                                                        'treatment of municipal solid waste, incineration'),
@@ -1547,7 +1552,12 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
                                              ws.contains('reference product', 'heat')
                                              )
             waste_heat_act = waste_original_heat.copy(database='additional_acts')
-            print(f'creating copy of {waste_act._data["name"]}')
+            # delete land use (it is during installation)
+            waste_land_use = [e for e in waste_heat_act.biosphere() if
+                              'Transformation' in e.input['name'] or 'Occupation' in e.input['name']]
+            for e in waste_land_use:
+                e.delete()
+            print(f'creating copy of {waste_heat_act._data["name"]}')
             #waste_heat_act.technosphere().delete()
             #print(f'deleting technosphere')
         # if we do not find the location, CH is chosen by default.
@@ -1565,8 +1575,13 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
             waste_act['location'] = location
             waste_act['comment'] = waste_act['comment'] + '\n' + 'Taken dataset from CH'
             waste_act.save()
-            waste_act.technosphere().delete()
-            print(f'deleting technosphere')
+            # delete land use (it is during installation)
+            waste_land_use = [e for e in waste_act.biosphere() if
+                              'Transformation' in e.input['name'] or 'Occupation' in e.input['name']]
+            for e in waste_land_use:
+                e.delete()
+            #waste_act.technosphere().delete()
+            #print(f'deleting technosphere')
             waste_heat_original = ws.get_one(bd.Database(db_waste_name),
                                              ws.equals('name',
                                                        'treatment of municipal solid waste, incineration'),
@@ -1577,7 +1592,12 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
             waste_heat_act['location'] = location
             waste_heat_act['comment'] = waste_act['comment'] + '\n' + 'Taken dataset from CH'
             waste_heat_act.save()
-            waste_heat_act.technosphere().delete()
+            # delete land use (it is during installation)
+            waste_land_use = [e for e in waste_heat_act.biosphere() if
+                              'Transformation' in e.input['name'] or 'Occupation' in e.input['name']]
+            for e in waste_land_use:
+                e.delete()
+            #waste_heat_act.technosphere().delete()
 
     # create municipal solid waste incinerator
     print('2. creating municipal solid waste incinerator')
