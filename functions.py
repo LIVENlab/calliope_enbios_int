@@ -1538,8 +1538,8 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
             print(f'original_location: {location}, assigned location: {location}')
             waste_act = waste_electricity_original.copy(database='additional_acts')
             print(f'creating copy of {waste_act._data["name"]}')
-            waste_act.technosphere().delete()
-            print(f'deleting technosphere')
+            #waste_act.technosphere().delete()
+            #print(f'deleting technosphere')
             waste_original_heat = ws.get_one(bd.Database(db_waste_name),
                                              ws.equals('name',
                                                        'treatment of municipal solid waste, incineration'),
@@ -1548,8 +1548,8 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
                                              )
             waste_heat_act = waste_original_heat.copy(database='additional_acts')
             print(f'creating copy of {waste_act._data["name"]}')
-            waste_heat_act.technosphere().delete()
-            print(f'deleting technosphere')
+            #waste_heat_act.technosphere().delete()
+            #print(f'deleting technosphere')
         # if we do not find the location, CH is chosen by default.
         except wurst.errors.NoResults:
             waste_electricity_original = ws.get_one(bd.Database(db_waste_name),
