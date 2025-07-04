@@ -1867,15 +1867,7 @@ def hydro_reservoir_update(location: str, db_hydro_name: str):
     infrastructure_amount = [e.amount for e in new_elec_act.technosphere() if e.input._data['unit'] == 'unit'][0]
     land = [e for e in new_elec_act.biosphere() if
             any(keyword in e.input._data['name'] for keyword in ['Occupation', 'occupied', 'Transformation'])]
-    emissions = [e for e in new_elec_act.biosphere() if
-                 any(keyword in e.input._data['name'] for keyword in ['Carbon dioxide', 'monoxide', 'Methane'])]
     for e in land:
-        new_amount = e.amount / infrastructure_amount
-        biosphere_act = e.input
-        e.delete()
-        new_ex = new_infrastructure_act.new_exchange(input=biosphere_act, type='biosphere', amount=new_amount)
-        new_ex.save()
-    for e in emissions:
         new_amount = e.amount / infrastructure_amount
         biosphere_act = e.input
         e.delete()
@@ -1934,11 +1926,7 @@ def pumped_hydro_update(db_pump_name: str, location: str):
     new_elec_act = electricity_pumped.copy(database='additional_acts')
     land = [e for e in new_elec_act.biosphere() if
             any(keyword in e.input._data['name'] for keyword in ['Occupation', 'occupied', 'Transformation'])]
-    emissions = [e for e in new_elec_act.biosphere() if
-                 any(keyword in e.input._data['name'] for keyword in ['Carbon dioxide', 'monoxide', 'Methane'])]
     for e in land:
-        e.delete()
-    for e in emissions:
         e.delete()
 
 
