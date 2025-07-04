@@ -1881,6 +1881,13 @@ def hydro_reservoir_update(location: str, db_hydro_name: str):
         e.delete()
         new_ex = new_infrastructure_act.new_exchange(input=biosphere_act, type='biosphere', amount=new_amount)
         new_ex.save()
+    # change land transformation, from unspecified. Use "Transformation, from unspecified, natural (non-use)"
+    unspecified_land_ex = [e for e in new_infrastructure_act.biosphere()
+                               if e.input['name'] == 'Transformation, from unspecified'][0]
+    unspecified_natural_land_ex = [a for a in bd.Database('biosphere3')
+                                       if a['name'] == 'Transformation, from unspecified, natural (non-use)'][0]
+    unspecified_land_ex.input = unspecified_natural_land_ex
+    unspecified_land_ex.save()
 
 
 def hydro_run_of_river_update(db_hydro_name: str):
@@ -1905,6 +1912,13 @@ def hydro_run_of_river_update(db_hydro_name: str):
         e.delete()
         new_ex = new_infrastructure_act.new_exchange(input=biosphere_act, type='biosphere', amount=new_amount)
         new_ex.save()
+    # change land transformation, from unspecified. Use "Transformation, from unspecified, natural (non-use)"
+    unspecified_land_ex = [e for e in new_infrastructure_act.biosphere()
+                           if e.input['name'] == 'Transformation, from unspecified'][0]
+    unspecified_natural_land_ex = [a for a in bd.Database('biosphere3')
+                                   if a['name'] == 'Transformation, from unspecified, natural (non-use)'][0]
+    unspecified_land_ex.input = unspecified_natural_land_ex
+    unspecified_land_ex.save()
 
 
 def pumped_hydro_update(db_pump_name: str, location: str):
