@@ -5,9 +5,31 @@ from config_parameters import *
 from functions import *
 import bw2data as bd
 import shutil
+from datetime import datetime
+import config_parameters as cfg
 
 
-def run(materials: list = [],
+def save_config_snapshot(file_path):
+    with open(file_path, "a") as f:
+        f.write("=== CONFIG PARAMETERS ===\n")
+        for name, value in vars(cfg).items():
+            if name.isupper():   # only log public/UPPERCASE config vars
+                f.write(f"{name}: {value}\n")
+        f.write("\n")
+
+
+def save_run_parameters(file_path, params_dict):
+    with open(file_path, "a") as f:
+        f.write("=== RUN() PARAMETERS ===\n")
+        for name, value in params_dict.items():
+            f.write(f"{name}: {value}\n")
+        f.write("\n")
+
+
+def run(# metadata
+        log_save_path: str,
+
+        materials: list = [],
         ccs_clinker: bool = True,
         train_electrification: bool = True,
         biomass_from_residues: bool = True,
@@ -71,6 +93,18 @@ def run(materials: list = [],
         - 'infrastructure (with European steel and concrete)': infrastructure activities WITH European markets for
           steel and concrete.
     """
+
+    # 1. Create logfile
+    timestamp = datetime.now().strftime("%Y%m%d")
+    full_path = os.path.join(log_save_path, f'{PROJECT_NAME}_{timestamp}.txt')
+    # 2. Freeze + save config parameters
+    save_config_snapshot(full_path)
+    # 3. Save run() arguments
+    params = {k: v for k, v in locals().items() if not k.startswith("_")}
+    save_run_parameters(full_path, params)
+    print(f"Saved log to: {full_path}")
+
+
     # setup_databases
     bd.projects.set_current(PROJECT_NAME)
     bi.bw2setup()
