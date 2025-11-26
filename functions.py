@@ -2262,7 +2262,7 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
 
 
 def wind_offshore_fleet(db_wind_name: str, location: str,
-                        fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]],
+                        fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]]
                         ):
     """
     ´´fleet_turbines_definition´´ structure:
@@ -2282,6 +2282,7 @@ def wind_offshore_fleet(db_wind_name: str, location: str,
     0.5], # where this 0.5 is the share of turbine_2
     }
     """
+
     print('Creating offshore wind fleet')
     create_additional_acts_db()
 

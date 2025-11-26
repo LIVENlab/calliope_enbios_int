@@ -58,7 +58,24 @@ MATERIALS_EI_ACTIVITY_CODES = {
     'Boron':
         {'name': 'market for boron carbide', 'location': 'GLO', 'reference product': 'boron carbide'},
     'Concrete_foundations':
-        {'name': 'market group for concrete, normal strength', 'location': 'GLO', 'reference product': 'concrete, normal strength'}
+        {'name': 'market group for concrete, normal strength', 'location': 'GLO', 'reference product': 'concrete, normal strength'},
+    'Gravel':
+        {'name': 'market for gravel, crushed', 'location': 'RoW', 'reference product': 'gravel, crushed'},
+    'Asphalt':
+        {'name': 'market for bitumen seal', 'location': 'GLO', 'reference product': 'bitumen seal'},
+    'hdpe':
+        {'name': 'market for polyethylene, high density, granulate', 'location': 'GLO',
+         'reference product': 'polyethylene, high density, granulate'},
+    'Cement':
+        {'name': 'market for cement, Portland', 'location': 'Europe without Switzerland',
+         'reference product': 'cement, Portland'},
+    'Lead':
+        {'name': 'market for lead', 'location': 'GLO', 'reference product': 'lead'},
+    'Paper':
+        {'name': 'market for kraft paper', 'location': 'RER', 'reference product': 'kraft paper'},
+    'PP':
+        {'name': 'market for polypropylene, granulate', 'location': 'GLO',
+         'reference product': 'polypropylene, granulate'},
 }
 
 EOL_EI_ACTIVITY_CODES = {
