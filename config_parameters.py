@@ -2,16 +2,16 @@ import os
 
 ###### ----- MODELLING CONFIG ----- ######
 
-# vestas_file path
-cwd = os.getcwd()
-windtrace_folder = os.path.join(cwd, 'WindTrace')
-VESTAS_FILE = os.path.join(windtrace_folder, 'clean_data.xlsx')
-
 # variables to be set by the user
-PROJECT_NAME = 'pniec_enbios_2'
+PROJECT_NAME = 'paper_pniec_enbios'
 NEW_DB_NAME = 'additional_acts'
 SPOLDS_CUTOFF = r"C:\ecoinvent_data\3.9.1\cutoff\datasets"
 SPOLDS_APOS = r"C:\ecoinvent_data\3.9.1\apos\datasets"
+
+# vestas_file path
+script_dir = os.path.dirname(os.path.abspath(__file__))
+windtrace_folder = os.path.join(script_dir, "WindTrace")
+VESTAS_FILE = os.path.join(windtrace_folder, 'clean_data.xlsx')
 
 ###### ----- SCENARIOS CONFIG ----- ######
 
@@ -194,3 +194,4 @@ SPAIN_2030_OFF_WIND_FLEET = \
             }, 0.25],  # based on the V236-15.0 MW
     }
 
+pass

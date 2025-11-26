@@ -7,8 +7,7 @@ import random
 from typing import Optional, List, Literal, Tuple
 from stats_arrays import NormalUncertainty
 import sys
-import consts
-import config_parameters
+from prepare_lci_data import consts, config_parameters
 
 # TODO: update for the newer version after paper reviews.
 
@@ -1410,7 +1409,7 @@ def auxiliary_road_materials(new_db, cutoff391,
     # remove the land use from the road activity
     # remove bitumen, concrete, reinforcing steel and steel. We will assume that all roads are rural roads (gravel)
     # (copying the activity in the database new_db and making the changes there)
-    road_act_in_new_db = new_db.search('road construction')
+    road_act_in_new_db = [a for a in new_db if a['name'] == 'road construction' and a['location'] == 'RoW']
 
     if not road_act_in_new_db:
         road_act = cutoff391.get(code='3d1d98819862a4057c75095315820d52')

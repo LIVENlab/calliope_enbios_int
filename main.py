@@ -1,12 +1,11 @@
 import bw2io as bi
 import wurst.errors
 from premise import *
-from config_parameters import *
-from functions import *
+from .config_parameters import *
+from .functions import *
 import bw2data as bd
 import shutil
 
-# TODO: test that it works with the new empty operational pv addition
 
 def run(materials: list = [],
         ccs_clinker: bool = True,

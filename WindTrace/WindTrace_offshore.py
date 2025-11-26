@@ -1,4 +1,4 @@
-from WindTrace.WindTrace_onshore import *
+from .WindTrace_onshore import *
 
 
 # depth: if it is in aarhus_wind_farm_market -> take it from there. Otherwise, use google API (Elevation)

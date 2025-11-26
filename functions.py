@@ -4,12 +4,12 @@ from premise.geomap import Geomap
 import wurst.searching as ws
 import sys
 import bw2data as bd
-import WindTrace.WindTrace_onshore
-import WindTrace.WindTrace_offshore
-import config_parameters
-import consts
 import wurst
 from collections import defaultdict
+
+from . import config_parameters
+from . import consts
+from .WindTrace import WindTrace_onshore, WindTrace_offshore
 
 
 def unlink_electricity(country_codes_list: Optional[List[str]] = None, db_name: str = 'premise_base'):
@@ -1538,8 +1538,8 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
             print(f'original_location: {location}, assigned location: {location}')
             waste_act = waste_electricity_original.copy(database='additional_acts')
             print(f'creating copy of {waste_act._data["name"]}')
-            #waste_act.technosphere().delete()
-            #print(f'deleting technosphere')
+            waste_act.technosphere().delete()
+            print(f'deleting technosphere')
             # delete land use (it is during installation)
             waste_land_use = [e for e in waste_act.biosphere() if
                                'Transformation' in e.input['name'] or 'Occupation' in e.input['name']]
@@ -1568,8 +1568,8 @@ def chp_waste_update(db_waste_name: str, db_original_name: str, locations: list)
             for e in waste_resource_extraction:
                 e.delete()
             print(f'creating copy of {waste_heat_act._data["name"]}')
-            #waste_heat_act.technosphere().delete()
-            #print(f'deleting technosphere')
+            waste_heat_act.technosphere().delete()
+            print(f'deleting technosphere')
         # if we do not find the location, CH is chosen by default.
         except wurst.errors.NoResults:
             waste_electricity_original = ws.get_one(bd.Database(db_waste_name),
@@ -2176,7 +2176,7 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
     for turbine, info in fleet_turbines_definition.items():
         turbine_parameters = info[0]
         park_name = f'{turbine}_{turbine_parameters["power"]}_{location}'
-        WindTrace.WindTrace_onshore.lci_wind_turbine(
+        WindTrace_onshore.lci_wind_turbine(
             new_db=bd.Database('additional_acts'), cutoff391=bd.Database(db_wind_name),
             park_name=park_name, park_power=turbine_parameters['power'], number_of_turbines=1,
             park_location=location, park_coordinates=(51.181, 13.655),
@@ -2313,7 +2313,7 @@ def wind_offshore_fleet(db_wind_name: str, location: str,
             park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["floating_platform"]}_{location}'
         else:
             park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["offshore_type"]}_{location}'
-        WindTrace.WindTrace_offshore.lci_offshore_turbine(
+        WindTrace_offshore.lci_offshore_turbine(
             new_db=bd.Database('additional_acts'), cutoff391=bd.Database(db_wind_name),
             biosphere3=bd.Database('biosphere3'),
             park_name=park_name, park_power=turbine_parameters['power'], number_of_turbines=1,
