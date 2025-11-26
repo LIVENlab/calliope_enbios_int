@@ -63,20 +63,20 @@ BALANCED_ON_WIND_FLEET = \
         {
             'power': 4.0, 'manufacturer': "Vestas", 'rotor_diameter': 125, 'hub_height': 100,
             'commissioning_year': 2030,
-            'generator_type': "gb_dfig", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4
+            'generator_type': "gb_dfig", 'recycled_share_steel': None, 'lifetime': 25, 'eol_scenario': 4
         }, 0.3],
         'turbine_2': [
             {
                 'power': 6.0, 'manufacturer': 'Vestas', 'rotor_diameter': 145, 'hub_height': 120,
                 'commissioning_year': 2030,
-                'generator_type': "gb_dfig", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4
+                'generator_type': "gb_dfig", 'recycled_share_steel': None, 'lifetime': 25, 'eol_scenario': 4
             },
             0.65],
         'turbine_3': [
             {
                 'power': 8.0, 'manufacturer': 'Vestas', 'rotor_diameter': 160, 'hub_height': 145,
                 'commissioning_year': 2030,
-                'generator_type': "gb_dfig", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4
+                'generator_type': "gb_dfig", 'recycled_share_steel': None, 'lifetime': 25, 'eol_scenario': 4
             },
             0.05]}
 
@@ -86,13 +86,13 @@ SPAIN_2030_ON_WIND_FLEET = \
         {
             'power': 4.0, 'manufacturer': "Vestas", 'rotor_diameter': 125, 'hub_height': 100,
             'commissioning_year': 2030,
-            'generator_type': "gb_dfig", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4
+            'generator_type': "gb_dfig", 'recycled_share_steel': None, 'lifetime': 25, 'eol_scenario': 4
         }, 0.3],
         'turbine_2': [
             {
                 'power': 6.0, 'manufacturer': 'Vestas', 'rotor_diameter': 145, 'hub_height': 120,
                 'commissioning_year': 2030,
-                'generator_type': "gb_dfig", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4
+                'generator_type': "gb_dfig", 'recycled_share_steel': None, 'lifetime': 25, 'eol_scenario': 4
             },
             0.7],
         }
@@ -105,49 +105,49 @@ OFF_WIND_FLEET = \
         {
             'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
             'commissioning_year': 2030,
-            'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
+            'generator_type': "dd_pmsg", 'recycled_share_steel': None, 'lifetime': 25, 'eol_scenario': 4,
             'offshore_type': 'gravity', 'floating_platform': None, 'sea_depth': 5, 'distance_to_shore': 30
         }, 0.05],  # based on the SG 14-222 DD
         'turbine_2': [
             {
                 'power': 10.0, 'manufacturer': "Vestas", 'rotor_diameter': 164, 'hub_height': 138,
                 'commissioning_year': 2030,
-                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
+                'generator_type': "dd_pmsg", 'recycled_share_steel': None, 'lifetime': 25, 'eol_scenario': 4,
                 'offshore_type': 'gravity', 'floating_platform': None, 'sea_depth': 5, 'distance_to_shore': 30
             }, 0.05],  # based on the V164-10MW
         'turbine_3': [
             {
                 'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
                 'commissioning_year': 2030,
-                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
+                'generator_type': "dd_pmsg", 'recycled_share_steel': None, 'lifetime': 25, 'eol_scenario': 4,
                 'offshore_type': 'monopile', 'floating_platform': None, 'sea_depth': 30, 'distance_to_shore': 30
             }, 0.2],
         'turbine_4': [
             {
                 'power': 10.0, 'manufacturer': "Vestas", 'rotor_diameter': 164, 'hub_height': 138,
                 'commissioning_year': 2030,
-                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
+                'generator_type': "dd_pmsg", 'recycled_share_steel': None, 'lifetime': 25, 'eol_scenario': 4,
                 'offshore_type': 'monopile', 'floating_platform': None, 'sea_depth': 30, 'distance_to_shore': 30
             }, 0.2],
         'turbine_5': [
             {
                 'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
                 'commissioning_year': 2030,
-                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
+                'generator_type': "dd_pmsg", 'recycled_share_steel': None, 'lifetime': 25, 'eol_scenario': 4,
                 'offshore_type': 'tripod', 'floating_platform': None, 'sea_depth': 45, 'distance_to_shore': 30
             }, 0.1],
         'turbine_6': [
             {
                 'power': 10.0, 'manufacturer': "Vestas", 'rotor_diameter': 164, 'hub_height': 138,
                 'commissioning_year': 2030,
-                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
+                'generator_type': "dd_pmsg", 'recycled_share_steel': None, 'lifetime': 25, 'eol_scenario': 4,
                 'offshore_type': 'tripod', 'floating_platform': None, 'sea_depth': 45, 'distance_to_shore': 30
             }, 0.1],
         'turbine_7': [
             {
                 'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
                 'commissioning_year': 2030,
-                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
+                'generator_type': "dd_pmsg", 'recycled_share_steel': None, 'lifetime': 25, 'eol_scenario': 4,
                 'offshore_type': 'floating', 'floating_platform': 'spar_buoy_steel', 'sea_depth': 45,
                 'distance_to_shore': 30
             }, 0.15],
@@ -155,7 +155,7 @@ OFF_WIND_FLEET = \
             {
                 'power': 10.0, 'manufacturer': "Vestas", 'rotor_diameter': 164, 'hub_height': 138,
                 'commissioning_year': 2030,
-                'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
+                'generator_type': "dd_pmsg", 'recycled_share_steel': None, 'lifetime': 25, 'eol_scenario': 4,
                 'offshore_type': 'floating', 'floating_platform': 'spar_buoy_steel', 'sea_depth': 45,
                 'distance_to_shore': 30
             }, 0.15]
@@ -168,30 +168,29 @@ SPAIN_2030_OFF_WIND_FLEET = \
         {
             'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
             'commissioning_year': 2030,
-            'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
+            'generator_type': "dd_pmsg", 'recycled_share_steel': None, 'lifetime': 25, 'eol_scenario': 4,
             'offshore_type': 'floating', 'floating_platform': 'spar_buoy_steel', 'sea_depth': 100, 'distance_to_shore': 24  # based on Parc Tramuntana
         }, 0.25],  # based on the SG 14-222 DD
         'turbine_2': [
             {
                 'power': 15.0, 'manufacturer': "Vestas", 'rotor_diameter': 236, 'hub_height': 150,
                 'commissioning_year': 2030,
-                'generator_type': "gb_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
+                'generator_type': "gb_pmsg", 'recycled_share_steel': None, 'lifetime': 25, 'eol_scenario': 4,
                 'offshore_type': 'floating', 'floating_platform': 'spar_buoy_steel', 'sea_depth': 100, 'distance_to_shore': 24
             }, 0.25],  # based on the V236-15.0 MW
         'turbine_3': [
         {
             'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
             'commissioning_year': 2030,
-            'generator_type': "dd_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
+            'generator_type': "dd_pmsg", 'recycled_share_steel': None, 'lifetime': 25, 'eol_scenario': 4,
             'offshore_type': 'floating', 'floating_platform': 'tension_leg', 'sea_depth': 100, 'distance_to_shore': 24  # based on Parc Tramuntana
         }, 0.25],  # based on the SG 14-222 DD
         'turbine_24': [
             {
                 'power': 15.0, 'manufacturer': "Vestas", 'rotor_diameter': 236, 'hub_height': 150,
                 'commissioning_year': 2030,
-                'generator_type': "gb_pmsg", 'recycled_share_steel': 0.5, 'lifetime': 25, 'eol_scenario': 4,
+                'generator_type': "gb_pmsg", 'recycled_share_steel': None, 'lifetime': 25, 'eol_scenario': 4,
                 'offshore_type': 'floating', 'floating_platform': 'tension_leg', 'sea_depth': 100, 'distance_to_shore': 24
             }, 0.25],  # based on the V236-15.0 MW
     }
 
-pass

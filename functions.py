@@ -7,9 +7,9 @@ import bw2data as bd
 import wurst
 from collections import defaultdict
 
-from . import config_parameters
-from . import consts
-from .WindTrace import WindTrace_onshore, WindTrace_offshore
+import config_parameters
+import consts
+from WindTrace import WindTrace_onshore, WindTrace_offshore
 
 
 def unlink_electricity(country_codes_list: Optional[List[str]] = None, db_name: str = 'premise_base'):
@@ -2132,6 +2132,7 @@ def airborne_wind_lci(bd_airborne_name: str):
 # wind_onshore
 def wind_onshore_fleet(db_wind_name: str, location: str,
                        fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]],
+                       biosphere3: bd.Database = bd.Database('biosphere3')
                        ):
     """
     ´´fleet_turbines_definition´´ structure:
@@ -2185,7 +2186,8 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
             commissioning_year=turbine_parameters['commissioning_year'],
             generator_type=turbine_parameters['generator_type'],
             recycled_share_steel=turbine_parameters['recycled_share_steel'],
-            lifetime=turbine_parameters['lifetime'], eol_scenario=turbine_parameters['eol_scenario']
+            lifetime=turbine_parameters['lifetime'], eol_scenario=turbine_parameters['eol_scenario'],
+            biosphere3=biosphere3
         )
 
         # maintenance activity per kWh
@@ -2200,6 +2202,7 @@ def wind_onshore_fleet(db_wind_name: str, location: str,
                     new_maintenance_act = e.input.copy(database='additional_acts')
                     new_maintenance_act['name'] = f'{e.input["name"]}_kwh'
                     new_maintenance_act['code'] = f'{e.input["name"]}_kwh'
+                    new_maintenance_act['reference product'] = f'{e.input["name"]}_kwh'
                     new_maintenance_act.save()
                     e.input = new_maintenance_act
                     e.save()

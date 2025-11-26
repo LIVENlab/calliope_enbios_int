@@ -1,8 +1,8 @@
 import bw2io as bi
 import wurst.errors
 from premise import *
-from .config_parameters import *
-from .functions import *
+from config_parameters import *
+from functions import *
 import bw2data as bd
 import shutil
 
@@ -54,6 +54,8 @@ def run(materials: list = [],
         avoid_kerosene: bool = True,
         avoid_diesel: bool = True,
         avoid_countries_list: Optional[List[str]] = None,
+
+        biosphere3: bd.Database = bd.Database('biosphere3')  # biosphere database
         ):
     """
     Databases:
@@ -149,7 +151,8 @@ def run(materials: list = [],
                       roof_156kw_share=roof_156kw_share,
                       roof_280kw_share=roof_280kw_share,
                       onshore_wind_fleet=onshore_wind_fleet,
-                      offshore_wind_fleet=offshore_wind_fleet)
+                      offshore_wind_fleet=offshore_wind_fleet,
+                      biosphere3=biosphere3)
 
     # 'infrastructure (with European steel and concrete)' operating.
     if infrastructure_production_in_europe:
@@ -346,7 +349,8 @@ def update_foreground(ccs: bool = False, vehicles_as_batteries: bool = True,
                       roof_280kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_280kw"],
                       # solar pv variables
                       onshore_wind_fleet: Dict = config_parameters.BALANCED_ON_WIND_FLEET,  # onshore wind variables
-                      offshore_wind_fleet: Dict = config_parameters.OFF_WIND_FLEET  # offshore wind variables
+                      offshore_wind_fleet: Dict = config_parameters.OFF_WIND_FLEET,  # offshore wind variables
+                      biosphere3: bd.Database = bd.Database('biosphere3')
                       ):
     """
     Adapt the foreground activities as follows:
@@ -424,7 +428,8 @@ def update_foreground(ccs: bool = False, vehicles_as_batteries: bool = True,
                   roof_156kw_share=roof_156kw_share,
                   roof_280kw_share=roof_280kw_share,
                   onshore_wind_fleet=onshore_wind_fleet,
-                  offshore_wind_fleet=offshore_wind_fleet)
+                  offshore_wind_fleet=offshore_wind_fleet,
+                  biosphere3=biosphere3)
 
     # create empty pv_operation inventories
     pv_operation_inventories(pv_db='additional_acts')
@@ -461,7 +466,8 @@ def create_fleets(
         roof_156kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_156kw"],
         roof_280kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_280kw"],  # solar pv variables
         onshore_wind_fleet: Dict = config_parameters.BALANCED_ON_WIND_FLEET,  # onshore wind variables
-        offshore_wind_fleet: Dict = config_parameters.OFF_WIND_FLEET  # offshore wind variables
+        offshore_wind_fleet: Dict = config_parameters.OFF_WIND_FLEET,  # offshore wind variables
+        biosphere3: bd.Database = bd.Database('biosphere3')
 ):
     """
     Electrolysers:
@@ -507,7 +513,8 @@ def create_fleets(
                    )
 
     # Onshore wind fleets
-    wind_onshore_fleet(db_wind_name='original_cutoff391', location='ES', fleet_turbines_definition=onshore_wind_fleet)
+    wind_onshore_fleet(db_wind_name='original_cutoff391', location='ES', fleet_turbines_definition=onshore_wind_fleet,
+                       biosphere3=biosphere3)
 
     # Offshore wind fleets
     # TODO: 1. offshore per kWh, 2. maintenance emissions are onsite!
