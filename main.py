@@ -5,10 +5,31 @@ from config_parameters import *
 from functions import *
 import bw2data as bd
 import shutil
+from datetime import datetime
+import config_parameters as cfg
 
-# TODO: test that it works with the new empty operational pv addition
 
-def run(materials: list = [],
+def save_config_snapshot(file_path):
+    with open(file_path, "a") as f:
+        f.write("=== CONFIG PARAMETERS ===\n")
+        for name, value in vars(cfg).items():
+            if name.isupper():   # only log public/UPPERCASE config vars
+                f.write(f"{name}: {value}\n")
+        f.write("\n")
+
+
+def save_run_parameters(file_path, params_dict):
+    with open(file_path, "a") as f:
+        f.write("=== RUN() PARAMETERS ===\n")
+        for name, value in params_dict.items():
+            f.write(f"{name}: {value}\n")
+        f.write("\n")
+
+
+def run(# metadata
+        log_save_path: str,
+
+        materials: list = [],
         ccs_clinker: bool = True,
         train_electrification: bool = True,
         biomass_from_residues: bool = True,
@@ -55,6 +76,8 @@ def run(materials: list = [],
         avoid_kerosene: bool = True,
         avoid_diesel: bool = True,
         avoid_countries_list: Optional[List[str]] = None,
+
+        biosphere3: bd.Database = bd.Database('biosphere3')  # biosphere database
         ):
     """
     Databases:
@@ -70,6 +93,18 @@ def run(materials: list = [],
         - 'infrastructure (with European steel and concrete)': infrastructure activities WITH European markets for
           steel and concrete.
     """
+
+    # 1. Create logfile
+    timestamp = datetime.now().strftime("%Y%m%d")
+    full_path = os.path.join(log_save_path, f'{PROJECT_NAME}_{timestamp}.txt')
+    # 2. Freeze + save config parameters
+    save_config_snapshot(full_path)
+    # 3. Save run() arguments
+    params = {k: v for k, v in locals().items() if not k.startswith("_")}
+    save_run_parameters(full_path, params)
+    print(f"Saved log to: {full_path}")
+
+
     # setup_databases
     bd.projects.set_current(PROJECT_NAME)
     bi.bw2setup()
@@ -150,7 +185,8 @@ def run(materials: list = [],
                       roof_156kw_share=roof_156kw_share,
                       roof_280kw_share=roof_280kw_share,
                       onshore_wind_fleet=onshore_wind_fleet,
-                      offshore_wind_fleet=offshore_wind_fleet)
+                      offshore_wind_fleet=offshore_wind_fleet,
+                      biosphere3=biosphere3)
 
     # 'infrastructure (with European steel and concrete)' operating.
     if infrastructure_production_in_europe:
@@ -347,7 +383,8 @@ def update_foreground(ccs: bool = False, vehicles_as_batteries: bool = True,
                       roof_280kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_280kw"],
                       # solar pv variables
                       onshore_wind_fleet: Dict = config_parameters.BALANCED_ON_WIND_FLEET,  # onshore wind variables
-                      offshore_wind_fleet: Dict = config_parameters.OFF_WIND_FLEET  # offshore wind variables
+                      offshore_wind_fleet: Dict = config_parameters.OFF_WIND_FLEET,  # offshore wind variables
+                      biosphere3: bd.Database = bd.Database('biosphere3')
                       ):
     """
     Adapt the foreground activities as follows:
@@ -425,7 +462,8 @@ def update_foreground(ccs: bool = False, vehicles_as_batteries: bool = True,
                   roof_156kw_share=roof_156kw_share,
                   roof_280kw_share=roof_280kw_share,
                   onshore_wind_fleet=onshore_wind_fleet,
-                  offshore_wind_fleet=offshore_wind_fleet)
+                  offshore_wind_fleet=offshore_wind_fleet,
+                  biosphere3=biosphere3)
 
     # create empty pv_operation inventories
     pv_operation_inventories(pv_db='additional_acts')
@@ -462,7 +500,8 @@ def create_fleets(
         roof_156kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_156kw"],
         roof_280kw_share: Dict[str, float] = config_parameters.PV_CURRENT_TREND["rooftop_280kw"],  # solar pv variables
         onshore_wind_fleet: Dict = config_parameters.BALANCED_ON_WIND_FLEET,  # onshore wind variables
-        offshore_wind_fleet: Dict = config_parameters.OFF_WIND_FLEET  # offshore wind variables
+        offshore_wind_fleet: Dict = config_parameters.OFF_WIND_FLEET,  # offshore wind variables
+        biosphere3: bd.Database = bd.Database('biosphere3')
 ):
     """
     Electrolysers:
@@ -508,7 +547,8 @@ def create_fleets(
                    )
 
     # Onshore wind fleets
-    wind_onshore_fleet(db_wind_name='original_cutoff391', location='ES', fleet_turbines_definition=onshore_wind_fleet)
+    wind_onshore_fleet(db_wind_name='original_cutoff391', location='ES', fleet_turbines_definition=onshore_wind_fleet,
+                       biosphere3=biosphere3)
 
     # Offshore wind fleets
     # TODO: 1. offshore per kWh, 2. maintenance emissions are onsite!

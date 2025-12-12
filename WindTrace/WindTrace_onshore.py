@@ -1,147 +1,227 @@
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
+import consts
 import bw2data as bd
 from geopy.distance import geodesic
 import random
-from typing import Optional, List, Literal, Tuple
-from stats_arrays import NormalUncertainty
+from typing import Optional, List, Literal
+from stats_arrays import NormalUncertainty, UniformUncertainty
 import sys
-import consts
-import config_parameters
+from WindTrace.helper_functions import *
+from config_parameters import VESTAS_FILE, NEW_DB_NAME
 
-# TODO: update for the newer version after paper reviews.
 
-def steel_turbine(plot_mat: bool = False):
+def steel_turbine(plot_mat: bool = False, regression_adjustment: Literal['D2h', 'Hub height'] = 'D2h'):
     """
     It returns a dictionary 'materials_polyfits' that contains the fitting curve of steel (mass vs hub height). The
-    dictionary has the keys 'polyfit' and 'confidence_95%' where the values are stored. The uncertainty (to be added
-    to the lci) is stored as 'std_dev' also in the same dictionary and corresponds to the standard deviation of the
-    residuals. If plot_mat is set to True, all the materials fitting plots will be shown.
+    dictionary has the keys 'polyfit', 'confidence_95%', 'std_dev', and 'residual_distribution' where the values are stored.
+    If plot_mat is set to True, all the materials fitting plots will be shown.
     """
-    vestas_data = pd.read_excel(config_parameters.VESTAS_FILE, sheet_name="1_MATERIALS_TURBINE", dtype=None, decimal=";", header=0)
+    vestas_data = load_vestas_data(VESTAS_FILE, "1_MATERIALS_TURBINE")
 
-    short_vestas_data = vestas_data[vestas_data['Hub height'] <= 84]
-    # Extracting columns
-    x = vestas_data['Hub height']
-    y = vestas_data['Low alloy steel']
-    # Remove NaN values
-    valid_indices = ~np.isnan(x) & ~np.isnan(y)
-    new_x = x[valid_indices]
-    new_y = y[valid_indices]
-    # Dictionary to save the polyfits and confidence intervals
+    # Determine x-column based on regression_adjustment
+    x_col = 'Hub height' if regression_adjustment == 'Hub height' else 'D2h'
+
+    x_full = vestas_data[x_col]
+    y_full = vestas_data['Low alloy steel']
+
+    # Remove NaN values for full range data
+    valid_full_indices = ~np.isnan(x_full) & ~np.isnan(y_full)
+    x_full = x_full[valid_full_indices]
+    y_full = y_full[valid_full_indices]
+
     materials_polyfits = {}
     materials_polyfits_short = {}
-    # Linear regression (steel mass vs height) and statistics
-    fit_steel = np.polyfit(new_x, new_y, 1)
-    predict_steel = np.poly1d(fit_steel)
-    # Calculate residuals
-    residuals = new_y - predict_steel(new_x)
-    # Calculate standard error of the estimate
-    std_error = np.sqrt(np.mean(residuals ** 2))
-    # Calculate confidence intervals (95%) for interpolated x values
-    confidence = 1.96 * std_error  # 95% confidence interval multiplier
-    residual_variance = np.mean(residuals ** 2)
-    residual_std_dev = np.sqrt(residual_variance)
-    # long_short = {}
-    polyfit_and_confidence = {'polyfit': predict_steel, 'confidence_95%': confidence, 'std_dev': residual_std_dev}
-    materials_polyfits['Low alloy steel'] = polyfit_and_confidence
-    # Extract short data
-    short_x = short_vestas_data['Hub height']
-    short_y = short_vestas_data['Low alloy steel']
-    slope = np.sum(short_x * short_y) / np.sum(short_x ** 2)
-    intercept = 0
-    short_predict_steel = np.poly1d([slope, intercept])
-    # Calculate residuals
-    residuals = short_y - short_predict_steel(short_x)
-    # Calculate standard error of the estimate
-    std_error = np.sqrt(np.mean(residuals ** 2))
-    # Calculate confidence intervals (95%) for interpolated x values
-    confidence = 1.96 * std_error  # 95% confidence interval multiplier
-    # residual_variance = np.mean(residuals ** 2)
-    residual_std_dev = np.sqrt(residual_variance)
-    # We mantain the same confidence and std_dev as the main function.
-    polyfit_and_confidence_short = {'polyfit': short_predict_steel, 'confidence_95%': confidence,
-                                    'std_dev': residual_std_dev}
-    if plot_mat:
-        plot_materials(x=short_x, y=short_y, residuals=residuals, interpolation_eq=short_predict_steel,
-                       confidence=confidence,
-                       xlabel='Hub height (m)', ylabel='Steel mass (t)', title='Steel')
-    materials_polyfits_short['Low alloy steel'] = polyfit_and_confidence_short
 
-    # where do the linear equations intersect?
-    intersection_poly = np.poly1d(short_predict_steel - predict_steel)
-    intersection_x = np.roots(intersection_poly)
+    # Fit Full Range Model
+    full_model_fit = fit_model(x_full, y_full, 'Low alloy steel (Full Range)', proportional=False)
+
+    materials_polyfits['Low alloy steel'] = {
+        'polyfit': full_model_fit['polyfit'],
+        'confidence_95%': full_model_fit['confidence_95%'],
+        'std_dev': full_model_fit['std_dev'],
+        'residual_distribution': full_model_fit['residual_distribution']
+    }
+
+    # Prepare Short Range Data
+    short_limit = 84 if regression_adjustment == 'Hub height' else 1053696
+    short_vestas_data = vestas_data[vestas_data[x_col] <= short_limit]
+    x_short = short_vestas_data[x_col]
+    y_short = short_vestas_data['Low alloy steel']
+
+    # Remove NaN values for short range data
+    valid_short_indices = ~np.isnan(x_short) & ~np.isnan(y_short)
+    x_short = x_short[valid_short_indices]
+    y_short = y_short[valid_short_indices]
+
+    # Fit Short Range Model (proportional)
+    short_model_fit = fit_model(x_short, y_short, 'Low alloy steel (Short Range)', proportional=True)
+
+    materials_polyfits_short['Low alloy steel'] = {
+        'polyfit': short_model_fit['polyfit'],
+        'confidence_95%': short_model_fit['confidence_95%'],
+        'std_dev': short_model_fit['std_dev'],
+        'residual_distribution': short_model_fit['residual_distribution']
+    }
+
+    # Calculate Intersection
+    intersection_x = calculate_intersection(full_model_fit['polyfit'], short_model_fit['polyfit'])
     intersection = {'Low alloy steel': intersection_x}
+
+    # Plotting if requested
+    if plot_mat:
+        # Plot Full Range
+        if isinstance(full_model_fit['polyfit'], np.poly1d):
+            residuals_full = y_full - full_model_fit['polyfit'](x_full)
+            plot_materials(
+                x=x_full, y=y_full,
+                residuals=residuals_full,
+                interpolation_eq=full_model_fit['polyfit'],
+                confidence=full_model_fit['confidence_95%'],
+                xlabel=f'{x_col} (m)' if regression_adjustment == 'Hub height' else f'{x_col}',  # Dynamic label
+                ylabel='Low alloy steel (t)',
+                title='Low alloy steel (Full Range)'
+            )
+            plot_qq_plot(residuals_full, 'Low alloy steel (Full Range)', full_model_fit['residual_distribution'])
+        else:
+            print("Skipping full range plot for Low alloy steel: Model fit was not successful.")
+
+        # Plot Short Range
+        if isinstance(short_model_fit['polyfit'], np.poly1d):
+            residuals_short = y_short - short_model_fit['polyfit'](x_short)
+            plot_materials(
+                x=x_short, y=y_short,
+                residuals=residuals_short,
+                interpolation_eq=short_model_fit['polyfit'],
+                confidence=short_model_fit['confidence_95%'],
+                xlabel=f'{x_col} (m)' if regression_adjustment == 'Hub height' else f'{x_col}',  # Dynamic label
+                ylabel='Low alloy steel (t)',
+                title='Low alloy steel (Short Range)'
+            )
+            plot_qq_plot(residuals_short, 'Low alloy steel (Short Range)', short_model_fit['residual_distribution'])
+        else:
+            print("Skipping short range plot for Low alloy steel: Model fit was not successful.")
 
     return vestas_data, materials_polyfits, materials_polyfits_short, intersection
 
 
-def other_turbine_materials(plot_mat=False) -> (tuple, dict, dict):
+def other_turbine_materials(plot_mat=False, regression_adjustment: Literal['D2h', 'Hub height'] = 'D2h') -> (
+        Tuple[Dict, Dict, Dict]):
     """
     It returns a dictionary 'materials_polyfits' that contains the fitting curves of steel and turbine materials.
-    The dictionary has the keys 'polyfit' and 'confidence_95%' where the values are stored.
+    The dictionary has the keys 'polyfit', 'confidence_95%', 'std_dev', and 'residual_distribution' where the values are stored.
     If plot_mat is set to True, all the materials fitting plots will be shown.
     """
-    vestas_data, materials_polyfits, materials_polyfits_short, intersection = steel_turbine()
-    columns = list(vestas_data)
-    last_index = columns.index('Lubricating oil')
-    initial_index = columns.index('Low alloy steel') + 1
+    # Call steel_turbine to get initial data and steel fits
+    (vestas_data, materials_polyfits,
+     materials_polyfits_short, intersection) = steel_turbine(regression_adjustment=regression_adjustment)
 
-    while initial_index <= last_index:
-        short = False
-        materials_to_adjust_3mw = ['PUR', 'PVC']
-        materials_to_adjust_1mw = ['Low alloy steel', 'Chromium steel', 'Epoxy resin', 'Fiberglass', 'Rubber',
-                                   'Aluminium']
-        if columns[initial_index] in materials_to_adjust_3mw:
-            short_vestas_data = vestas_data[vestas_data['Power (MW)'] <= 3.0]
-            short = True
-        elif columns[initial_index] in materials_to_adjust_1mw:
-            short_vestas_data = vestas_data[vestas_data['Power (MW)'] <= 1.0]
-            short = True
-        x = vestas_data[columns[columns.index('Power (MW)')]]  # power (MW)
-        y = vestas_data[columns[initial_index]]  # material mass (t)
-        valid_indices = ~np.isnan(x) & ~np.isnan(y)
-        new_x = x[valid_indices]
-        new_y = y[valid_indices]
-        fit = np.polyfit(new_x, new_y, 1)
-        predict_mat = np.poly1d(fit)
-        residuals = new_y - predict_mat(new_x)
-        std_error = np.sqrt(np.mean(residuals ** 2))
-        confidence = 1.96 * std_error
-        residual_variance = np.mean(residuals ** 2)
-        residual_std_dev = np.sqrt(residual_variance)
-        polyfit_and_confidence = {'polyfit': predict_mat, 'confidence_95%': confidence, 'std_dev': residual_std_dev}
-        materials_polyfits[columns[initial_index]] = polyfit_and_confidence
-        if short:
-            short_x = short_vestas_data[columns[columns.index('Power (MW)')]]
-            short_y = short_vestas_data[columns[initial_index]]
-            valid_indices = ~np.isnan(x) & ~np.isnan(y)
-            short_x = short_x[valid_indices]
-            short_y = short_y[valid_indices]
-            slope = np.sum(short_x * short_y) / np.sum(short_x ** 2)
-            intercept = 0
-            # slope, intercept = linear_regression(short_x, short_y)
-            short_predict_mat = np.poly1d([slope, intercept])
-            residuals = short_y - short_predict_mat(short_x)
-            # Calculate standard error of the estimate
-            std_error = np.sqrt(np.mean(residuals ** 2))
-            # Calculate confidence intervals (95%) for interpolated x values
-            confidence = 1.96 * std_error  # 95% confidence interval multiplier
-            # residual_variance = np.mean(residuals ** 2)
-            residual_std_dev = np.sqrt(residual_variance)
-            polyfit_and_confidence_short = {'polyfit': short_predict_mat, 'confidence_95%': confidence,
-                                            'std_dev': residual_std_dev}
-            materials_polyfits_short[columns[initial_index]] = polyfit_and_confidence_short
+    columns = list(vestas_data.columns)  # Use .columns for pandas DataFrame
 
-            intersection_poly = np.poly1d(short_predict_mat - predict_mat)
-            intersection_x = np.roots(intersection_poly)
-            intersection[columns[initial_index]] = intersection_x
+    # Define material categories for short-range adjustments
+    materials_to_adjust_3mw = ['PUR', 'PVC']
+    materials_to_adjust_1mw = ['Low alloy steel', 'Chromium steel', 'Epoxy resin', 'Fiberglass', 'Rubber', 'Aluminium']
 
+    # Iterate through material columns starting after 'Low alloy steel' up to 'Lubricating oil'
+    try:
+        initial_col_index = columns.index('Low alloy steel') + 1
+        last_col_index = columns.index('Lubricating oil')
+    except ValueError as e:
+        print(f"Error: Required column not found in turbine materials data: {e}")
+        return materials_polyfits, materials_polyfits_short, intersection
+
+    current_col_index = initial_col_index
+    while current_col_index <= last_col_index:
+        material_name = columns[current_col_index]
+        is_short_range_material = False
+        short_data_mask = None  # Initialize mask
+
+        if material_name in materials_to_adjust_3mw:
+            short_data_mask = vestas_data['Power (MW)'] <= 3.0
+            is_short_range_material = True
+        elif material_name in materials_to_adjust_1mw:
+            short_data_mask = vestas_data['Power (MW)'] <= 1.0
+            is_short_range_material = True
+
+        # Full range data for current material, using 'Power (MW)' as x
+        x_full = vestas_data['Power (MW)']
+        y_full = vestas_data[material_name]
+        valid_full = ~np.isnan(x_full) & ~np.isnan(y_full)
+        x_full = x_full[valid_full]
+        y_full = y_full[valid_full]
+
+        # Fit full range model
+        full_model_fit = fit_model(x_full, y_full, material_name + ' (Full Range)', proportional=False)
+        materials_polyfits[material_name] = {
+            'polyfit': full_model_fit['polyfit'],
+            'confidence_95%': full_model_fit['confidence_95%'],
+            'std_dev': full_model_fit['std_dev'],
+            'residual_distribution': full_model_fit['residual_distribution']
+        }
+
+        # If it's a short-range material, fit the short-range model as well
+        if is_short_range_material and short_data_mask is not None:
+            short_vestas_data = vestas_data[short_data_mask]
+            x_short = short_vestas_data['Power (MW)']
+            y_short = short_vestas_data[material_name]
+            valid_short = ~np.isnan(x_short) & ~np.isnan(y_short)
+            x_short = x_short[valid_short]
+            y_short = y_short[valid_short]
+
+            # Fit short range model (proportional to 0,0)
+            short_model_fit = fit_model(x_short, y_short, material_name + ' (Short Range)', proportional=True)
+            materials_polyfits_short[material_name] = {
+                'polyfit': short_model_fit['polyfit'],
+                'confidence_95%': short_model_fit['confidence_95%'],
+                'std_dev': short_model_fit['std_dev'],
+                'residual_distribution': short_model_fit['residual_distribution']
+            }
+
+            # Calculate intersection
+            if isinstance(full_model_fit['polyfit'], np.poly1d) and isinstance(short_model_fit['polyfit'], np.poly1d):
+                intersection_points = calculate_intersection(full_model_fit['polyfit'], short_model_fit['polyfit'])
+                intersection[material_name] = intersection_points
+            else:
+                print(
+                    f"Skipping intersection calculation for {material_name}: One or both polyfit objects are invalid.")
+                intersection[material_name] = np.array([])  # Store empty array if intersection can't be calculated
+
+        # Plot if requested
         if plot_mat:
-            plot_materials(x=new_x, y=new_y, residuals=residuals, interpolation_eq=predict_mat, confidence=confidence,
-                           xlabel='Power (MW)', ylabel=columns[initial_index] + ' (t)', title=columns[initial_index])
-        initial_index += 1
+            # Main regression plot for full range
+            if isinstance(full_model_fit['polyfit'], np.poly1d):
+                residuals_full = y_full - full_model_fit['polyfit'](x_full)
+                plot_materials(
+                    x=x_full, y=y_full,
+                    residuals=residuals_full,
+                    interpolation_eq=full_model_fit['polyfit'],
+                    confidence=full_model_fit['confidence_95%'],
+                    xlabel='Power (MW)',
+                    ylabel=f"{material_name} (t)",
+                    title=f"{material_name} (Full Range)"
+                )
+                # Q-Q plot for full range residuals
+                plot_qq_plot(residuals_full, f"{material_name} (Full Range)", full_model_fit['residual_distribution'])
+            else:
+                print(f"Skipping plot for {material_name} (Full Range): Model fit was not successful.")
+
+            if is_short_range_material and short_data_mask is not None:
+                if isinstance(short_model_fit['polyfit'], np.poly1d):
+                    # Q-Q plot for short range residuals
+                    residuals_short = y_short - short_model_fit['polyfit'](x_short)
+                    plot_materials(
+                        x=x_short, y=y_short,
+                        residuals=residuals_short,
+                        interpolation_eq=short_model_fit['polyfit'],
+                        confidence=short_model_fit['confidence_95%'],
+                        xlabel='Power (MW)',
+                        ylabel=f"{material_name} (t)",
+                        title=f"{material_name} (Short Range)"
+                    )
+                    plot_qq_plot(residuals_short, f"{material_name} (Short Range)",
+                                 short_model_fit['residual_distribution'])
+                else:
+                    print(f"Skipping plot for {material_name} (Short Range): Model fit was not successful.")
+
+        current_col_index += 1
     return materials_polyfits, materials_polyfits_short, intersection
 
 
@@ -161,94 +241,102 @@ def rare_earth(generator_type: Literal['dd_eesg', 'dd_pmsg', 'gb_pmsg', 'gb_dfig
     return rare_earth_int
 
 
-def foundations_mat(mat_file: str, plot_mat=False):
+def foundations_mat(mat_file: str, plot_mat=False, regression_adjustment: Literal['D2h', 'Hub height'] = 'D2h'):
     """
     It returns a dictionary 'materials_polyfits' that contains the fitting curves of all the materials (steel, turbine
-    and foundations). The dictionary has the keys 'polyfit' and 'confidence_95%' where the values are stored.
+    and foundations). The dictionary has the keys 'polyfit', 'confidence_95%', 'std_dev', and 'residual_distribution'
+    where the values are stored.
     If plot_mat is set to True, all the materials fitting plots will be shown.
     """
-    materials_polyfits, mat_polyfits_short, intersection = other_turbine_materials()
-    vestas_data = pd.read_excel(mat_file, sheet_name="1_MATERIALS_FOUNDATIONS", dtype=None, decimal=";", header=0)
-    columns = list(vestas_data)
-    last_index = columns.index('Concrete')
-    initial_index = columns.index('Low alloy steel')
-    while initial_index <= last_index:
-        x = vestas_data[
-            columns[columns.index('Power (MW)')]]  # power (MW). Maybe in the future I use tip momentum (D^2*h)
-        y = vestas_data[columns[initial_index]]  # material mass (t)
+    # Start by getting turbine materials data from the existing function
+    (materials_polyfits, mat_polyfits_short,
+     intersection) = other_turbine_materials(regression_adjustment=regression_adjustment)
+
+    # Load foundations data
+    vestas_data = load_vestas_data(mat_file, "1_MATERIALS_FOUNDATIONS")
+    columns = list(vestas_data.columns)
+
+    # Find the indices for materials within the foundations sheet
+    try:
+        initial_col_index = columns.index('Low alloy steel')
+        last_col_index = columns.index('Concrete')
+        power_mw_col_index = columns.index('Power (MW)')
+    except ValueError as e:
+        print(f"Error: Required column not found in foundations data: {e}")
+        return materials_polyfits, mat_polyfits_short, intersection
+
+    # Iterate through material columns for foundations
+    current_col_index = initial_col_index
+    while current_col_index <= last_col_index:
+        material_name = columns[current_col_index]
+        x = vestas_data[columns[power_mw_col_index]]  # Power (MW)
+        y = vestas_data[material_name]  # Material mass (t)
+
         valid_indices = ~np.isnan(x) & ~np.isnan(y)
         new_x = x[valid_indices]
         new_y = y[valid_indices]
-        fit = np.polyfit(new_x, new_y, 1)
-        predict_mat = np.poly1d(fit)
-        residuals = new_y - predict_mat(new_x)
-        residual_variance = np.mean(residuals ** 2)
-        residual_std_dev = np.sqrt(residual_variance)
-        std_error = np.sqrt(np.mean(residuals ** 2))
-        confidence = 1.96 * std_error
-        polyfit_and_confidence = {}
-        polyfit_and_confidence['polyfit'] = predict_mat
-        polyfit_and_confidence['confidence_95%'] = confidence
-        polyfit_and_confidence['std_dev'] = residual_std_dev
-        materials_polyfits[columns[initial_index] + '_foundations'] = polyfit_and_confidence
+
+        # Use the robust fit_model function
+        # Assuming linear fit for foundation materials, not proportional
+        model_fit = fit_model(new_x, new_y, material_name + ' (Foundations)', proportional=False)
+
+        # Store the results in the dictionary
+        materials_polyfits[material_name + '_foundations'] = {
+            'polyfit': model_fit['polyfit'],
+            'confidence_95%': model_fit['confidence_95%'],
+            'std_dev': model_fit['std_dev'],
+            'residual_distribution': model_fit['residual_distribution']
+        }
+
         if plot_mat:
-            plot_materials(x=new_x, y=new_y, residuals=residuals, interpolation_eq=predict_mat, confidence=confidence,
-                           xlabel='Power (MW)', ylabel=columns[initial_index] + ' (t)', title=columns[initial_index])
-        initial_index += 1
+            # Only plot if the model fit was successful (polyfit is a valid object)
+            if isinstance(model_fit['polyfit'], np.poly1d):
+                residuals = new_y - model_fit['polyfit'](new_x)
+                plot_materials(
+                    x=new_x, y=new_y,
+                    residuals=residuals,
+                    interpolation_eq=model_fit['polyfit'],
+                    confidence=model_fit['confidence_95%'],
+                    xlabel='Power (MW)',
+                    ylabel=f"{material_name} (t)",
+                    title=f"{material_name} (Foundations)"
+                )
+                # Generate Q-Q plot for foundations material residuals
+                plot_qq_plot(residuals, f"{material_name} (Foundations)", model_fit['residual_distribution'])
+            else:
+                print(
+                    f"Skipping plot for {material_name} (Foundations): Model fit was not successful or data was insufficient.")
+
+        current_col_index += 1
     return materials_polyfits, mat_polyfits_short, intersection
 
 
-def plot_materials(x, y, residuals, interpolation_eq, confidence, xlabel: str, ylabel: str, title: str, grid=True,
-                   adjusted_plot=True):
-    """
-    for the scatter points of x and y, given the residuals, fitting curve (interpolation_eq), and confidence 95% (value
-    that stablishes the minimim and maximum deviation from the mean that guarantees that 95% of the values will fall in
-    that range), it shows the corresponding plot. It's not saving it, just showing.
-    Note:
-    The variable adjusted_plot allows to extend the plot from 0 to 15 MW.
-    """
-    y_mean = np.mean(y)
-    ss_total = np.sum((y - y_mean) ** 2)
-    ss_residual = np.sum(residuals ** 2)
-    r_squared = 1 - (ss_residual / ss_total)
-    if adjusted_plot:
-        x_interpolate = np.linspace(min(x), max(x), 100)
-        y_interpolated = interpolation_eq(x_interpolate)
-    else:
-        x_interpolate = np.linspace(0, 15, 100)
-        y_interpolated = interpolation_eq(x_interpolate)
-    # Plot the data, fitted curve, and confidence interval
-    plt.figure(figsize=(10, 6))
-    plt.scatter(x, y, color='blue')
-    plt.plot(x_interpolate, y_interpolated, color='red')
-    plt.fill_between(x_interpolate, y_interpolated - confidence, y_interpolated + confidence,
-                     color='red', alpha=0.2)
-    plt.annotate(f"R-squared = {r_squared:.2f}", xy=(0.05, 0.9), xycoords='axes fraction', fontsize=10)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.title(title)
-    plt.grid(grid)
-    plt.show()
-
-
 def materials_mass(generator_type: Literal['dd_eesg', 'dd_pmsg', 'gb_pmsg', 'gb_dfig'],
-                   turbine_power: float, hub_height: float):
+                   turbine_power: float, hub_height: float, rotor_diameter: float,
+                   regression_adjustment: Literal['D2h', 'Hub height'] = 'D2h'):
     """
     returns a dictionary 'mass_materials' with material names as keys and their masses in kg as values.
     generator_type: it only accepts the models (strings) 'dd_eesg', 'dd_pmsg', 'gb_pmsg', 'gb_dfig'.
     """
     mass_materials = {}
-    materials_polyfits, mat_polyfits_short, intersection = foundations_mat(config_parameters.VESTAS_FILE)
+    (materials_polyfits, mat_polyfits_short,
+     intersection) = foundations_mat(mat_file=VESTAS_FILE, regression_adjustment=regression_adjustment)
 
     uncertainty = {}
-
-    turbine_power_is_larger = hub_height > intersection['Low alloy steel'].item()
+    if regression_adjustment == 'Hub height':
+        turbine_power_is_larger = hub_height > intersection['Low alloy steel'].item()
+    else:
+        turbine_power_is_larger = hub_height * rotor_diameter * rotor_diameter > intersection['Low alloy steel'].item()
     if not turbine_power_is_larger:
         materials_polyf = mat_polyfits_short
     else:
         materials_polyf = materials_polyfits
     uncertainty['Low alloy steel'] = materials_polyf['Low alloy steel']['std_dev']
-    steel_mass_turbine = materials_polyf['Low alloy steel']['polyfit'](hub_height) * 1000
+    if regression_adjustment == 'Hub height':
+        steel_mass_turbine = materials_polyf['Low alloy steel']['polyfit'](hub_height) * 1000
+    else:
+        steel_mass_turbine = (materials_polyf['Low alloy steel']['polyfit']
+                              (hub_height * rotor_diameter * rotor_diameter) * 1000)
     mass_materials['Low alloy steel'] = steel_mass_turbine
 
     is_larger_true_list = []
@@ -325,7 +413,7 @@ def cabling_materials(turbine_power: float, rotor_diameter: float, number_of_tur
     return cable_mat_mass
 
 
-def mva500_transformer(new_db, cutoff391):
+def mva500_transformer(new_db: bd.Database, cutoff391: bd.Database, ei_index: dict):
     """
     It creates the activity "Power transformer TrafoStar 500 MVA" in the database 'new_db' in brightway2. It returns
     the recently created transformer activity as a variable.
@@ -333,65 +421,105 @@ def mva500_transformer(new_db, cutoff391):
     """
     if not [act for act in new_db if 'Power transformer TrafoStar 500 MVA' in act['name']]:
         new_act = new_db.new_activity(name="Power transformer TrafoStar 500 MVA", unit='unit', code='TrafoStar_500')
-        new_act['reference product'] = "Power transformer TrafoStar 500 MVA"
+        new_act['reference product'] = 'power transformer'
         new_act.save()
 
         # electric steel
-        steel = cutoff391.get(code='b3d48f2f5446c645c128b06b5de93f21')
+        steel = find_unique_act(index=ei_index,
+                                database=cutoff391,
+                                name='steel production, electric, low-alloyed',
+                                location='Europe without Switzerland and Austria',
+                                reference_product='steel, low-alloyed')
         new_exc = new_act.new_exchange(input=steel.key, amount=99640.0, unit="kilogram", type='technosphere')
         new_exc.save()
         new_act.save()
 
         # transformer oil
-        oil = cutoff391.get(code='92391c8c6958ada25b22935e3fa6f06f')
+        oil = find_unique_act(index=ei_index,
+                              database=cutoff391,
+                              name='market for lubricating oil',
+                              location='RER',
+                              reference_product='lubricating oil')
         new_exc = new_act.new_exchange(input=oil.key, amount=63000.0, unit="kilogram", type='technosphere')
         new_exc.save()
         new_act.save()
 
         # copper
-        copper = cutoff391.get(code='8b62f30ed586a5f23611ef196cc97b93')
+        copper = find_unique_act(index=ei_index,
+                                 database=cutoff391,
+                                 name='market for copper, cathode',
+                                 location='GLO',
+                                 reference_product='copper, cathode')
         new_exc = new_act.new_exchange(input=copper.key, amount=39960.0, unit="kilogram", type='technosphere')
         new_exc.save()
         new_act.save()
 
         # insulation
-        insulation = cutoff391.get(code='1548660cbdd613eab4b00ddbd388c490')
+        insulation = find_unique_act(index=ei_index,
+                                     database=cutoff391,
+                                     name='market for glass wool mat',
+                                     location='GLO',
+                                     reference_product='glass wool mat')
         new_exc = new_act.new_exchange(input=insulation.key, amount=6500.0, unit="kilogram", type='technosphere')
         new_exc.save()
         new_act.save()
 
         # wood
-        wood = cutoff391.get(code='31d3bc7c09fc6efcd9c626cca48f6e47')
+        wood = find_unique_act(index=ei_index,
+                               database=cutoff391,
+                               name='planing, board, softwood, u=20%',
+                               location='CH',
+                               reference_product='sawnwood, board, softwood, dried (u=20%), planed')
         new_exc = new_act.new_exchange(input=wood.key, amount=15000.0, unit="kilogram", type='technosphere')
         new_exc.save()
         new_act.save()
 
         # porcelain
-        porcelain = cutoff391.get(code='245eaef2fb637e428e0425deb295ec37')
+        porcelain = find_unique_act(index=ei_index,
+                                    database=cutoff391,
+                                    name='market for ceramic tile',
+                                    location='GLO',
+                                    reference_product='ceramic tile')
         new_exc = new_act.new_exchange(input=porcelain.key, amount=2650.0, unit="kilogram", type='technosphere')
         new_exc.save()
         new_act.save()
 
         # construction steel
-        c_steel = cutoff391.get(code='d872e0d78319cb13e12b96de83e19dd7')
+        c_steel = find_unique_act(index=ei_index,
+                                  database=cutoff391,
+                                  name='market for steel, unalloyed',
+                                  location='GLO',
+                                  reference_product='steel, unalloyed')
         new_exc = new_act.new_exchange(input=c_steel.key, amount=53618.0, unit="kilogram", type='technosphere')
         new_exc.save()
         new_act.save()
 
         # paint
-        paint = cutoff391.get(code='9291eac91d350e0a56be6f433a25ad3a')
+        paint = find_unique_act(index=ei_index,
+                                database=cutoff391,
+                                name='market for electrostatic paint',
+                                location='GLO',
+                                reference_product='electrostatic paint')
         new_exc = new_act.new_exchange(input=paint.key, amount=2200.0, unit="kilogram", type='technosphere')
         new_exc.save()
         new_act.save()
 
         # electricity, medium
-        elec = cutoff391.get(code='0e4b280caeeba40d5644b8d28328b0de')
+        elec = find_unique_act(index=ei_index,
+                               database=cutoff391,
+                               name='market for electricity, medium voltage',
+                               location='SE',
+                               reference_product='electricity, medium voltage')
         new_exc = new_act.new_exchange(input=elec.key, amount=750000.0, unit="kilowatt hour", type='technosphere')
         new_exc.save()
         new_act.save()
 
         # heat
-        heat = cutoff391.get(code='e73087e282f26de5d3a9fec2edc19e61')
+        heat = find_unique_act(index=ei_index,
+                               database=cutoff391,
+                               name='heat, from municipal waste incineration to generic market for heat district or industrial, other than natural gas',
+                               location='SE',
+                               reference_product='heat, district or industrial, other than natural gas')
         new_exc = new_act.new_exchange(input=heat.key, amount=1080000.0, unit="megajoule", type='technosphere')
         new_exc.save()
         new_act.save()
@@ -405,8 +533,8 @@ def mva500_transformer(new_db, cutoff391):
     return transformer
 
 
-def manipulate_steel_activities(new_db, cutoff391,
-                                commissioning_year: int, recycled_share: float = None,
+def manipulate_steel_activities(new_db: bd.Database, cutoff391: bd.Database, ei_index: dict, commissioning_year: int,
+                                recycled_share: float = None,
                                 electricity_mix: Optional[Literal['Europe', 'Poland', 'Norway']] = None,
                                 printed_warning: bool = False):
     """
@@ -439,7 +567,7 @@ def manipulate_steel_activities(new_db, cutoff391,
                                                        '"Norway" or "Europe". A European electricity mix will '
                                                        'be applied by default!!')
     if str(commissioning_year) not in list(
-            consts.secondary_steel.keys()) and recycled_share is None and not printed_warning:
+            consts.SECONDARY_STEEL.keys()) and recycled_share is None and not printed_warning:
         if commissioning_year > 2021:
             print('WARNING. This wind turbine was commissioned after 2021 for which WindTrace '
                   'does not have data from the steel industry. '
@@ -452,23 +580,24 @@ def manipulate_steel_activities(new_db, cutoff391,
                   'rate if you have an estimation. Otherwise, 41.6% of recycled steel will be considered by '
                   'default.')
             print('Steel recycling share: 41.6%')
+
     if recycled_share is None and electricity_mix is None:
         if not printed_warning:
             print('WARNING. You did not select any electricity_mix. '
                   'The mean shares by country applied in the steel industry between 2017 and 2021 will be used')
-            print('Electricity mix: European mix provided by Eurofer')
+            print('Electricity mix: European mix from Eurofer')
         act_name = "market for steel, low-alloyed, " + str(commissioning_year - 1)
         code_name = "steel, " + str(commissioning_year - 1)
         try:
             steel_act = new_db.get(code=code_name)
-        except Exception as e:
+        except Exception:
             steel_act = None
     else:
         act_name = "market for steel, low-alloyed, defined " + str(recycled_share) + str(electricity_mix)
         code_name = "steel, defined " + str(recycled_share) + str(electricity_mix)
         try:
             steel_act = new_db.get(code=code_name)
-        except Exception as e:
+        except Exception:
             steel_act = None
 
     # check if we already created a steel market for that year and skip if we did
@@ -478,12 +607,20 @@ def manipulate_steel_activities(new_db, cutoff391,
 
     if steel_act_check == 0:
         # find recycled steel production activity in Ecoinvent
-        recycled_ei = cutoff391.get(code='b3d48f2f5446c645c128b06b5de93f21')
+        recycled_ei = find_unique_act(index=ei_index,
+                                      database=cutoff391,
+                                      name='steel production, electric, low-alloyed',
+                                      location='Europe without Switzerland and Austria',
+                                      reference_product='steel, low-alloyed')
         # find primary steel production activity in Ecoinvent
-        primary_ei = cutoff391.get(code='89cb4e1a47b707fe43b99135b81fcaba')
+        primary_ei = find_unique_act(index=ei_index,
+                                     database=cutoff391,
+                                     name='steel production, converter, low-alloyed',
+                                     location='RER',
+                                     reference_product='steel, low-alloyed')
         # Create a copy to manipulate them in the new_db database
-        recycled_act = recycled_ei.copy(database=config_parameters.NEW_DB_NAME)
-        primary_act = primary_ei.copy(database=config_parameters.NEW_DB_NAME)
+        recycled_act = recycled_ei.copy(database=NEW_DB_NAME)
+        primary_act = primary_ei.copy(database=NEW_DB_NAME)
         acts = [recycled_act, primary_act]
 
         # Manipulate both the primary and secondary activities in the same way
@@ -506,11 +643,21 @@ def manipulate_steel_activities(new_db, cutoff391,
             # Add new exchanges with adjusted location. The total amount of gas and electricity inputs are maintained
             # from the original Ecoinvent activity. The only main change is the share of each country.
             if electricity_mix is None:
-                for country in consts.steel_data_EU27.keys():
-                    elect_act = cutoff391.get(code=consts.steel_data_EU27[country]['elect_code'])
-                    gas_act = cutoff391.get(code=consts.steel_data_EU27[country]['gas_code'])
-                    elect_amount = total_elect_amount * consts.steel_data_EU27[country]['share'] / 100
-                    gas_amount = total_gas_amount * consts.steel_data_EU27[country]['share'] / 100
+                for country in consts.STEEL_DATA_EU27.keys():
+                    elect_act = find_unique_act(index=ei_index,
+                                                database=cutoff391,
+                                                name=consts.STEEL_DATA_EU27[country]['elect']['name'],
+                                                location=consts.STEEL_DATA_EU27[country]['elect']['location'],
+                                                reference_product=consts.STEEL_DATA_EU27[country]['elect'][
+                                                    'reference product'])
+                    gas_act = find_unique_act(index=ei_index,
+                                              database=cutoff391,
+                                              name=consts.STEEL_DATA_EU27[country]['gas']['name'],
+                                              location=consts.STEEL_DATA_EU27[country]['gas']['location'],
+                                              reference_product=consts.STEEL_DATA_EU27[country]['gas']
+                                              ['reference product'])
+                    elect_amount = total_elect_amount * consts.STEEL_DATA_EU27[country]['share'] / 100
+                    gas_amount = total_gas_amount * consts.STEEL_DATA_EU27[country]['share'] / 100
                     new_elect_ex = act.new_exchange(input=elect_act, amount=elect_amount, unit='kilowatt hour',
                                                     type='technosphere')
                     new_gas_ex = act.new_exchange(input=gas_act, amount=gas_amount, unit='cubic meter',
@@ -519,9 +666,14 @@ def manipulate_steel_activities(new_db, cutoff391,
                     new_gas_ex.save()
             else:
                 # gas is always changed independently of the electricity mix chosen
-                for country in consts.steel_data_EU27.keys():
-                    gas_act = cutoff391.get(code=consts.steel_data_EU27[country]['gas_code'])
-                    gas_amount = total_gas_amount * consts.steel_data_EU27[country]['share'] / 100
+                for country in consts.STEEL_DATA_EU27.keys():
+                    gas_act = find_unique_act(index=ei_index,
+                                              database=cutoff391,
+                                              name=consts.STEEL_DATA_EU27[country]['gas']['name'],
+                                              location=consts.STEEL_DATA_EU27[country]['gas']['location'],
+                                              reference_product=consts.STEEL_DATA_EU27[country]['gas']
+                                              ['reference product'])
+                    gas_amount = total_gas_amount * consts.STEEL_DATA_EU27[country]['share'] / 100
                     new_gas_ex = act.new_exchange(input=gas_act, amount=gas_amount, unit='cubic meter',
                                                   type='technosphere')
                     new_gas_ex.save()
@@ -561,13 +713,13 @@ def manipulate_steel_activities(new_db, cutoff391,
             if len(ch_act) == 0:
                 ch_steel_act_cutoff = [a for a in cutoff391 if a._data['name'] ==
                                        'market for steel, chromium steel 18/8'][0]
-                ch_steel_act_newdb = ch_steel_act_cutoff.copy(database=config_parameters.NEW_DB_NAME)
+                ch_steel_act_newdb = ch_steel_act_cutoff.copy(database=NEW_DB_NAME)
                 ch_steel_act_newdb._data['name'] = 'market for steel, chromium steel 18/8' + str(electricity_mix)
                 ch_steel_act_newdb.save()
                 ch_steel_electric_input = [e.input for e in ch_steel_act_newdb.technosphere() if
                                            'transport' not in e.input._data['name'] and e.input._data[
                                                'location'] == 'RER'][0]
-                ch_steel_act = ch_steel_electric_input.copy(database=config_parameters.NEW_DB_NAME)
+                ch_steel_act = ch_steel_electric_input.copy(database=NEW_DB_NAME)
                 ch_steel_act._data['name'] = 'steel production, electric, chromium steel 18/8' + str(electricity_mix)
                 ch_steel_act.save()
                 # Calculate the total amount of electricity inputs in the activity
@@ -622,7 +774,7 @@ def manipulate_steel_activities(new_db, cutoff391,
         # Create an empty market activity in new_db
         try:
             steel_market = new_db.new_activity(name=act_name, code=code_name, unit='kilogram', location='RER')
-            steel_market['reference product'] = act_name
+            steel_market['reference product'] = 'steel, low-alloyed'
             steel_market.save()
         except bd.errors.DuplicateNode:
             steel_market = new_db.get(code=code_name)
@@ -630,12 +782,12 @@ def manipulate_steel_activities(new_db, cutoff391,
         # Add exchanges with the annual share of primary a secondary steel to the recently created activity
         # Historic primary and secondary shares according to Eurofer data.
         if recycled_share is None:
-            if str(commissioning_year - 1) in consts.secondary_steel.keys():
+            if str(commissioning_year - 1) in consts.SECONDARY_STEEL.keys():
                 # We assume that the turbine was manufactured a year before the commissioning date
-                secondary_amount = consts.secondary_steel[str(commissioning_year - 1)]
+                secondary_amount = consts.SECONDARY_STEEL[str(commissioning_year - 1)]
                 primary_amount = 1 - secondary_amount
             else:
-                secondary_amount = consts.secondary_steel['other']
+                secondary_amount = consts.SECONDARY_STEEL['other']
                 primary_amount = 1 - secondary_amount
             # Add primary steel
             primary_ex = steel_market.new_exchange(input=primary_act, amount=primary_amount, unit='kilogram',
@@ -674,8 +826,8 @@ def manipulate_steel_activities(new_db, cutoff391,
         print('Something went wrong during the creation of the steel market')
 
 
-def lci_materials(new_db, cutoff391,
-                  park_name: str, park_power: float, number_of_turbines: int, park_location: str,
+def lci_materials(new_db: bd.Database, cutoff391: bd.Database, ei_index: dict, park_name: str, park_power: float,
+                  number_of_turbines: int, park_location: str,
                   park_coordinates: tuple,
                   manufacturer: Literal['Vestas', 'Siemens Gamesa', 'Nordex', 'Enercon', 'LM Wind'],
                   rotor_diameter: float,
@@ -685,6 +837,7 @@ def lci_materials(new_db, cutoff391,
                   electricity_mix_steel: Optional[Literal['Norway', 'Europe', 'Poland']] = None,
                   generator_type: Literal['dd_eesg', 'dd_pmsg', 'gb_pmsg', 'gb_dfig'] = 'gb_dfig',
                   include_life_cycle_stages: bool = True,
+                  regression_adjustment: Literal['D2h', 'Hub height'] = 'D2h',
                   comment: str = ''):
     """
     It creates the activities 'park_name_single_turbine' (code: 'park_name_single_turbine'),
@@ -698,19 +851,19 @@ def lci_materials(new_db, cutoff391,
     try:
         turbine_act = new_db.new_activity(name=park_name + '_single_turbine', code=park_name + '_single_turbine',
                                           location=park_location, unit='unit', comment=comment)
-        turbine_act['reference product'] = 'wind turbine'
+        turbine_act['reference product'] = f'{park_name}_single_turbine'
         turbine_act.save()
         new_exc = turbine_act.new_exchange(input=turbine_act.key, amount=1.0, unit="unit", type='production')
         new_exc.save()
-
+        turbine_act.save()
     except bd.errors.DuplicateNode:
         print(
-            'An inventory for a park with the name ' + '"' + park_name + '"' + 'was already created before in the '
+            'An inventory for a park with the name ' + '"' + park_name + '"' + ' was already created before in the '
                                                                                'database ')
         print('"new_db". You may want to think about giving '
               'another name to the wind park you are trying to '
               'analyse. Otherwise, you may want to delete '
-              'the content of "new_db" by runing delete_new_db().')
+              'the content of "new_db" by running delete_db().')
         print(
             'WARNING: if you run delete_new_db() '
             'ALL WIND PARKS STORED IN THAT DATABASE WILL '
@@ -718,19 +871,18 @@ def lci_materials(new_db, cutoff391,
         sys.exit()
 
     cables_act = new_db.new_activity(name=park_name + '_cables', code=park_name + '_intra_cables', unit='unit')
-    cables_act['reference product'] = 'wind park cables'
+    cables_act['reference product'] = f'{park_name}_cables'
     cables_act.save()
     new_exc = cables_act.new_exchange(input=cables_act.key, amount=1.0, unit="unit", type='production')
     new_exc.save()
-
+    cables_act.save()
 
     # create an activity for each life cycle stage
     if include_life_cycle_stages:
-        print('creating an activity for each life-cycle stage')
         # 1. materials
         materials_act = new_db.new_activity(name=park_name + '_materials', code=park_name + '_materials',
                                             location=park_location, unit='unit')
-        materials_act['reference product'] = 'wind turbine materials'
+        materials_act['reference product'] = f'{park_name}_materials'
         materials_act.save()
         new_exc = materials_act.new_exchange(input=materials_act.key, amount=1.0, unit="unit", type='production')
         new_exc.save()
@@ -738,7 +890,7 @@ def lci_materials(new_db, cutoff391,
         # 2. manufacturing
         manufacturing_act = new_db.new_activity(name=park_name + '_manufacturing', code=park_name + '_manufacturing',
                                                 location=park_location, unit='unit')
-        manufacturing_act['reference product'] = 'wind turbine manufacturer'
+        manufacturing_act['reference product'] = f'{park_name}_manufacturing'
         manufacturing_act.save()
         new_exc = manufacturing_act.new_exchange(input=manufacturing_act.key, amount=1.0, unit="unit",
                                                  type='production')
@@ -747,7 +899,7 @@ def lci_materials(new_db, cutoff391,
         # 3. transport
         transport_act = new_db.new_activity(name=park_name + '_transport', code=park_name + '_transport',
                                             location=park_location, unit='unit')
-        transport_act['reference product'] = 'wind turbine transport'
+        transport_act['reference product'] = f'{park_name}_transport'
         transport_act.save()
         new_exc = transport_act.new_exchange(input=transport_act.key, amount=1.0, unit="unit",
                                              type='production')
@@ -756,7 +908,7 @@ def lci_materials(new_db, cutoff391,
         # 4. installation
         installation_act = new_db.new_activity(name=park_name + '_installation', code=park_name + '_installation',
                                                location=park_location, unit='unit')
-        installation_act['reference product'] = 'wind turbine installation'
+        installation_act['reference product'] = f'{park_name}_installation'
         installation_act.save()
         new_exc = installation_act.new_exchange(input=installation_act.key, amount=1.0, unit="unit",
                                                 type='production')
@@ -765,7 +917,7 @@ def lci_materials(new_db, cutoff391,
         # 5. operation & maintenance
         om_act = new_db.new_activity(name=park_name + '_maintenance', code=park_name + '_maintenance',
                                      location=park_location, unit='unit')
-        om_act['reference product'] = 'wind turbine maintenance'
+        om_act['reference product'] = f'{park_name}_maintenance'
         om_act.save()
         new_exc = om_act.new_exchange(input=om_act.key, amount=1.0, unit="unit",
                                       type='production')
@@ -774,7 +926,7 @@ def lci_materials(new_db, cutoff391,
         # 6. eol
         eol_act = new_db.new_activity(name=park_name + '_eol', code=park_name + '_eol',
                                       location=park_location, unit='unit')
-        eol_act['reference product'] = 'wind turbine end of life'
+        eol_act['reference product'] = f'{park_name}_eol'
         eol_act.save()
         new_exc = eol_act.new_exchange(input=eol_act.key, amount=1.0, unit="unit",
                                        type='production')
@@ -791,19 +943,41 @@ def lci_materials(new_db, cutoff391,
     if generator_type not in ['dd_eesg', 'dd_pmsg', 'gb_pmsg', 'gb_dfig']:
         print(generator_type, 'is not an allowed value. We selected the default gb_dfig instead.')
         generator_type = 'gb_dfig'
-    mass_materials, material_polyfits = materials_mass(generator_type, turbine_power, hub_height)
+    mass_materials, material_polyfits = materials_mass(generator_type, turbine_power,
+                                                       hub_height, regression_adjustment=regression_adjustment,
+                                                       rotor_diameter=rotor_diameter)
     for material in mass_materials.keys():
         if any(element in material for element in ['Praseodymium', 'Neodymium', 'Dysprosium', 'Terbium', 'Boron']):
-            inp = cutoff391.get(code=consts.MATERIALS_EI391_ACTIVITY_CODES[material]['code'])
+            inp = find_unique_act(index=ei_index,
+                                  database=cutoff391,
+                                  name=consts.MATERIALS_EI_ACTIVITY_CODES[material]['name'],
+                                  location=consts.MATERIALS_EI_ACTIVITY_CODES[material]['location'],
+                                  reference_product=consts.MATERIALS_EI_ACTIVITY_CODES[material]['reference product']
+                                  )
             ex = materials_activity.new_exchange(input=inp, type='technosphere', amount=mass_materials[material])
             ex.save()
             materials_activity.save()
-        elif any(element in material for element in ['Low alloy steel', 'Low alloy steel_foundations']):
-            inp, ch = manipulate_steel_activities(new_db=new_db, cutoff391=cutoff391,
-                                                  commissioning_year=commissioning_year,
+        elif material == 'Low alloy steel':
+            inp, ch = manipulate_steel_activities(commissioning_year=commissioning_year,
                                                   recycled_share=recycled_share_steel,
                                                   electricity_mix=electricity_mix_steel,
-                                                  printed_warning=consts.PRINTED_WARNING_STEEL)
+                                                  printed_warning=consts.PRINTED_WARNING_STEEL,
+                                                  cutoff391=cutoff391, new_db=new_db, ei_index=ei_index)
+            consts.PRINTED_WARNING_STEEL = True
+            ex = materials_activity.new_exchange(input=inp, type='technosphere', amount=mass_materials[material])
+            # Uncertainty added as the standard deviation of the residuals
+            ex['uncertainty type'] = UniformUncertainty.id  # now it adjusts to Uniform Distribution
+            ex['loc'] = mass_materials[material]
+            ex['scale'] = material_polyfits[material] * 1000
+            ex['minimum'] = 0
+            ex.save()
+            materials_activity.save()
+        elif material == 'Low alloy steel_foundations':
+            inp, ch = manipulate_steel_activities(commissioning_year=commissioning_year,
+                                                  recycled_share=recycled_share_steel,
+                                                  electricity_mix=electricity_mix_steel,
+                                                  printed_warning=consts.PRINTED_WARNING_STEEL,
+                                                  cutoff391=cutoff391, new_db=new_db, ei_index=ei_index)
             consts.PRINTED_WARNING_STEEL = True
             ex = materials_activity.new_exchange(input=inp, type='technosphere', amount=mass_materials[material])
             # Uncertainty added as the standard deviation of the residuals
@@ -815,15 +989,21 @@ def lci_materials(new_db, cutoff391,
             materials_activity.save()
         elif (any(element in material for element in ['Chromium steel', 'Chromium steel_foundations'])
               and electricity_mix_steel is not None):
-            steel, ch = manipulate_steel_activities(new_db=new_db, cutoff391=cutoff391,
-                                                    commissioning_year=commissioning_year,
+            steel, ch = manipulate_steel_activities(commissioning_year=commissioning_year,
                                                     recycled_share=recycled_share_steel,
                                                     electricity_mix=electricity_mix_steel,
-                                                    printed_warning=consts.PRINTED_WARNING_STEEL)
+                                                    printed_warning=consts.PRINTED_WARNING_STEEL,
+                                                    new_db=new_db, cutoff391=cutoff391, ei_index=ei_index)
             if ch:
                 inp = ch[0]
             else:
-                inp = cutoff391.get(consts.MATERIALS_EI391_ACTIVITY_CODES[material]['code'])
+                inp = find_unique_act(index=ei_index,
+                                      database=cutoff391,
+                                      name=consts.MATERIALS_EI_ACTIVITY_CODES[material]['name'],
+                                      location=consts.MATERIALS_EI_ACTIVITY_CODES[material]['location'],
+                                      reference_product=consts.MATERIALS_EI_ACTIVITY_CODES[material][
+                                          'reference product']
+                                      )
             ex = materials_activity.new_exchange(input=inp, type='technosphere', amount=mass_materials[material])
             # Uncertainty added as the standard deviation of the residuals
             ex['uncertainty type'] = NormalUncertainty.id
@@ -833,7 +1013,14 @@ def lci_materials(new_db, cutoff391,
             ex.save()
             materials_activity.save()
         elif material == 'Fiberglass':
-            inp = cutoff391.get(code=consts.MATERIALS_EI391_ACTIVITY_CODES[material]['code'])
+            inp = find_unique_act(index=ei_index,
+                                  database=cutoff391,
+                                  name=consts.MATERIALS_EI_ACTIVITY_CODES[material]['name'],
+                                  location=consts.MATERIALS_EI_ACTIVITY_CODES[material]['location'],
+                                  reference_product=consts.MATERIALS_EI_ACTIVITY_CODES[material][
+                                      'reference product']
+                                  )
+
             # Mass includes 10% of waste produced in the manufacturing (Psomopoulos et al. 2019)
             ex = materials_activity.new_exchange(input=inp, type='technosphere', amount=mass_materials[material] * 1.1)
             # Uncertainty added as the standard deviation of the residuals
@@ -844,7 +1031,13 @@ def lci_materials(new_db, cutoff391,
             ex.save()
             materials_activity.save()
         elif material == 'Concrete_foundations':
-            inp = cutoff391.get(code=consts.MATERIALS_EI391_ACTIVITY_CODES[material]['code'])
+            inp = find_unique_act(index=ei_index,
+                                  database=cutoff391,
+                                  name=consts.MATERIALS_EI_ACTIVITY_CODES[material]['name'],
+                                  location=consts.MATERIALS_EI_ACTIVITY_CODES[material]['location'],
+                                  reference_product=consts.MATERIALS_EI_ACTIVITY_CODES[material][
+                                      'reference product']
+                                  )
             ex = materials_activity.new_exchange(input=inp, type='technosphere', amount=mass_materials[material])
             # Uncertainty added as the standard deviation of the residuals
             ex['uncertainty type'] = NormalUncertainty.id
@@ -854,7 +1047,13 @@ def lci_materials(new_db, cutoff391,
             ex.save()
             materials_activity.save()
         else:
-            inp = cutoff391.get(code=consts.MATERIALS_EI391_ACTIVITY_CODES[material]['code'])
+            inp = find_unique_act(index=ei_index,
+                                  database=cutoff391,
+                                  name=consts.MATERIALS_EI_ACTIVITY_CODES[material]['name'],
+                                  location=consts.MATERIALS_EI_ACTIVITY_CODES[material]['location'],
+                                  reference_product=consts.MATERIALS_EI_ACTIVITY_CODES[material][
+                                      'reference product']
+                                  )
             ex = materials_activity.new_exchange(input=inp, type='technosphere', amount=mass_materials[material])
             # Uncertainty added as the standard deviation of the residuals
             ex['uncertainty type'] = NormalUncertainty.id
@@ -870,12 +1069,26 @@ def lci_materials(new_db, cutoff391,
     for material in processing_materials_list:
         if material == 'Low alloy steel':
             # section bar rolling
-            inp = cutoff391.get(code=consts.MATERIAL_PROCESSING_EI391_ACTIVITY_CODES['Steel_tower_rolling']['code'])
+            inp = find_unique_act(index=ei_index,
+                                  database=cutoff391,
+                                  name=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES['Steel_tower_rolling']['name'],
+                                  location=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES['Steel_tower_rolling'][
+                                      'location'],
+                                  reference_product=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES['Steel_tower_rolling'][
+                                      'reference product']
+                                  )
             ex = manufacturing_activity.new_exchange(input=inp, type='technosphere', amount=mass_materials[material])
             ex.save()
             manufacturing_activity.save()
             # welding
-            inp = cutoff391.get(code=consts.MATERIAL_PROCESSING_EI391_ACTIVITY_CODES['Steel_tower_welding']['code'])
+            inp = find_unique_act(index=ei_index,
+                                  database=cutoff391,
+                                  name=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES['Steel_tower_welding']['name'],
+                                  location=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES['Steel_tower_welding'][
+                                      'location'],
+                                  reference_product=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES['Steel_tower_welding'][
+                                      'reference product']
+                                  )
             ex = manufacturing_activity.new_exchange(input=inp, type='technosphere', amount=hub_height * 2)
             ex.save()
             manufacturing_activity.save()
@@ -890,23 +1103,48 @@ def lci_materials(new_db, cutoff391,
             perimeter = np.pi * outer_diameter
             tower_surface_area = perimeter * hub_height
             # create exchange
-            inp = cutoff391.get(code=consts.MATERIAL_PROCESSING_EI391_ACTIVITY_CODES['Zinc coating']['code'])
+            inp = find_unique_act(index=ei_index,
+                                  database=cutoff391,
+                                  name=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES['Zinc coating']['name'],
+                                  location=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES['Zinc coating']['location'],
+                                  reference_product=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES['Zinc coating'][
+                                      'reference product']
+                                  )
             ex = manufacturing_activity.new_exchange(input=inp, type='technosphere', amount=tower_surface_area)
             ex.save()
             manufacturing_activity.save()
         elif 'foundations' in material and 'alloy' not in material:
             material_name = material[:material.index('_')]
-            inp = cutoff391.get(code=consts.MATERIAL_PROCESSING_EI391_ACTIVITY_CODES[material_name]['code'])
+            inp = find_unique_act(index=ei_index,
+                                  database=cutoff391,
+                                  name=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES[material_name]['name'],
+                                  location=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES[material_name]['location'],
+                                  reference_product=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES[material_name][
+                                      'reference product']
+                                  )
             ex = manufacturing_activity.new_exchange(input=inp, type='technosphere', amount=mass_materials[material])
             ex.save()
             manufacturing_activity.save()
         elif 'foundations' in material and 'alloy' in material:
-            inp = cutoff391.get(code=consts.MATERIAL_PROCESSING_EI391_ACTIVITY_CODES['Steel_tower_rolling']['code'])
+            inp = find_unique_act(index=ei_index,
+                                  database=cutoff391,
+                                  name=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES['Steel_tower_rolling']['name'],
+                                  location=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES['Steel_tower_rolling'][
+                                      'location'],
+                                  reference_product=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES['Steel_tower_rolling'][
+                                      'reference product']
+                                  )
             ex = manufacturing_activity.new_exchange(input=inp, type='technosphere', amount=mass_materials[material])
             ex.save()
             manufacturing_activity.save()
         else:
-            inp = cutoff391.get(code=consts.MATERIAL_PROCESSING_EI391_ACTIVITY_CODES[material]['code'])
+            inp = find_unique_act(index=ei_index,
+                                  database=cutoff391,
+                                  name=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES[material]['name'],
+                                  location=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES[material]['location'],
+                                  reference_product=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES[material][
+                                      'reference product']
+                                  )
             ex = manufacturing_activity.new_exchange(input=inp, type='technosphere', amount=mass_materials[material])
             ex.save()
             manufacturing_activity.save()
@@ -937,7 +1175,12 @@ def lci_materials(new_db, cutoff391,
     # add materials from the cables
     cable_mass = cabling_materials(turbine_power, rotor_diameter, number_of_turbines)
     for material in cable_mass.keys():
-        inp = cutoff391.get(code=consts.MATERIALS_EI391_ACTIVITY_CODES[material]['code'])
+        inp = find_unique_act(index=ei_index,
+                              database=cutoff391,
+                              name=consts.MATERIALS_EI_ACTIVITY_CODES[material]['name'],
+                              location=consts.MATERIALS_EI_ACTIVITY_CODES[material]['location'],
+                              reference_product=consts.MATERIALS_EI_ACTIVITY_CODES[material]['reference product']
+                              )
         ex = cables_act.new_exchange(input=inp, type='technosphere', amount=cable_mass[material])
         ex.save()
 
@@ -946,12 +1189,24 @@ def lci_materials(new_db, cutoff391,
     for material in processing_materials_list:
         if material == 'Aluminium_cables':
             # copper wire drawing
-            inp = cutoff391.get(code=consts.MATERIAL_PROCESSING_EI391_ACTIVITY_CODES['Copper']['code'])
+            inp = find_unique_act(index=ei_index,
+                                  database=cutoff391,
+                                  name=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES['Copper']['name'],
+                                  location=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES['Copper']['location'],
+                                  reference_product=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES['Copper'][
+                                      'reference product']
+                                  )
             ex = cables_act.new_exchange(input=inp, type='technosphere', amount=cable_mass['Aluminium'])
             ex.save()
             cables_act.save()
         else:
-            inp = cutoff391.get(code=consts.MATERIAL_PROCESSING_EI391_ACTIVITY_CODES[material]['code'])
+            inp = find_unique_act(index=ei_index,
+                                  database=cutoff391,
+                                  name=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES[material]['name'],
+                                  location=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES[material]['location'],
+                                  reference_product=consts.MATERIAL_PROCESSING_EI_ACTIVITY_CODES[material][
+                                      'reference product']
+                                  )
             ex = cables_act.new_exchange(input=inp, type='technosphere', amount=cable_mass[material])
             ex.save()
             cables_act.save()
@@ -968,7 +1223,7 @@ def lci_materials(new_db, cutoff391,
     park_act = new_db.new_activity(name=park_name,
                                    code=park_name + '_' + str(park_power), location=park_location, unit='unit',
                                    comment=comment)
-    park_act['reference product'] = 'wind park'
+    park_act['reference product'] = f'{park_name}'
     park_act.save()
 
     # add turbines
@@ -980,7 +1235,7 @@ def lci_materials(new_db, cutoff391,
     cables_ex.save()
 
     # add materials from the transformer (downscaled from 500MVA to the park power)
-    transformer = mva500_transformer(new_db, cutoff391)
+    transformer = mva500_transformer(cutoff391=cutoff391, new_db=new_db, ei_index=ei_index)
     transformer_ex = park_act.new_exchange(input=transformer, type='technosphere', amount=park_power / 500)
     transformer_ex.save()
 
@@ -999,10 +1254,10 @@ def lci_materials(new_db, cutoff391,
     return total_mass_turbines
 
 
-def end_of_life(new_db, cutoff391,
-                scenario: int, park_name: str,
+def end_of_life(new_db: bd.Database, cutoff391: bd.Database, ei_index: dict, scenario: int, park_name: str,
                 generator_type: Literal['dd_eesg', 'dd_pmsg', 'gb_pmsg', 'gb_dfig'],
-                turbine_power: float, hub_height: float, include_life_cycle_stages: bool = True):
+                turbine_power: float, hub_height: float, rotor_diameter: float, include_life_cycle_stages: bool = True,
+                regression_adjustment: Literal['D2h', 'Hub height'] = 'D2h'):
     """
     This function adds the end-of-life of materials to the turbine activity.
     The variable 'scenario' is used to retrieve the dictionary with the activity codes that should be taken
@@ -1030,7 +1285,9 @@ def end_of_life(new_db, cutoff391,
         eol_activity = turbine_act
 
     # add materials from the turbine
-    mass_materials, material_polyfits = materials_mass(generator_type, turbine_power, hub_height)
+    mass_materials, material_polyfits = materials_mass(generator_type, turbine_power, hub_height,
+                                                       regression_adjustment=regression_adjustment,
+                                                       rotor_diameter=rotor_diameter)
     for material in mass_materials.keys():
         # metals
         if any(element in material for element in fe_alloys):
@@ -1039,7 +1296,13 @@ def end_of_life(new_db, cutoff391,
             # scenario == 3
             else:
                 recycling_rate = 0.52
-            inp = cutoff391.get(code=consts.EOL_S1_EI391_ACTIVITY_CODES[material]['landfill']['code'])
+            inp = find_unique_act(index=ei_index,
+                                  database=cutoff391,
+                                  name=consts.EOL_EI_ACTIVITY_CODES[material]['landfill']['name'],
+                                  location=consts.EOL_EI_ACTIVITY_CODES[material]['landfill']['location'],
+                                  reference_product=consts.EOL_EI_ACTIVITY_CODES[material]['landfill'][
+                                      'reference product']
+                                  )
             ex = eol_activity.new_exchange(input=inp, type='technosphere',
                                            amount=mass_materials[material] * (-(1 - recycling_rate)))
             ex.save()
@@ -1052,7 +1315,13 @@ def end_of_life(new_db, cutoff391,
             # scenario == 3
             else:
                 recycling_rate = 0.42
-            inp = cutoff391.get(code=consts.EOL_S1_EI391_ACTIVITY_CODES[material]['landfill']['code'])
+            inp = find_unique_act(index=ei_index,
+                                  database=cutoff391,
+                                  name=consts.EOL_EI_ACTIVITY_CODES[material]['landfill']['name'],
+                                  location=consts.EOL_EI_ACTIVITY_CODES[material]['landfill']['location'],
+                                  reference_product=consts.EOL_EI_ACTIVITY_CODES[material]['landfill'][
+                                      'reference product']
+                                  )
             ex = eol_activity.new_exchange(input=inp, type='technosphere',
                                            amount=mass_materials[material] * (-(1 - recycling_rate)))
             ex.save()
@@ -1065,7 +1334,13 @@ def end_of_life(new_db, cutoff391,
             # secenario == 3
             else:
                 recycling_rate = 0.42
-            inp = cutoff391.get(code=consts.EOL_S1_EI391_ACTIVITY_CODES[material]['landfill']['code'])
+            inp = find_unique_act(index=ei_index,
+                                  database=cutoff391,
+                                  name=consts.EOL_EI_ACTIVITY_CODES[material]['landfill']['name'],
+                                  location=consts.EOL_EI_ACTIVITY_CODES[material]['landfill']['location'],
+                                  reference_product=consts.EOL_EI_ACTIVITY_CODES[material]['landfill'][
+                                      'reference product']
+                                  )
             ex = eol_activity.new_exchange(input=inp, type='technosphere',
                                            amount=mass_materials[material] * (-(1 - recycling_rate)))
             ex.save()
@@ -1080,13 +1355,44 @@ def end_of_life(new_db, cutoff391,
             # scenario == 4
             else:
                 recycling_rate = 0.7
-            inp = cutoff391.get(code=consts.EOL_S1_EI391_ACTIVITY_CODES[material]['landfill']['code'])
+            try:
+                inp = find_unique_act(index=ei_index,
+                                      database=cutoff391,
+                                      name=consts.EOL_EI_ACTIVITY_CODES[material]['landfill']['name'],
+                                      location=consts.EOL_EI_ACTIVITY_CODES[material]['landfill']['location'],
+                                      reference_product=consts.EOL_EI_ACTIVITY_CODES[material]['landfill'][
+                                          'reference product']
+                                      )
+            except Exception:
+                inp = find_unique_act(index=ei_index,
+                                      database=cutoff391,
+                                      name=consts.EOL_EI_ACTIVITY_CODES[material]['landfill']['name'],
+                                      location='RER',
+                                      reference_product=consts.EOL_EI_ACTIVITY_CODES[material]['landfill'][
+                                          'reference product']
+                                      )
             ex = eol_activity.new_exchange(input=inp, type='technosphere',
                                            amount=mass_materials[material] * (-(1 - recycling_rate)))
             ex.save()
             eol_activity.save()
         elif any(element in material for element in plastics):
-            inp = cutoff391.get(code=consts.EOL_S1_EI391_ACTIVITY_CODES[material]['incineration']['code'])
+            try:
+                inp = find_unique_act(index=ei_index,
+                                      database=cutoff391,
+                                      name=consts.EOL_EI_ACTIVITY_CODES[material]['incineration']['name'],
+                                      location=consts.EOL_EI_ACTIVITY_CODES[material]['incineration']['location'],
+                                      reference_product=consts.EOL_EI_ACTIVITY_CODES[material]['incineration'][
+                                          'reference product']
+                                      )
+            except Exception:
+                # change of name in incinerator in 3.10
+                inp = find_unique_act(index=ei_index,
+                                      database=cutoff391,
+                                      name=f"{consts.EOL_EI_ACTIVITY_CODES[material]['incineration']['name']} FAE",
+                                      location=consts.EOL_EI_ACTIVITY_CODES[material]['incineration']['location'],
+                                      reference_product=consts.EOL_EI_ACTIVITY_CODES[material]['incineration'][
+                                          'reference product']
+                                      )
             ex = eol_activity.new_exchange(input=inp, type='technosphere', amount=mass_materials[material] * (-1))
             ex.save()
             eol_activity.save()
@@ -1094,17 +1400,45 @@ def end_of_life(new_db, cutoff391,
             # NOTE: 10% of glassfiber mass corresponds to the extra mass on the manufacturing process (i.e., waste)
             # and the waste is not accounted in here.
             if scenario == 4:
-                inp = cutoff391.get(code=consts.EOL_S1_EI391_ACTIVITY_CODES[material]['incineration']['code'])
+                inp = find_unique_act(index=ei_index,
+                                      database=cutoff391,
+                                      name=consts.EOL_EI_ACTIVITY_CODES[material]['incineration']['name'],
+                                      location=consts.EOL_EI_ACTIVITY_CODES[material]['incineration']['location'],
+                                      reference_product=consts.EOL_EI_ACTIVITY_CODES[material]['incineration'][
+                                          'reference product']
+                                      )
                 ex = eol_activity.new_exchange(input=inp, type='technosphere', amount=mass_materials[material] * (-0.3))
                 ex.save()
                 eol_activity.save()
             else:
-                inp = cutoff391.get(code=consts.EOL_S1_EI391_ACTIVITY_CODES[material]['incineration']['code'])
+                try:
+                    inp = find_unique_act(index=ei_index,
+                                          database=cutoff391,
+                                          name=consts.EOL_EI_ACTIVITY_CODES[material]['incineration']['name'],
+                                          location=consts.EOL_EI_ACTIVITY_CODES[material]['incineration']['location'],
+                                          reference_product=consts.EOL_EI_ACTIVITY_CODES[material]['incineration'][
+                                              'reference product']
+                                          )
+                except Exception:
+                    # change of name in incinerator in 3.10
+                    inp = find_unique_act(index=ei_index,
+                                          database=cutoff391,
+                                          name=f"{consts.EOL_EI_ACTIVITY_CODES[material]['incineration']['name']} FAE",
+                                          location=consts.EOL_EI_ACTIVITY_CODES[material]['incineration']['location'],
+                                          reference_product=consts.EOL_EI_ACTIVITY_CODES[material]['incineration'][
+                                              'reference product']
+                                          )
                 ex = eol_activity.new_exchange(input=inp, type='technosphere', amount=mass_materials[material] * (-1))
                 ex.save()
                 eol_activity.save()
         elif any(element in material for element in ['Lubricating oil', 'Ethyleneglycol']):
-            inp = cutoff391.get(code=consts.EOL_S1_EI391_ACTIVITY_CODES[material]['incineration']['code'])
+            inp = find_unique_act(index=ei_index,
+                                  database=cutoff391,
+                                  name=consts.EOL_EI_ACTIVITY_CODES[material]['incineration']['name'],
+                                  location=consts.EOL_EI_ACTIVITY_CODES[material]['incineration']['location'],
+                                  reference_product=consts.EOL_EI_ACTIVITY_CODES[material]['incineration'][
+                                      'reference product']
+                                  )
             ex = eol_activity.new_exchange(input=inp, type='technosphere', amount=mass_materials[material] * (-1))
             ex.save()
             eol_activity.save()
@@ -1112,25 +1446,58 @@ def end_of_life(new_db, cutoff391,
             # concrete modelled separatelly because the amount is in m3 and the landfill activity in kg
             # we use the density (2400 kg/m3)
             if scenario == 4:
-                inp = cutoff391.get(code=consts.EOL_S1_EI391_ACTIVITY_CODES[material]['landfill']['code'])
+                inp = find_unique_act(index=ei_index,
+                                      database=cutoff391,
+                                      name=consts.EOL_EI_ACTIVITY_CODES[material]['landfill']['name'],
+                                      location=consts.EOL_EI_ACTIVITY_CODES[material]['landfill']['location'],
+                                      reference_product=consts.EOL_EI_ACTIVITY_CODES[material]['landfill'][
+                                          'reference product']
+                                      )
                 ex = eol_activity.new_exchange(input=inp, type='technosphere',
                                                amount=mass_materials[material] * (-2400 * 0.5))
                 ex.save()
                 eol_activity.save()
             else:
-                inp = cutoff391.get(code=consts.EOL_S1_EI391_ACTIVITY_CODES[material]['landfill']['code'])
+                inp = find_unique_act(index=ei_index,
+                                      database=cutoff391,
+                                      name=consts.EOL_EI_ACTIVITY_CODES[material]['landfill']['name'],
+                                      location=consts.EOL_EI_ACTIVITY_CODES[material]['landfill']['location'],
+                                      reference_product=consts.EOL_EI_ACTIVITY_CODES[material]['landfill'][
+                                          'reference product']
+                                      )
                 ex = eol_activity.new_exchange(input=inp, type='technosphere',
                                                amount=mass_materials[material] * (-2400))
                 ex.save()
                 eol_activity.save()
         else:
             if scenario == 4:
-                inp = cutoff391.get(code=consts.EOL_S1_EI391_ACTIVITY_CODES[material]['landfill']['code'])
+                inp = find_unique_act(index=ei_index,
+                                      database=cutoff391,
+                                      name=consts.EOL_EI_ACTIVITY_CODES[material]['landfill']['name'],
+                                      location=consts.EOL_EI_ACTIVITY_CODES[material]['landfill']['location'],
+                                      reference_product=consts.EOL_EI_ACTIVITY_CODES[material]['landfill'][
+                                          'reference product']
+                                      )
                 ex = eol_activity.new_exchange(input=inp, type='technosphere', amount=-mass_materials[material] * 0.5)
                 ex.save()
                 eol_activity.save()
             else:
-                inp = cutoff391.get(code=consts.EOL_S1_EI391_ACTIVITY_CODES[material]['landfill']['code'])
+                try:
+                    inp = find_unique_act(index=ei_index,
+                                          database=cutoff391,
+                                          name=consts.EOL_EI_ACTIVITY_CODES[material]['landfill']['name'],
+                                          location=consts.EOL_EI_ACTIVITY_CODES[material]['landfill']['location'],
+                                          reference_product=consts.EOL_EI_ACTIVITY_CODES[material]['landfill'][
+                                              'reference product']
+                                          )
+                except Exception:
+                    inp = find_unique_act(index=ei_index,
+                                          database=cutoff391,
+                                          name=consts.EOL_EI_ACTIVITY_CODES[material]['landfill']['name'],
+                                          location='RER',
+                                          reference_product=consts.EOL_EI_ACTIVITY_CODES[material]['landfill'][
+                                              'reference product']
+                                          )
                 ex = eol_activity.new_exchange(input=inp, type='technosphere', amount=-mass_materials[material])
                 ex.save()
                 eol_activity.save()
@@ -1140,10 +1507,11 @@ def end_of_life(new_db, cutoff391,
         eol_ex.save()
 
 
-def maintenance(new_db, cutoff391,
-                park_name: str,
+def maintenance(new_db: bd.Database, cutoff391: bd.Database, ei_index: dict, park_name: str,
                 generator_type: Literal['dd_eesg', 'dd_pmsg', 'gb_pmsg', 'gb_dfig'],
-                turbine_power: float, hub_height: float, lifetime: int, include_life_cycle_stages: bool = True):
+                turbine_power: float, hub_height: float, lifetime: int, rotor_diameter: float,
+                include_life_cycle_stages: bool = True,
+                regression_adjustment: Literal['D2h', 'Hub height'] = 'D2h'):
     """
     This function adds the maintenance activities (inspection trips and oil changes) to the turbine activity.
     Inspection trips: 200 km every 6 months (Elsan Engineering, 2004)
@@ -1157,20 +1525,36 @@ def maintenance(new_db, cutoff391,
     else:
         om_activity = turbine_act
     # Inspection trips
-    inp = cutoff391.get(code='dceed1b2fd31e759a751c6dd912a45f3')
+    inp = find_unique_act(index=ei_index,
+                          database=cutoff391,
+                          name='transport, passenger car, large size, diesel, EURO 4',
+                          location='RER',
+                          reference_product='transport, passenger car, large size, diesel, EURO 4'
+                          )
     ex = om_activity.new_exchange(input=inp, type='technosphere', amount=200 * (lifetime * 2))
     ex.save()
     om_activity.save()
 
     # Change oil and lubrication
     mass_materials, m_poly = materials_mass(generator_type=generator_type,
-                                            turbine_power=turbine_power, hub_height=hub_height)
-    inp = cutoff391.get(code='92391c8c6958ada25b22935e3fa6f06f')
+                                            turbine_power=turbine_power, hub_height=hub_height,
+                                            regression_adjustment=regression_adjustment, rotor_diameter=rotor_diameter)
+    inp = find_unique_act(index=ei_index,
+                          database=cutoff391,
+                          name='market for lubricating oil',
+                          location='RER',
+                          reference_product='lubricating oil'
+                          )
     ex = om_activity.new_exchange(input=inp, type='technosphere',
                                   amount=mass_materials['Lubricating oil'] * (lifetime / 2))
     ex.save()
     om_activity.save()
-    inp = cutoff391.get(code='ad6d0f2a8b45536da196238df879077b')
+    inp = find_unique_act(index=ei_index,
+                          database=cutoff391,
+                          name='treatment of waste mineral oil, hazardous waste incineration, with energy recovery',
+                          location='Europe without Switzerland',
+                          reference_product='waste mineral oil'
+                          )
     ex = om_activity.new_exchange(input=inp, type='technosphere',
                                   amount=mass_materials['Lubricating oil'] * -(lifetime / 2))
     ex.save()
@@ -1181,11 +1565,12 @@ def maintenance(new_db, cutoff391,
         om_ex.save()
 
 
-def transport(new_db, cutoff391,
+def transport(new_db: bd.Database, cutoff391: bd.Database, ei_index: dict,
               manufacturer: Literal['Vestas', 'Siemens Gamesa', 'Nordex', 'ENERCON', 'LM Wind'],
-              park_coordinates: tuple, park_name: str,
+              park_coordinates: tuple, park_name: str, rotor_diameter: float,
               generator_type: Optional[Literal['dd_eesg', 'dd_pmsg', 'gb_pmsg', 'gb_dfig']], turbine_power: float,
-              hub_height: float, include_life_cycle_stages: bool = True):
+              hub_height: float, include_life_cycle_stages: bool = True,
+              regression_adjustment: Literal['D2h', 'Hub height'] = 'D2h'):
     """
     **Tower transport. Distance data (in km) according to Vestas report on Vestas V162-6.2 MW.**
     Limitations:
@@ -1204,7 +1589,9 @@ def transport(new_db, cutoff391,
     **General Limitations**
     1) Cable transport not included
     """
-    mat_mass, material_polyfits = materials_mass(generator_type, turbine_power, hub_height)
+    mat_mass, material_polyfits = materials_mass(generator_type, turbine_power, hub_height,
+                                                 regression_adjustment=regression_adjustment,
+                                                 rotor_diameter=rotor_diameter)
 
     for material in mat_mass.keys():
         if 'Concrete' in material:
@@ -1220,7 +1607,12 @@ def transport(new_db, cutoff391,
             others_amount = (sum(mat_mass.values()) - mat_mass['Concrete_foundations']
                              - mat_mass['Low alloy steel']) / 1000 * min(distance_dict.keys())
 
-    truck_trans = cutoff391.get(code='508cc8b20d83e7b31af9848e1fb45815')
+    truck_trans = find_unique_act(index=ei_index,
+                                  database=cutoff391,
+                                  name='market for transport, freight, lorry >32 metric ton, EURO6',
+                                  location='RER',
+                                  reference_product='transport, freight, lorry >32 metric ton, EURO6'
+                                  )
 
     turbine_act = new_db.search(park_name + '_single_turbine')[0]
     if include_life_cycle_stages:
@@ -1271,8 +1663,8 @@ def generate_events_with_probability():
                 return event_type
 
 
-def land_use(new_db,
-             turbine_power: float, park_name: str, lifetime: int, manual_land_cover: str = None,
+def land_use(new_db: bd.Database, biosphere3: bd.Database, turbine_power: float, park_name: str, lifetime: int,
+             manual_land_cover: str = None,
              include_life_cycle_stages: bool = True, land_use_permanent_intensity: int = 3000):
     """
     Function to define the flows with the biosphere regarding the land use.
@@ -1328,7 +1720,7 @@ def land_use(new_db,
     ### transformation flows ###
     # transformation, from
     try:
-        land_cover_type_activity = bd.Database('biosphere3').get(equivalence[land_cover_type]['transformation_code'])
+        land_cover_type_activity = biosphere3.get(equivalence[land_cover_type]['transformation_code'])
     except bd.errors.UnknownObject:
         print('You introduced a wrong land cover type: ' + str(manual_land_cover))
         print('Only the following land cover types are allowed: industrial_from, crops, non-irrigated, row crops, '
@@ -1338,19 +1730,19 @@ def land_use(new_db,
                                 land_use_permanent_intensity + 7000) * turbine_power  # 3000 m2/MW permanent, 7000 m2/MW temporal.
 
     # transformation, to
-    industrial_type_activity = bd.Database('biosphere3').get(equivalence['industrial']['transformation_code'])
+    industrial_type_activity = biosphere3.get(equivalence['industrial']['transformation_code'])
     amount_industrial = (
                                 0.21 * land_use_permanent_intensity + 2660) * turbine_power  # 630 m2/MW permanent, 2660 m2/MW temporal.
-    road_type_activity = bd.Database('biosphere3').get(equivalence['road']['transformation_code'])
+    road_type_activity = biosphere3.get(equivalence['road']['transformation_code'])
     amount_road = (
                           0.79 * land_use_permanent_intensity + 4340) * turbine_power  # 2370 m2/MW permanent, 4340 m2/MW temporal.
 
     # occupation flows
-    industrial_occ_activity = bd.Database('biosphere3').get(equivalence['industrial']['occupation_code'])
+    industrial_occ_activity = biosphere3.get(equivalence['industrial']['occupation_code'])
     amount_industrial_occ = (0.21 * land_use_permanent_intensity * turbine_power * lifetime) + (
             2660 * turbine_power * 2.5)  # 630 m2/MW permanent, 2660 m2/MW temporal.
     # 2.5 in years, is the mean recovery time from a temporal land cover change (data also from the report)
-    road_occ_activity = bd.Database('biosphere3').get(equivalence['road']['occupation_code'])
+    road_occ_activity = biosphere3.get(equivalence['road']['occupation_code'])
     amount_road_occ = (0.79 * land_use_permanent_intensity * turbine_power * lifetime) + (
             4340 * turbine_power * 2.5)  # 2370 m2/MW permanent, 4340 m2/MW temporal.
 
@@ -1386,7 +1778,7 @@ def land_use(new_db,
     return transformation_flows, occupation_flows
 
 
-def auxiliary_road_materials(new_db, cutoff391,
+def auxiliary_road_materials(new_db: bd.Database, cutoff391: bd.Database, ei_index: dict,
                              turbine_power: float, park_name: str, include_life_cycle_stages: bool = True):
     """
     Adds the auxiliary road materials (exchange with: market for road) to the lci.
@@ -1413,8 +1805,13 @@ def auxiliary_road_materials(new_db, cutoff391,
     road_act_in_new_db = new_db.search('road construction')
 
     if not road_act_in_new_db:
-        road_act = cutoff391.get(code='3d1d98819862a4057c75095315820d52')
-        road_new = road_act.copy(database=config_parameters.NEW_DB_NAME)
+        road_act = find_unique_act(index=ei_index,
+                                   database=cutoff391,
+                                   name='road construction',
+                                   location='RoW',
+                                   reference_product='road'
+                                   )
+        road_new = road_act.copy(database=NEW_DB_NAME)
         technosphere_activities_to_remove = ['bitumen', 'concrete', 'steel']
         for ex in road_new.biosphere():
             if 'Transformation' in ex.input._data['name'] or 'Occupation' in ex.input._data['name']:
@@ -1433,10 +1830,11 @@ def auxiliary_road_materials(new_db, cutoff391,
     new_exc.save()
 
 
-def excavation_activities(new_db, cutoff391,
+def excavation_activities(new_db: bd.Database, cutoff391: bd.Database, ei_index: dict,
                           generator_type: Literal['dd_eesg', 'dd_pmsg', 'gb_pmsg', 'gb_dfig'],
                           turbine_power: float, hub_height: float, rotor_diameter: float,
-                          number_of_turbines: int, park_name: str, include_life_cycle_stages: bool = True):
+                          number_of_turbines: int, park_name: str, include_life_cycle_stages: bool = True,
+                          regression_adjustment: Literal['D2h', 'Hub height'] = 'D2h'):
     """
     Adds to the lci the hydraulic digger activities necessary build the foundations and bury the cables.
     *Data*
@@ -1445,7 +1843,9 @@ def excavation_activities(new_db, cutoff391,
     Distance between turbines: 8*D (could be too much)
     """
     # foundations volume
-    mat_mass, material_polyfits = materials_mass(generator_type, turbine_power, hub_height)
+    mat_mass, material_polyfits = materials_mass(generator_type, turbine_power, hub_height,
+                                                 regression_adjustment=regression_adjustment,
+                                                 rotor_diameter=rotor_diameter)
     volume_steel = mat_mass['Low alloy steel_foundations'] / 7800  # 7.8 t/m3 is the density of steel
     volume_ch_steel = mat_mass['Chromium steel_foundations'] / 7190  # 7.19 t/m3 is the density of chromium steel
     # volume_copper = mat_mass['Copper_foundations'] / 8960  # 8.96 t/m3 is the density of copper
@@ -1458,7 +1858,12 @@ def excavation_activities(new_db, cutoff391,
     cabling_volume = 1.1 * 0.85 * cable_length
 
     # define brightway activities
-    digger_act = cutoff391.get(code='dc208e3cd1b01954185c03259c97a36a')
+    digger_act = find_unique_act(index=ei_index,
+                                 database=cutoff391,
+                                 name='excavation, hydraulic digger',
+                                 location='RER',
+                                 reference_product='excavation, hydraulic digger'
+                                 )
     turbine_act = new_db.search(park_name + '_single_turbine')[0]
     cables_act = new_db.search(park_name + '_cables')[0]
     if include_life_cycle_stages:
@@ -1480,8 +1885,7 @@ def excavation_activities(new_db, cutoff391,
         installation_ex.save()
 
 
-def electricity_production(new_db,
-                           park_name: str, park_power: float,
+def electricity_production(new_db: bd.Database, park_name: str, park_power: float,
                            cf: float, time_adjusted_cf: float):
     # Finds park activity to extract lifetime and turbine power (saved in comments).
     try:
@@ -1517,7 +1921,7 @@ def electricity_production(new_db,
     return elec_prod_turbine, elec_prod_park
 
 
-def lci_wind_turbine(new_db, cutoff391,
+def lci_wind_turbine(new_db: bd.Database, cutoff391: bd.Database, biosphere3: bd.Database,
                      park_name: str, park_power: float, number_of_turbines: int, park_location: str,
                      park_coordinates: tuple, manufacturer: str, rotor_diameter: int,
                      turbine_power: float, hub_height: float, commissioning_year: int,
@@ -1527,6 +1931,7 @@ def lci_wind_turbine(new_db, cutoff391,
                      lifetime: int = 20, land_use_permanent_intensity: int = 3000, land_cover_type: str = None,
                      eol_scenario: int = 1,
                      cf: float = 0.24, time_adjusted_cf: float = 0.009,
+                     regression_adjustment: Literal['D2h', 'Hub height'] = 'D2h',
                      include_life_cycle_stages: bool = True,
                      eol: bool = True, transportation: bool = True,
                      use_and_maintenance: bool = True, installation: bool = True,
@@ -1567,8 +1972,8 @@ def lci_wind_turbine(new_db, cutoff391,
                    f'land_cover_type: {land_cover_type}, eol_scenario: {eol_scenario}, cf: {cf * 100} %, '
                    f'annual attrition rate: {time_adjusted_cf}'
                    )
-    mass_materials_park = lci_materials(new_db=new_db, cutoff391=cutoff391,
-                                        park_name=park_name, park_power=park_power,
+    ei_index = build_bw_index(cutoff391)
+    mass_materials_park = lci_materials(park_name=park_name, park_power=park_power,
                                         number_of_turbines=number_of_turbines,
                                         park_location=park_location, park_coordinates=park_coordinates,
                                         manufacturer=manufacturer,
@@ -1578,45 +1983,52 @@ def lci_wind_turbine(new_db, cutoff391,
                                         lifetime=lifetime,
                                         turbine_power=turbine_power,
                                         hub_height=hub_height, commissioning_year=commissioning_year,
-                                        include_life_cycle_stages=include_life_cycle_stages, comment=comment)
+                                        include_life_cycle_stages=include_life_cycle_stages, comment=comment,
+                                        regression_adjustment=regression_adjustment,
+                                        new_db=new_db, cutoff391=cutoff391, ei_index=ei_index)
     if transportation:
-        transport(cutoff391=cutoff391, new_db=new_db,
-                  manufacturer=manufacturer, park_coordinates=park_coordinates, park_name=park_name,
+        transport(manufacturer=manufacturer, park_coordinates=park_coordinates, park_name=park_name,
                   generator_type=generator_type, turbine_power=turbine_power, hub_height=hub_height,
-                  include_life_cycle_stages=include_life_cycle_stages)
+                  include_life_cycle_stages=include_life_cycle_stages, regression_adjustment=regression_adjustment,
+                  rotor_diameter=rotor_diameter,
+                  new_db=new_db, cutoff391=cutoff391, ei_index=ei_index)
     if installation and not land_cover_type:
-        trans, occ = land_use(new_db=new_db,
-                              turbine_power=turbine_power, park_name=park_name,
+        trans, occ = land_use(turbine_power=turbine_power, park_name=park_name,
                               include_life_cycle_stages=include_life_cycle_stages, lifetime=lifetime,
-                              land_use_permanent_intensity=land_use_permanent_intensity)
-        auxiliary_road_materials(new_db=new_db, cutoff391=cutoff391,
-                                 turbine_power=turbine_power, park_name=park_name,
-                                 include_life_cycle_stages=include_life_cycle_stages)
-        excavation_activities(new_db=new_db, cutoff391=cutoff391,
-                              generator_type=generator_type, turbine_power=turbine_power, hub_height=hub_height,
+                              land_use_permanent_intensity=land_use_permanent_intensity,
+                              biosphere3=biosphere3, new_db=new_db)
+        auxiliary_road_materials(turbine_power=turbine_power, park_name=park_name,
+                                 include_life_cycle_stages=include_life_cycle_stages,
+                                 new_db=new_db, cutoff391=cutoff391, ei_index=ei_index)
+        excavation_activities(generator_type=generator_type, turbine_power=turbine_power, hub_height=hub_height,
                               rotor_diameter=rotor_diameter, number_of_turbines=number_of_turbines, park_name=park_name,
-                              include_life_cycle_stages=include_life_cycle_stages)
+                              include_life_cycle_stages=include_life_cycle_stages,
+                              regression_adjustment=regression_adjustment,
+                              new_db=new_db, cutoff391=cutoff391, ei_index=ei_index)
     elif installation and land_cover_type:
-        trans, occ = land_use(new_db=new_db,
-                              turbine_power=turbine_power, park_name=park_name, manual_land_cover=land_cover_type,
+        trans, occ = land_use(turbine_power=turbine_power, park_name=park_name, manual_land_cover=land_cover_type,
                               include_life_cycle_stages=include_life_cycle_stages, lifetime=lifetime,
-                              land_use_permanent_intensity=land_use_permanent_intensity)
-        auxiliary_road_materials(new_db=new_db, cutoff391=cutoff391,
-                                 turbine_power=turbine_power, park_name=park_name,
-                                 include_life_cycle_stages=include_life_cycle_stages)
-        excavation_activities(new_db=new_db, cutoff391=cutoff391,
-                              generator_type=generator_type, turbine_power=turbine_power, hub_height=hub_height,
+                              land_use_permanent_intensity=land_use_permanent_intensity,
+                              biosphere3=biosphere3, new_db=new_db)
+        auxiliary_road_materials(turbine_power=turbine_power, park_name=park_name,
+                                 include_life_cycle_stages=include_life_cycle_stages,
+                                 new_db=new_db, cutoff391=cutoff391, ei_index=ei_index)
+        excavation_activities(generator_type=generator_type, turbine_power=turbine_power, hub_height=hub_height,
                               rotor_diameter=rotor_diameter, number_of_turbines=number_of_turbines, park_name=park_name,
-                              include_life_cycle_stages=include_life_cycle_stages)
+                              include_life_cycle_stages=include_life_cycle_stages,
+                              regression_adjustment=regression_adjustment,
+                              new_db=new_db, cutoff391=cutoff391, ei_index=ei_index)
     if use_and_maintenance:
-        maintenance(new_db=new_db, cutoff391=cutoff391,
-                    park_name=park_name, generator_type=generator_type, turbine_power=turbine_power,
-                    hub_height=hub_height, include_life_cycle_stages=include_life_cycle_stages, lifetime=lifetime)
+        maintenance(park_name=park_name, generator_type=generator_type, turbine_power=turbine_power,
+                    hub_height=hub_height, include_life_cycle_stages=include_life_cycle_stages, lifetime=lifetime,
+                    regression_adjustment=regression_adjustment, rotor_diameter=rotor_diameter,
+                    new_db=new_db, cutoff391=cutoff391, ei_index=ei_index)
     if eol:
-        end_of_life(new_db=new_db, cutoff391=cutoff391,
-                    scenario=eol_scenario, park_name=park_name, generator_type=generator_type,
+        end_of_life(scenario=eol_scenario, park_name=park_name, generator_type=generator_type,
                     turbine_power=turbine_power,
-                    hub_height=hub_height, include_life_cycle_stages=include_life_cycle_stages)
+                    hub_height=hub_height, include_life_cycle_stages=include_life_cycle_stages,
+                    regression_adjustment=regression_adjustment, rotor_diameter=rotor_diameter,
+                    new_db=new_db, cutoff391=cutoff391,ei_index=ei_index)
 
     # Create electricity_production activity per turbine and per park (per kWh)
     try:
@@ -1627,7 +2039,7 @@ def lci_wind_turbine(new_db, cutoff391,
             cf_comment = 'CF: ' + str(cf) + '. Constant CF (no attrition rate)'
         elec_prod_turbine_act = new_db.new_activity(name=park_name + '_turbine_kwh', code=park_name + '_turbine_kwh',
                                                     location=park_location, unit='kilowatt hour', comment=cf_comment)
-        elec_prod_turbine_act['reference product'] = 'wind turbine'
+        elec_prod_turbine_act['reference product'] = f'{park_name}_turbine_kwh'
         elec_prod_turbine_act.save()
         new_exc = elec_prod_turbine_act.new_exchange(input=elec_prod_turbine_act.key, amount=1.0, unit='kilowatt hour',
                                                      type='production')
@@ -1635,7 +2047,7 @@ def lci_wind_turbine(new_db, cutoff391,
         # park
         elec_prod_park_act = new_db.new_activity(name=park_name + '_park_kwh', code=park_name + '_park_kwh',
                                                  location=park_location, unit='kilowatt hour', comment=cf_comment)
-        elec_prod_park_act['reference product'] = 'wind park'
+        elec_prod_park_act['reference product'] = f'{park_name}_park_kwh'
         elec_prod_park_act.save()
         new_exc = elec_prod_park_act.new_exchange(input=elec_prod_park_act.key, amount=1.0, unit='kilowatt hour',
                                                   type='production')
@@ -1651,9 +2063,9 @@ def lci_wind_turbine(new_db, cutoff391,
         sys.exit()
 
     # add infrastructure
-    elec_turbine, elec_park = electricity_production(new_db=new_db,
-                                                     park_name=park_name, park_power=park_power,
-                                                     cf=cf, time_adjusted_cf=time_adjusted_cf)
+    elec_turbine, elec_park = electricity_production(park_name=park_name, park_power=park_power,
+                                                     cf=cf, time_adjusted_cf=time_adjusted_cf,
+                                                     new_db=new_db)
     # to turbine activity
     turbine_amount = 1 / elec_turbine
     turbine_act = new_db.get(park_name + '_single_turbine')
@@ -1669,6 +2081,8 @@ def lci_wind_turbine(new_db, cutoff391,
 
     consts.PRINTED_WARNING_STEEL = False
 
+    print(f'Wind park {park_name} inventories created successfully.')
+
     if installation:
         return mass_materials_park, trans, occ
     else:
@@ -1676,11 +2090,12 @@ def lci_wind_turbine(new_db, cutoff391,
         return mass_materials_park, trans, occ
 
 
-def lca_wind_turbine(new_db,
+def lca_wind_turbine(new_db: bd.Database,
                      park_name: str, park_power: float,
                      method: str = 'ReCiPe 2016 v1.03, midpoint (H)',
                      indicators: List[Tuple[str, str, str]] = None,
-                     turbine: bool = True):
+                     turbine: bool = True,
+                     ecoinvent_v3_10: bool = False):
     """
     Based on LCIs previously built with the function lci_wind_turbine, it creates a dictionary (total_park_results)
     with the lca score results of the total park. The dictionary follows this structure:
@@ -1736,19 +2151,36 @@ def lca_wind_turbine(new_db,
     for m in methods:
         lca_obj.switch_method(m)
         lca_obj.lcia()
-        results[m[1]] = lca_obj.score
+        if ecoinvent_v3_10:
+            results[m[2]] = lca_obj.score
+        else:
+            results[m[1]] = lca_obj.score
     # per kwh
     lca_obj = act_kwh.lca(amount=1)
     for m in methods:
         lca_obj.switch_method(m)
         lca_obj.lcia()
-        results_kwh[m[1]] = lca_obj.score
+        if ecoinvent_v3_10:
+            results_kwh[m[2]] = lca_obj.score
+        else:
+            results_kwh[m[1]] = lca_obj.score
 
     return results, results_kwh
 
 
-def delete_new_db(new_db):
-    for a in new_db:
+def find_unique_act(index: dict, database: bd.Database, name: str, location: str, reference_product: str):
+    key = index.get((name, location, reference_product))
+    return database.get(key[1])
+
+
+def delete_db(db_name: str):
+    for a in bd.Database(db_name):
         a.delete()
-    if len(new_db) == 0:
-        print('The database new_db was cleared and it is now empty')
+
+def build_bw_index(database: bd.Database):
+    data = database.load()
+    return {
+        (v['name'], v['location'], v['reference product']): k
+        for k, v in data.items()
+    }
+
