@@ -1,4 +1,5 @@
 import bw2data as bd
+import math
 
 TECH_ACT_DICT = {
     'open_pv': 'electricity production, photovoltaic, 570kWp open ground installation, multi-Si',
@@ -40,57 +41,133 @@ TECH_NAME_SEARCH_NAME = {
     'pumped storage': 'hydro_storage',
 }
 
-
 REGION_GROUPS = {
-    # Europe
-    "RER": [
-        "DE", "AL", "AT", "BA", "BE", "BG", "CH", "CY", "CZ", "DK", "EE", "ES", "FI",
-        "FR", "GB", "GR", "HR", "HU", "IE", "IT", "LT", "LU", "LV", "ME", "MK", "MT",
-        "NL", "NO", "PL", "PT", "RO", "RS", "SE", "SI", "SK", "XK"
+
+    # Western Europe
+    "WEU": [
+        "AT", "BE", "CH", "DE", "DK", "ES", "FI", "FR", "GB", "IE",
+        "IS", "IT", "LU", "MT", "NL", "NO", "PT", "SE"
     ],
-    # North America
-    "NAM": [
-        "US", "CA"
+
+    # Central Europe
+    "CEU": [
+        "AL", "BA", "BG", "CZ", "HR", "HU", "LT", "LV", "MD",
+        "MK", "PL", "RO", "RS", "SI", "SK", "XK"
     ],
-    # Latin America
-    "LAM": [
-        "BR", "AR", "BO", "CL", "CO", "CR", "CU", "DO", "EC", "GT", "HN",
-        "MX", "NI", "PA", "PE", "PY", "SV", "UY", "VE"
+
+    # Eastern Europe
+    "EEU": [
+        "EE", "UA"
     ],
-    # Africa & Middle East
-    "SSA": [
-        "ZA", "AO", "BF", "BI", "BJ", "BW", "CD", "CF", "CG", "CI", "CM",
-        "DJ", "ER", "ET", "GA", "GH", "GM", "GN", "GQ", "KE", "LR", "LS",
-        "MG", "ML", "MR", "MW", "MZ", "NA", "NE", "NG", "RW", "SD", "SL",
-        "SN", "SO", "SS", "SZ", "TD", "TG", "TZ", "UG", "ZM", "ZW"
+
+    # Former Soviet Union
+    "FSU": [
+        "RU", "BY", "KZ", "KG", "TJ", "TM", "UZ", "AZ", "AM", "GE"
     ],
-    "MENA": [
-        "SA", "DZ", "BH", "EG", "IR", "IQ", "IL", "JO", "KW", "LB", "LY",
-        "MA", "OM", "QA", "SY", "TN", "AE", "YE"
+
+    # USA
+    "USA": [
+        "US-PR", "US-NPCC", "US-WECC", "US-MRO", "US-RFC",
+        "US-TRE", "US-SERC", "US-HICC", "US-ASCC"
     ],
-    # Asia
+
+    # Canada
+    "CAN": [
+        "CA-AB", "CA-BC", "CA-MB", "CA-NB", "CA-NF", "CA-NS",
+        "CA-NT", "CA-NU", "CA-ON", "CA-PE", "CA-QC", "CA-SK", "CA-YK"
+    ],
+
+    # Mexico
+    "MEX": [
+        "MX"
+    ],
+
+    # Brazil
+    "BRA": [
+        "BR-Northern grid", "BR-North-eastern grid",
+        "BR-South-eastern/Mid-western grid", "BR-Southern grid"
+    ],
+
+    # Rest of Central America & Caribbean
+    "RCAM": [
+        "CR", "CU", "DO", "GT", "HN", "HT", "JM",
+        "NI", "PA", "SV", "TT", "CW"
+    ],
+
+    # Rest of South America
+    "RSAM": [
+        "AR", "BO", "CL", "CO", "EC", "PE", "PY", "UY", "VE"
+    ],
+
+    # North Africa
+    "NAF": [
+        "DZ", "EG", "LY", "MA", "TN"
+    ],
+
+    # West Africa
+    "WAF": [
+        "BJ", "CI", "GH", "NG", "SN", "TG"
+    ],
+
+    # East Africa
+    "EAF": [
+        "ET", "KE", "TZ", "UG", "RW", "BI"
+    ],
+
+    # Southern Africa
+    "SAF": [
+        "BW", "MZ", "NA", "ZA", "ZW", "ZM"
+    ],
+
+    # Middle East
+    "ME": [
+        "AE", "BH", "IL", "IQ", "IR", "JO", "KW",
+        "LB", "OM", "QA", "SA", "SY", "TR", "YE", "ME"
+    ],
+
+    # China
     "CHN": [
-        "CN"
+        "CN-CSG", "CN-NWG", "CN-SWG", "CN-NECG",
+        "CN-ECGC", "CN-NCGC", "CN-CCG", "HK", "TW"
     ],
+
+    # India
     "IND": [
-        "IN"
+        "IN-Northern grid", "IN-Western grid",
+        "IN-Southern grid", "IN-Eastern grid",
+        "IN-North-eastern grid"
     ],
+
+    # Japan
     "JPN": [
         "JP"
     ],
+
+    # South Korea
     "KOR": [
         "KR"
     ],
-    "SAS": [
-        "BD", "LK", "NP", "PK", "TW", "BN", "KH", "LA", "MM", "MY", "PH", "SG", "TH", "VN"
+
+    # Southeast Asia
+    "SEAS": [
+        "ID", "MY", "PH", "SG", "TH", "VN"
     ],
-    # Russia & Central Asia
-    "RUS": [
-        "RU"
+
+    # Indonesia (sometimes separated)
+    "IDN": [
+        "ID"
     ],
-    "CAS": [
-        "KZ", "KG", "TJ", "TM", "UZ", "AM", "AZ", "BY", "GE", "MD", "UA"
+
+    # Rest of South Asia
+    "RSAS": [
+        "BD", "LK", "NP", "PK"
     ],
+
+    # Rest of Centrally Planned Asia
+    "RCAS": [
+        "KP", "MN"
+    ],
+
     # Oceania
     "OCE": [
         "AU", "NZ"
@@ -114,11 +191,19 @@ def _as_list_searchword(search_word: str | list[str]) -> str:
     return str(search_word)
 
 
-def _find_activities_by_name_and_location(db_name: str, activity_name: str, location: str | None = None):
+def _find_activities_by_name_and_location(db_name: str, activity_name: str, location: str | None = None,
+                                          unit: str | None = 'kilowatt hour'):
     db = bd.Database(db_name)
-    if location is None:
-        return [a for a in db if a["name"] == activity_name]
-    return [a for a in db if a["name"] == activity_name and a["location"] == location]
+    def matches(a):
+        if a["name"] != activity_name:
+            return False
+        if location is not None and a.get("location") != location:
+            return False
+        if unit is not None and a.get("unit") != unit:
+            return False
+        return True
+
+    return [a for a in db if matches(a)]
 
 
 def _get_region_group_countries(region: str, region_groups: dict[str, list[str]]) -> list[str] | None:
@@ -133,10 +218,10 @@ def _get_region_group_countries(region: str, region_groups: dict[str, list[str]]
 
 
 def choose_alternative(
-    db_name: str,
-    search_word: str | list[str],
-    region: str,
-    verbose: bool = False,
+        db_name: str,
+        search_word: str | list[str],
+        region: str,
+        verbose: bool = False,
 ):
     """
     Fallback order:
@@ -154,8 +239,8 @@ def choose_alternative(
     """
     # 0) Resolve the technology key and target activity name
     key = _as_list_searchword(search_word)
-    tech_key = TECH_NAME_SEARCH_NAME[key]          # e.g. "oil"
-    activity_name = TECH_ACT_DICT[tech_key]        # e.g. "electricity production, oil"
+    tech_key = TECH_NAME_SEARCH_NAME[key]  # e.g. "oil"
+    activity_name = TECH_ACT_DICT[tech_key]  # e.g. "electricity production, oil"
 
     # 1) Exact region
     acts = _find_activities_by_name_and_location(db_name, activity_name, region)
@@ -253,23 +338,24 @@ def replace_shares(tech_shares, exs, new_amount, new_act):
 
 
 def adapt_electricity_mix(ecoinvent_database_name: str,
-                          open_pv_share, roof_pv_share,
-                          waste_share,
-                          wind_onshore_share, wind_offshore_share,
-                          hydro_share,
-                          oil_share,
-                          cc_share,
-                          gas_turbine_share,
-                          cogen_share,
-                          biomass_share,
-                          coal_share,
-                          biogas_share,
-                          nuclear_share,
-                          solar_share,
-                          geothermal_share,
-                          hydro_storage_share,
-                          imports_share,
-                          country_location_code: str = 'ES'):
+                          open_pv_share: float, roof_pv_share: float,
+                          waste_share: float,
+                          wind_onshore_share: float, wind_offshore_share: float,
+                          hydro_share: float,
+                          oil_share: float,
+                          cc_share: float,
+                          gas_turbine_share: float,
+                          cogen_share: float,
+                          biomass_share: float,
+                          coal_share: float,
+                          biogas_share: float,
+                          nuclear_share: float,
+                          solar_share: float,
+                          geothermal_share: float,
+                          hydro_storage_share: float,
+                          imports_share: float,
+                          country_location_code: str,
+                          implement_tests: bool = False):
     """
         The electricity mix of a country in Ecoinvent is nested into voltage levels. From high to low voltage:
         1. 'market for electricity, high voltage' contains:
@@ -335,11 +421,11 @@ def adapt_electricity_mix(ecoinvent_database_name: str,
 
     # -- Rescale photovoltaic shares --
     pv_open_shares, exs, tech_exs = calculate_shares(activity=low_voltage_act, search_word='photovoltaic, 570kWp',
-                                           region=country_location_code, db_name=ecoinvent_database_name)
+                                                     region=country_location_code, db_name=ecoinvent_database_name)
     replace_shares(pv_open_shares, exs, open_pv_share, tech_exs)
 
     pv_roof_shares, exs, tech_exs = calculate_shares(activity=low_voltage_act, search_word='photovoltaic, 3kWp',
-                                           region=country_location_code, db_name=ecoinvent_database_name)
+                                                     region=country_location_code, db_name=ecoinvent_database_name)
     replace_shares(pv_roof_shares, exs, roof_pv_share, tech_exs)
 
     for ex in exs:
@@ -353,15 +439,24 @@ def adapt_electricity_mix(ecoinvent_database_name: str,
         medium_voltage = e.input
 
         # -- Tier 2: define waste and transformation shares --
+        waste_name = 'electricity, from municipal waste incineration to generic market for electricity, medium voltage'
+        target_waste_amount = waste_share / (1 - (open_pv_share + roof_pv_share))
+
+        shares, exs, tech_exs = calculate_shares(
+            db_name=ecoinvent_database_name,
+            activity=medium_voltage,
+            search_word=waste_name,
+            region=country_location_code,
+        )
+        replace_shares(shares, exs, target_waste_amount, tech_exs)
+
+        # then only handle the HV->MV transformation amount
         for me in medium_voltage.technosphere():
-            if me.input[
-                'name'] == 'electricity, from municipal waste incineration to generic market for electricity, medium voltage':
-                me._data['amount'] = waste_share / (
-                        1 - (open_pv_share + roof_pv_share))  # rescaling to have a mass balance
-            elif me.input['name'] == 'electricity voltage transformation from high to medium voltage':
+            if me.input['name'] == 'electricity voltage transformation from high to medium voltage':
                 transformation_high_to_med = me.input
-                me._data['amount'] = 1 - waste_share / (1 - (open_pv_share + roof_pv_share))
-            me.save()
+                me._data['amount'] = 1 - target_waste_amount
+                me.save()
+
 
     # -- Tier 3: high-voltage activities from transformation_high_to_med --
     for e in transformation_high_to_med.technosphere():
@@ -370,80 +465,81 @@ def adapt_electricity_mix(ecoinvent_database_name: str,
         # -- Tier 4: changes in high-voltage --
         # wind onshore
         shares, exs, tech_exs = calculate_shares(activity=high_voltage, search_word='onshore',
-                                       region=country_location_code, db_name=ecoinvent_database_name)
+                                                 region=country_location_code, db_name=ecoinvent_database_name)
         replace_shares(shares, exs, wind_onshore_share, tech_exs)
 
         # wind offshore
         shares, exs, tech_exs = calculate_shares(activity=high_voltage, search_word='offshore',
-                                       region=country_location_code, db_name=ecoinvent_database_name)
+                                                 region=country_location_code, db_name=ecoinvent_database_name)
         replace_shares(shares, exs, wind_offshore_share, tech_exs)
 
         # hydro
         shares, exs, tech_exs = calculate_shares(activity=high_voltage, search_word='hydro, r',
-                                       region=country_location_code, db_name=ecoinvent_database_name)
+                                                 region=country_location_code, db_name=ecoinvent_database_name)
         replace_shares(shares, exs, hydro_share, tech_exs)
 
         # oil
         shares, exs, tech_exs = calculate_shares(activity=high_voltage, search_word=[' oil', 'diesel'],
-                                       region=country_location_code, db_name=ecoinvent_database_name)
+                                                 region=country_location_code, db_name=ecoinvent_database_name)
         replace_shares(shares, exs, oil_share, tech_exs)
 
         # nuclear
         shares, exs, tech_exs = calculate_shares(activity=high_voltage, search_word='nuclear',
-                                       region=country_location_code, db_name=ecoinvent_database_name)
+                                                 region=country_location_code, db_name=ecoinvent_database_name)
         replace_shares(shares, exs, nuclear_share, tech_exs)
 
         # coal
         shares, exs, tech_exs = calculate_shares(activity=high_voltage, search_word=['lignite', 'hard coal', 'peat'],
-                                       region=country_location_code, db_name=ecoinvent_database_name)
+                                                 region=country_location_code, db_name=ecoinvent_database_name)
         replace_shares(shares, exs, coal_share, tech_exs)
 
         # gas turbine
         shares, exs, tech_exs = calculate_shares(activity=high_voltage,
-                                       search_word='electricity production, natural gas, conventional power plant',
-                                       region=country_location_code, db_name=ecoinvent_database_name)
+                                                 search_word='electricity production, natural gas, conventional power plant',
+                                                 region=country_location_code, db_name=ecoinvent_database_name)
         replace_shares(shares, exs, gas_turbine_share, tech_exs)
 
         # combined cycle
         shares, exs, tech_exs = calculate_shares(activity=high_voltage, search_word='combined cycle',
-                                       region=country_location_code, db_name=ecoinvent_database_name)
+                                                 region=country_location_code, db_name=ecoinvent_database_name)
         replace_shares(shares, exs, cc_share, tech_exs)
 
         # co-generation
         shares, exs, tech_exs = calculate_shares(activity=high_voltage,
                                                  search_word='heat and power co-generation, natural gas',
-                                       region=country_location_code, db_name=ecoinvent_database_name,
+                                                 region=country_location_code, db_name=ecoinvent_database_name,
                                                  exclude_word='combined cycle')
         replace_shares(shares, exs, cogen_share, tech_exs)
 
         # biomass
         shares, exs, tech_exs = calculate_shares(activity=high_voltage, search_word='wood chips',
-                                       region=country_location_code, db_name=ecoinvent_database_name)
+                                                 region=country_location_code, db_name=ecoinvent_database_name)
         replace_shares(shares, exs, biomass_share, tech_exs)
 
         # biogas
-        shares, exs, tech_exs = calculate_shares(activity=high_voltage, search_word='heat and power co-generation, biogas',
-                                       region=country_location_code, db_name=ecoinvent_database_name)
+        shares, exs, tech_exs = calculate_shares(activity=high_voltage,
+                                                 search_word='heat and power co-generation, biogas',
+                                                 region=country_location_code, db_name=ecoinvent_database_name)
         replace_shares(shares, exs, biogas_share, tech_exs)
 
         # solar
         shares, exs, tech_exs = calculate_shares(activity=high_voltage, search_word='solar ',
-                                       region=country_location_code, db_name=ecoinvent_database_name)
+                                                 region=country_location_code, db_name=ecoinvent_database_name)
         replace_shares(shares, exs, solar_share, tech_exs)
 
         # geothermal
         shares, exs, tech_exs = calculate_shares(activity=high_voltage, search_word='deep geothermal',
-                                       region=country_location_code, db_name=ecoinvent_database_name)
+                                                 region=country_location_code, db_name=ecoinvent_database_name)
         replace_shares(shares, exs, geothermal_share, tech_exs)
 
         # pumped storage
         shares, exs, tech_exs = calculate_shares(activity=high_voltage, search_word='pumped storage',
-                                       region=country_location_code, db_name=ecoinvent_database_name)
+                                                 region=country_location_code, db_name=ecoinvent_database_name)
         replace_shares(shares, exs, hydro_storage_share, tech_exs)
 
         # imports
         shares, exs, tech_exs = calculate_shares(activity=high_voltage, search_word='import',
-                                       region=country_location_code, db_name=ecoinvent_database_name)
+                                                 region=country_location_code, db_name=ecoinvent_database_name)
         if shares != {}:
             replace_shares(shares, exs, imports_share, tech_exs)
 
@@ -460,15 +556,153 @@ def adapt_electricity_mix(ecoinvent_database_name: str,
         for e in other_deletable_exs:
             e.delete()
 
+        if implement_tests:
+            print('STARTING TESTS')
+            low_voltage_test = find_activity(
+                bd.Database(ecoinvent_database_name), 'market for electricity, low voltage', country_location_code
+            )
+            lv_open_pv = _sum_amounts(low_voltage_test, 'photovoltaic, 570kWp')
+            lv_roof_pv = _sum_amounts(low_voltage_test, 'photovoltaic, 3kWp')
+            _assert_close(lv_open_pv, open_pv_share, "LV: open PV total amount")
+            _assert_close(lv_roof_pv, roof_pv_share, "LV: roof PV total amount")
+
+            # Transformation MV->LV should be 1 - PV total (your code sets it that way)
+            lv_transf_amt = 0.0
+            found = False
+            for ex in low_voltage_test.technosphere():
+                if ex.input['name'] == 'electricity voltage transformation from medium to low voltage':
+                    lv_transf_amt = float(ex.amount)
+                    found = True
+                    break
+            _assert_true(found, "LV: missing exchange 'electricity voltage transformation from medium to low voltage'")
+            _assert_close(lv_transf_amt, 1.0 - (open_pv_share + roof_pv_share), "LV: MV->LV transformation amount")
+
+            # (B) Test medium voltage waste amount matches your internal rescaling logic
+            # Expected: waste_share / (1 - PV_total)
+            mv_expected_waste = waste_share / (1.0 - (open_pv_share + roof_pv_share))
+
+            mv_waste = _sum_amounts(
+                medium_voltage,
+                'electricity, from municipal waste incineration to generic market for electricity, medium voltage'
+            )
+            _assert_close(mv_waste, mv_expected_waste, "MV: waste amount (rescaled)")
+
+            mv_transf_amt = 0.0
+            found = False
+            for ex in medium_voltage.technosphere():
+                if ex.input['name'] == 'electricity voltage transformation from high to medium voltage':
+                    mv_transf_amt = float(ex.amount)
+                    found = True
+                    break
+            _assert_true(found, "MV: missing exchange 'electricity voltage transformation from high to medium voltage'")
+            _assert_close(mv_transf_amt, 1.0 - mv_expected_waste, "MV: HV->MV transformation amount")
+
+            # (C) Test HIGH VOLTAGE technology amounts match function inputs
+            # IMPORTANT: this test is executed BEFORE the rescale-to-1-kWh block below.
+            _assert_close(_sum_amounts(high_voltage, 'onshore'), wind_onshore_share, "HV pre-rescale: wind onshore total")
+            _assert_close(_sum_amounts(high_voltage, 'offshore'), wind_offshore_share,
+                          "HV pre-rescale: wind offshore total")
+            _assert_close(_sum_amounts(high_voltage, 'hydro, r'), hydro_share, "HV pre-rescale: hydro total")
+            _assert_close(_sum_amounts(high_voltage, [' oil', 'diesel']), oil_share, "HV pre-rescale: oil total")
+            _assert_close(_sum_amounts(high_voltage, 'nuclear'), nuclear_share, "HV pre-rescale: nuclear total")
+            _assert_close(_sum_amounts(high_voltage, ['lignite', 'hard coal', 'peat']), coal_share,
+                          "HV pre-rescale: coal total")
+            _assert_close(_sum_amounts(high_voltage, 'wood chips'), biomass_share, "HV pre-rescale: biomass total")
+            _assert_close(_sum_amounts(high_voltage, 'heat and power co-generation, biogas'), biogas_share,
+                          "HV pre-rescale: biogas total")
+            _assert_close(_sum_amounts(high_voltage, 'solar '), solar_share, "HV pre-rescale: solar total")
+            _assert_close(_sum_amounts(high_voltage, 'deep geothermal'), geothermal_share,
+                          "HV pre-rescale: geothermal total")
+            _assert_close(_sum_amounts(high_voltage, 'pumped storage'), hydro_storage_share,
+                          "HV pre-rescale: pumped storage total")
+
+            _assert_close(_sum_amounts(high_voltage, 'combined cycle'), cc_share, "HV pre-rescale: combined cycle total")
+            _assert_close(
+                _sum_amounts(high_voltage, 'electricity production, natural gas, conventional power plant'),
+                gas_turbine_share,
+                "HV pre-rescale: gas conventional plant total",
+            )
+            _assert_close(
+                _sum_amounts(high_voltage, 'heat and power co-generation, natural gas', exclude_word='combined cycle'),
+                cogen_share,
+                "HV pre-rescale: cogen (excluding combined cycle) total",
+            )
+
+            # Imports: your logic *does not create* an import exchange if none existed originally
+            # (calculate_shares returns {} for imports only in the 'imports' special case, but you call 'import'). :contentReference[oaicite:3]{index=3}
+            hv_imports = _sum_amounts(high_voltage, 'import', unit='kilowatt hour')
+            if hv_imports > 0:
+                _assert_close(hv_imports, imports_share, "HV pre-rescale: imports total")
+
+            # (D) Save the pre-rescale total of tech kWh inputs (excluding the market itself), then rescale, then test sum==1
+            hv_kwh_total_before = sum(
+                float(e.amount) for e in high_voltage.technosphere()
+                if e.unit == 'kilowatt hour' and 'market for electricity, high voltage' not in e.input['name']
+            )
+            _assert_true(hv_kwh_total_before > 0, "HV: pre-rescale total kWh inputs (excluding HV market) must be > 0")
+            print('TESTS SUCCESFULLY COMPLETED!')
+
         # rescale inputs so the output is 1 kWh
         high_voltage_techs = [e for e in high_voltage.technosphere() if e.unit == 'kilowatt hour'
-                                  and 'market for electricity, high voltage' not in e.input['name']]
+                              and 'market for electricity, high voltage' not in e.input['name']]
         high_voltage_techs_amounts = sum([e.amount for e in high_voltage.technosphere() if e.unit == 'kilowatt hour'
-                                              and 'market for electricity, high voltage' not in e.input['name']])
+                                          and 'market for electricity, high voltage' not in e.input['name']])
         for e in high_voltage_techs:
             e['amount'] = e['amount'] / high_voltage_techs_amounts
             e.save()
-        # TODO: implement test
+
+        # Post-rescale test: all technologies sum to 1 kWh (excluding 'market for electricity, high voltage')
+        hv_kwh_total_after = sum(
+            float(e.amount) for e in high_voltage.technosphere()
+            if e.unit == 'kilowatt hour' and 'market for electricity, high voltage' not in e.input['name']
+        )
+        _assert_close(hv_kwh_total_after, 1.0, "HV post-rescale: total kWh inputs excluding HV market == 1")
+
+
+# -----------------------------
+# Helpers for tests
+# -----------------------------
+def _matches_search_word(name: str, search_word: str | list[str]) -> bool:
+    if isinstance(search_word, str):
+        return search_word in name
+    return any(w in name for w in search_word)
+
+
+def _not_excluded(name: str, exclude_word: str | list[str] | None) -> bool:
+    if exclude_word is None:
+        return True
+    if isinstance(exclude_word, str):
+        return exclude_word not in name
+    return not any(w in name for w in exclude_word)
+
+
+def _sum_amounts(activity, search_word: str | list[str], exclude_word: str | list[str] | None = None,
+                 unit: str | None = "kilowatt hour") -> float:
+    """
+    Sum technosphere exchange amounts whose input['name'] matches search_word
+    (string contains, or any of list entries), with optional exclude_word.
+    This mirrors your calculate_shares selection logic, but sums amounts. :contentReference[oaicite:2]{index=2}
+    """
+    total = 0.0
+    for e in activity.technosphere():
+        if unit is not None and getattr(e, "unit", None) != unit:
+            continue
+        in_name = e.input["name"]
+        if _matches_search_word(in_name, search_word) and _not_excluded(in_name, exclude_word):
+            total += float(e.amount)
+    return total
+
+
+def _assert_close(actual: float, expected: float, label: str, tol: float = 1e-9):
+    if not (math.isfinite(actual) and math.isfinite(expected)):
+        raise AssertionError(f"[TEST FAIL] {label}: non-finite actual/expected (actual={actual}, expected={expected})")
+    if abs(actual - expected) > tol:
+        raise AssertionError(f"[TEST FAIL] {label}: expected {expected}, got {actual} (diff={abs(actual - expected)})")
+
+
+def _assert_true(cond: bool, label: str):
+    if not cond:
+        raise AssertionError(f"[TEST FAIL] {label}")
 
 
 bd.projects.set_current('fossil_free_ecoinvent')
@@ -488,4 +722,4 @@ adapt_electricity_mix(ecoinvent_database_name='ei391-testss',
                       geothermal_share=0.01,
                       hydro_storage_share=0.02,
                       imports_share=0.05,
-                      country_location_code='BG')
+                      country_location_code='FR')
