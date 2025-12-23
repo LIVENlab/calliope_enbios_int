@@ -1,0 +1,374 @@
+# Configuration file for custom scenarios for `premise`
+
+---
+
+production pathways:
+  # BIOMASS: RESIUDES OR WOOD CHIPS
+  # TODO: deal with Lower Heating Values. At the moment we are substituting the 'wood chips, wet' with the new market, but 'wood chips, dry' as well as 'wood pellet' also have energy uses. In order to be able to substitute them, I should deal with the fact that the LHV of the three are different!
+  BIOMASS_RESIDUES:
+    production volume:
+      variable: Share|Biomass|Residues
+    ecoinvent alias:
+      name: supply of forest residue
+      reference product: forest residue
+      exists in original database: True
+
+  BIOMASS_WOOD_CHIPS:
+    production volume:
+      variable: Share|Biomass|Wood
+    ecoinvent alias:
+      name: market for wood chips, wet, measured as dry mass
+      reference product: wood chips, wet, measured as dry mass
+      exists in original database: True
+      regionalize: True
+
+  # HYDROGEN: WOOD GASIFICATION (WITH OR WITHOUT CCS), STEAM REFORMING, AUTOTHERMAL REFORMING, COAL GASIFICATION (WITH
+  # OR WITHOUT CCS), ELECTROLYSIS
+  H2_WOOD_GASIFICATION_CCS:
+    production volume:
+      variable: Share|H2|Wood|CCS
+    ecoinvent alias:
+      name: hydrogen production, gaseous, 25 bar, from gasification of woody biomass in entrained flow gasifier, with CCS, at gasification plant
+      reference product: hydrogen, gaseous, 25 bar
+      exists in original database: True
+
+  H2_WOOD_GASIFICATION_NO_CCS:
+    production volume:
+      variable: Share|H2|Wood|NoCCS
+    ecoinvent alias:
+      name: hydrogen production, gaseous, 25 bar, from gasification of woody biomass in entrained flow gasifier, at gasification plant
+      mask: CCS
+      reference product: hydrogen, gaseous, 25 bar
+      exists in original database: True
+
+  H2_STEAM_REFORMING:
+    production volume:
+      variable: Share|H2|SteamReforming
+    ecoinvent alias:
+      name: hydrogen production, steam methane reforming
+      mask: CCS
+      reference product: hydrogen, gaseous, low pressure
+      exists in original database: True
+
+  H2_AUTOTHERMAL_REFORMING:
+    production volume:
+      variable: Share|H2|AutothermalReforming
+    ecoinvent alias:
+      name: hydrogen production, auto-thermal reforming
+      mask: CCS
+      reference product: hydrogen, gaseous, low pressure
+      exists in original database: True
+
+  H2_COAL_GASIFICATION_CCS:
+    production volume:
+      variable: Share|H2|Coal|CCS
+    ecoinvent alias:
+      name: hydrogen production, coal gasification, with CCS
+      reference product: hydrogen, gaseous, low pressure
+      exists in original database: True
+
+  H2_COAL_GASIFICATION_NO_CCS:
+    production volume:
+      variable: Share|H2|Coal|NoCCS
+    ecoinvent alias:
+      name: hydrogen production, coal gasification
+      mask: CCS
+      reference product: hydrogen, gaseous, low pressure
+      exists in original database: True
+
+  H2_ELECTROLYSIS:
+    production volume:
+      variable: Share|H2|Electrolysis
+    ecoinvent alias:
+      name: hydrogen production, gaseous, 30 bar, from PEM electrolysis, from grid electricity
+      reference product: hydrogen, gaseous, 30 bar
+      exists in original database: True
+
+  # METHANOL: HYDROGEN, BIOMASS, NATURAL GAS
+  METHANOL_HYDROGEN:
+    production volume:
+      variable: Share|Methanol|H2
+    ecoinvent alias:
+      name: methanol distillation, hydrogen from electrolysis, CO2 from DAC  # it is no longer H2 from electrolysis, but from the 'market for hydrogen (new)'
+      reference product: methanol, purified
+      exists in original database: True
+
+  METHANOL_BIOMASS:
+    production volume:
+      variable: Share|Methanol|Biomass
+    ecoinvent alias:
+      name: methanol production, from synthetic gas
+      reference product: methanol, from biomass
+      exists in original database: True
+      regionalize: True
+
+  METHANOL_NATURAL_GAS:
+    production volume:
+      variable: Share|Methanol|NatGas
+    ecoinvent alias:
+      name: methanol production
+      reference product: methanol
+      exists in original database: True
+      regionalize: True
+
+  # KEROSENE: HYDROGEN, METHANOL, BIOMASS, NATURAL GAS, OIL
+  KEROSENE_H2:
+    production volume:
+      variable: Share|Kerosene|H2
+    ecoinvent alias:
+      name: kerosene production, synthetic, Fischer Tropsch process, hydrogen from electrolysis, energy allocation
+      reference product: kerosene, synthetic
+      exists in original database: True
+
+  KEROSENE_METHANOL:
+    production volume:
+      variable: Share|Kerosene|Methanol
+    ecoinvent alias:
+      name: kerosene production, from methanol, hydrogen from electrolysis, CO2 from DAC, energy allocation
+      reference product: kerosene, synthetic
+      exists in original database: True
+
+  KEROSENE_BIOMASS:
+    production volume:
+      variable: Share|Kerosene|Biomass
+    ecoinvent alias:
+      name: kerosene production, via Fischer-Tropsch, from forest residues, energy allocation
+      reference product: kerosene, from forest residues
+      exists in original database: True
+
+  KEROSENE_NATGAS:  # TODO: still not substituted Nat Gas!
+    production volume:
+      variable: Share|Kerosene|NatGas
+    ecoinvent alias:
+      name: kerosene production, synthetic, Fischer Tropsch process, from natural gas, energy allocation
+      reference product: kerosene, synthetic
+      exists in original database: True
+
+  KEROSENE_OIL:
+    production volume:
+      variable: Share|Kerosene|Oil
+    ecoinvent alias:
+      name: kerosene production, petroleum refinery operation
+      reference product: kerosene
+      exists in original database: True
+      regionalize: True
+
+  # DIESEL: HYDROGEN, METHANOL, BIOMASS, NATURAL GAS, OIL
+  DIESEL_H2:
+    production volume:
+      variable: Share|Diesel|H2
+    ecoinvent alias:
+      name: diesel production, synthetic, Fischer Tropsch process, hydrogen from electrolysis, energy allocation
+      reference product: diesel, synthetic
+      exists in original database: True
+
+  DIESEL_METHANOL:
+    production volume:
+      variable: Share|Diesel|Methanol
+    ecoinvent alias:
+      name: diesel production, from methanol, hydrogen from electrolysis, CO2 from DAC, energy allocation
+      reference product: diesel, synthetic
+      exists in original database: True
+
+  DIESEL_BIOMASS:  # We give no option to make biodiesel from Algae, used cooking oil, palm oil nor rapseed oil
+    production volume:
+      variable: Share|Diesel|Biomass
+    ecoinvent alias:
+      name: biodiesel production, via Fischer-Tropsch, from forest residues, energy allocation
+      reference product: biodiesel, from forest residues
+      exists in original database: True
+
+  DIESEL_NATGAS:  # TODO: still not substituted Nat Gas!
+    production volume:
+      variable: Share|Diesel|NatGas
+    ecoinvent alias:
+      name: diesel production, synthetic, Fischer Tropsch process, from natural gas, energy allocation
+      reference product: diesel, synthetic
+      exists in original database: True
+
+  DIESEL_OIL:
+    production volume:
+      variable: Share|Diesel|Oil
+    ecoinvent alias:
+      name: diesel production, petroleum refinery operation
+      reference product: diesel
+      exists in original database: True
+      regionalize: True
+
+
+markets:
+  - name: market for biomass, used as fuel (new)
+    reference product: biomass, used as fuel (new)
+    unit: kilogram
+    includes:
+      - BIOMASS_RESIDUES
+      - BIOMASS_WOOD_CHIPS
+    replaces: # it allows name, product, location and unit as filters!
+      - name: market for wood chips, wet, measured as dry mass
+        product: wood chips, wet, measured as dry mass
+        location: Europe without Switzerland
+        operator: equals  # it allows any string. If it is not 'equals' it will be ws.contains() automatically
+      - name: market for wood chips, wet, measured as dry mass
+        product: wood chips, wet, measured as dry mass
+        location: CH
+        operator: equals
+      - name: supply of forest residue
+        product: forest residue
+        location: RER
+        operator: equals
+    replaces in:
+      - name: ""
+        operator: contains
+    # now it replaces both energy and non energy uses. 'replaces in' could give it more specificity. However,
+    # replaces in only allows to filter out one item. This means, we cannot filer out all energy production activities
+    # replaces in:
+    # It allows "name", "reference product", "location", "unit" to be filtered. This refers to the characteristics of the ex.output activity!
+    # It also allows "operator" (being ws.contains() if it is not "equals"), as well as "excludes" (being a dictionary that contains any of "name", "reference product", "location", "unit" as keys and the string to be filtered as values.
+
+  - name: market for hydrogen (new)
+    reference product: hydrogen, gaseous (new)
+    unit: kilogram
+    includes:
+      - H2_WOOD_GASIFICATION_CCS
+      - H2_WOOD_GASIFICATION_NO_CCS
+      - H2_STEAM_REFORMING
+      - H2_AUTOTHERMAL_REFORMING
+      - H2_COAL_GASIFICATION_CCS
+      - H2_COAL_GASIFICATION_NO_CCS
+      - H2_ELECTROLYSIS
+    replaces:
+      - name: market for hydrogen, gaseous  # some minor activities (less than 10) have a global scope
+        product: hydrogen, gaseous
+      - name: hydrogen production, gaseous, 30 bar, from PEM electrolysis, from grid electricity
+        product: hydrogen, gaseous, 30 bar
+      - name: hydrogen production, gaseous, 25 bar, from gasification of woody biomass in entrained flow gasifier, with CCS, at gasification plant
+        product: hydrogen, gaseous, 25 bar
+      - name: hydrogen production, gaseous, 25 bar, from gasification of woody biomass in entrained flow gasifier, at gasification plant
+        product: hydrogen, gaseous, 25 bar
+      - name: hydrogen production, steam methane reforming
+        product: hydrogen, gaseous, low pressure
+      - name: hydrogen production, auto-thermal reforming
+        product: hydrogen, gaseous, low pressure
+      - name: hydrogen production, coal gasification, with CCS
+        product: hydrogen, gaseous, low pressure
+      - name: hydrogen production, coal gasification
+        product: hydrogen, gaseous, low pressure
+    replaces in:
+      - name: ""
+        operator: contains
+
+  - name: market for methanol (new)
+    reference product: methanol (new)
+    unit: kilogram
+    includes:
+      - METHANOL_HYDROGEN
+      - METHANOL_BIOMASS
+      - METHANOL_NATURAL_GAS
+    replaces:
+      - name: methanol distillation, hydrogen from electrolysis, CO2 from DAC
+        product: methanol, purified
+      - name: methanol distillation, hydrogen from coal gasification, with CCS
+        product: methanol, purified
+      - name: methanol distillation, hydrogen from coal gasification
+        product: methanol, purified
+      - name: methanol distillation, from wood, with CCS
+        product: methanol, purified
+      - name: market for methanol  # some minor activities (max 1.7 kg of methanol for kilogram of product produced) have activities outside Europe
+        product: methanol
+        location: GLO
+        operator: equals
+    replaces in:
+      - name: ""
+        operator: contains
+
+  - name: market for kerosene (new)
+    reference product: kerosene (new)
+    unit: kilogram
+    includes:
+      - KEROSENE_H2
+      - KEROSENE_METHANOL
+      - KEROSENE_BIOMASS
+      - KEROSENE_NATGAS
+      - KEROSENE_OIL
+    replaces:
+      - name: market for kerosene
+        product: kerosene
+        location: Europe without Switzerland
+        operator: equals
+      - name: market for kerosene
+        product: kerosene
+        location: CH
+        operator: equals
+      - name: kerosene production, synthetic, Fischer Tropsch process, hydrogen from electrolysis, energy allocation
+        product: kerosene, synthetic
+        location: RER
+        operator: equals
+      - name: kerosene production, from methanol, hydrogen from electrolysis, CO2 from DAC, energy allocation
+        product: kerosene, synthetic
+        location: RER
+        operator: equals
+      - name: kerosene production, via Fischer-Tropsch, from forest residues, energy allocation
+        product: kerosene, from forest products
+        location: RER
+        operator: equals
+      - name: kerosene production, synthetic, Fischer Tropsch process, from natural gas, energy allocation
+        product: kerosene, synthetic
+        location: RER
+        operator: equals
+    replaces in:
+      - name: ""
+        operator: contains
+
+  - name: market for diesel (new)
+    reference product: diesel (new)
+    unit: kilogram
+    includes:
+      - DIESEL_H2
+      - DIESEL_METHANOL
+      - DIESEL_BIOMASS
+      - DIESEL_NATGAS
+      - DIESEL_OIL
+    replaces:
+      - name: market for diesel
+        product: diesel
+        location: Europe without Switzerland
+        operator: equals
+      - name: market for diesel
+        product: diesel
+        location: CH
+        operator: equals
+      - name: market group for diesel
+        product: diesel
+        location: RER
+        operator: equals
+      - name: market for diesel, low-sulfur
+        product: diesel, low sulfur
+        location: Europe without Switzerland
+        operator: equals
+      - name: market for diesel, low-sulfur
+        product: diesel, low sulfur
+        location: CH
+        operator: equals
+      - name: market group for diesel, low-sulfur
+        product: diesel, low sulfur
+        location: RER
+        operator: equals
+      - name: diesel production, synthetic, Fischer Tropsch process, hydrogen from electrolysis, energy allocation
+        product: diesel, synthetic
+        location: RER
+        operator: equals
+      - name: diesel production, from methanol, hydrogen from electrolysis, CO2 from DAC, energy allocation
+        product: diesel, synthetic
+        location: RER
+        operator: equals
+      - name: biodiesel production, via Fischer-Tropsch, from forest residues, energy allocation
+        product: biodiesel, from forest products
+        location: RER
+        operator: equals
+      - name: diesel production, synthetic, Fischer Tropsch process, from natural gas, energy allocation
+        product: diesel, synthetic
+        location: RER
+        operator: equals
+    replaces in:
+      - name: ""
+        operator: contains

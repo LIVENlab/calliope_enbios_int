@@ -1,0 +1,3 @@
+﻿model,pathway,scenario,region,variables,unit,2020,2050
+image,SSP2-Base,Business As Usual,RER,Share|H2|SteamReforming,share,0.1, 0.1
+image,SSP2-Base,Business As Usual,RER,Share|H2|AutothermalReforming,share,0.9, 0.9

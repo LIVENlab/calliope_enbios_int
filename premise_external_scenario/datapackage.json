@@ -1,0 +1,73 @@
+{
+  "profile": "data-package",
+  "name": "premise-additional-inventories-local",
+  "title": "Premise external scenario using local additional_inventories (xlsx)",
+  "version": "0.0.1",
+  "dependencies": {
+        "premise": ">=2.1.1"
+    },
+  "ecoinvent": {
+        "version": "3.9.1",
+        "system model": "cut-off"
+    },
+  "scenarios": [
+    "Business As Usual"
+  ],
+  "resources": [
+    {
+      "path": "scenario_data/scenario_data_eur.csv",
+      "profile": "tabular-data-resource",
+      "name": "scenario_data",
+      "format": "csv",
+      "mediatype": "text/csv",
+      "encoding": "utf-8-sig",
+      "schema": {
+        "fields": [
+          {
+            "name": "model",
+            "type": "string"
+          },
+          {
+            "name": "pathway",
+            "type": "string"
+          },
+          {
+            "name": "scenario",
+            "type": "string"
+          },
+          {
+            "name": "region",
+            "type": "string"
+          },
+          {
+            "name": "variables",
+            "type": "string"
+          },
+          {
+            "name": "unit",
+            "type": "string"
+          },
+          {
+            "name": "2020",
+            "type": "number"
+          },
+          {
+            "name": "2050",
+            "type": "number"
+          }
+        ],
+        "missingValues": [
+          ""
+        ]
+      }
+    },
+    {
+      "path": "configuration_file/config_eur.yaml",
+      "profile": "data-resource",
+      "name": "config",
+      "format": "yaml",
+      "mediatype": "text/yaml",
+      "encoding": "utf-8"
+    }
+  ]
+}

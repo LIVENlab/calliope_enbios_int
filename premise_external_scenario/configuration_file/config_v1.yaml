@@ -1,0 +1,32 @@
+# Configuration file for custom scenarios for `premise`
+
+---
+
+production pathways:
+  H2_STEAM_REFORMING:
+    production volume:
+      variable: Share|H2|SteamReforming
+    ecoinvent alias:
+      name: hydrogen production, steam reforming
+      mask: CCS
+      reference product: hydrogen, gaseous
+
+  H2_AUTOTHERMAL_REFORMING:
+    production volume:
+      variable: Share|H2|AutothermalReforming
+    ecoinvent alias:
+      name: chlor-alkali electrolysis, mercury cell
+      reference product: hydrogen, liquid
+
+markets:
+  - name: market for hydrogen (new)
+    reference product: hydrogen, gaseous, low pressure
+    unit: kilogram
+    includes:
+      - H2_STEAM_REFORMING
+      - H2_AUTOTHERMAL_REFORMING
+
+    replaces:
+      - name: market for hydrogen, gaseous
+        product: hydrogen, gaseous
+        operator: equals

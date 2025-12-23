@@ -1,0 +1,129 @@
+# Configuration file for custom scenarios for `premise`
+
+---
+
+production pathways:
+  BIOMASS_RESIDUES:
+    production volume:
+      variable: Share|Biomass|Residues
+    ecoinvent alias:
+      name: supply of forest residue
+      reference product: forest residue
+      exists in original database: True
+
+  BIOMASS_WOOD_CHIPS:
+    production volume:
+      variable: Share|Biomass|Wood
+    ecoinvent alias:
+      name: market for wood chips, wet, measured as dry mass
+      reference product: wood chips, wet, measured as dry mass
+      exists in original database: True
+
+  H2_WOOD_GASIFICATION_CCS:
+    production volume:
+      variable: Share|H2|Wood|CCS
+    ecoinvent alias:
+      name: hydrogen production, gaseous, 25 bar, from gasification of woody biomass in entrained flow gasifier, with CCS, at gasification plant
+      reference product: hydrogen, gaseous, 25 bar
+      exists in original database: True
+      regionalize: True
+
+  H2_WOOD_GASIFICATION_NO_CCS:
+    production volume:
+      variable: Share|H2|Wood|NoCCS
+    ecoinvent alias:
+      name: hydrogen production, gaseous, 25 bar, from gasification of woody biomass in entrained flow gasifier, at gasification plant
+      mask: CCS
+      reference product: hydrogen, gaseous, 25 bar
+      exists in original database: True
+      regionalize: True
+
+  H2_STEAM_REFORMING:
+    production volume:
+      variable: Share|H2|SteamReforming
+    ecoinvent alias:
+      name: hydrogen production, steam methane reforming
+      mask: CCS
+      reference product: hydrogen, gaseous, low pressure
+      exists in original database: True
+      regionalize: True
+
+  H2_AUTOTHERMAL_REFORMING:
+    production volume:
+      variable: Share|H2|AutothermalReforming
+    ecoinvent alias:
+      name: hydrogen production, auto-thermal reforming
+      mask: CCS
+      reference product: hydrogen, gaseous, low pressure
+      exists in original database: True
+      regionalize: True
+
+  H2_COAL_GASIFICATION_CCS:
+    production volume:
+      variable: Share|H2|Coal|CCS
+    ecoinvent alias:
+      name: hydrogen production, coal gasification, with CCS
+      reference product: hydrogen, gaseous, low pressure
+      exists in original database: True
+      regionalize: True
+
+  H2_COAL_GASIFICATION_NO_CCS:
+    production volume:
+      variable: Share|H2|Coal|NoCCS
+    ecoinvent alias:
+      name: hydrogen production, coal gasification
+      mask: CCS
+      reference product: hydrogen, gaseous, low pressure
+      exists in original database: True
+      regionalize: True
+
+  H2_ELECTROLYSIS:
+    production volume:
+      variable: Share|H2|Electrolysis
+    ecoinvent alias:
+      name: hydrogen production, gaseous, 30 bar, from PEM electrolysis, from grid electricity
+      reference product: hydrogen, gaseous, 30 bar
+      exists in original database: True
+      regionalize: True
+
+
+markets:
+  - name: market for biomass, used as fuel
+    reference product: biomass, used as fuel
+    unit: kilogram
+    includes:
+      - BIOMASS_RESIDUES
+      - BIOMASS_WOOD_CHIPS
+    replaces: # it allows name, product, location and unit as filters!
+      - name: market for wood chips, wet, measured as dry mass
+        product: wood chips, wet, measured as dry mass
+        location: Europe without Switzerland
+        operator: equals  # it allows any string. If it is not 'equals' it will be ws.contains() automathically
+      - name: market for wood chips, wet, measured as dry mass
+        product: wood chips, wet, measured as dry mass
+        location: CH
+        operator: equals
+    # now it replaces both energy and non energy uses. I could be more specific by fitting in replaces in. However,
+    # replaces in only allows to filter out one item. This means, we cannot filer out all energy production activities
+    # TODO: (but we could choose electricity, OR heat, for instance). MAYBE TRY EXCLUDES!?!?! (think how that would work with wurst.searching).
+    # replaces in:
+    # It allows "name", "reference product", "location", "unit" to be filtered. This refers to the characteristics of the ex.output activity!
+    # It also allows "operator" (being ws.contains() if it is not "equals"), as well as "excludes" (being a dictionary that contains any of "name", "reference product", "location", "unit" as keys and the string to be filtered as values.
+
+  - name: market for hydrogen (new)
+    reference product: hydrogen, gaseous
+    unit: kilogram
+    includes:
+      - H2_WOOD_GASIFICATION_CCS
+      - H2_WOOD_GASIFICATION_NO_CCS
+      - H2_STEAM_REFORMING
+      - H2_AUTOTHERMAL_REFORMING
+      - H2_COAL_GASIFICATION_CCS
+      - H2_COAL_GASIFICATION_NO_CCS
+      - H2_ELECTROLYSIS
+    replaces:
+      - name: market for hydrogen, gaseous
+        product: hydrogen, gaseous
+        operator: equals
+      - name: hydrogen production, gaseous, 30 bar, from PEM electrolysis, from grid electricity
+        product: hydrogen, gaseous, 30 bar
