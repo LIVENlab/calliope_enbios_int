@@ -136,7 +136,7 @@ production pathways:
       reference product: kerosene, from forest residues
       exists in original database: True
 
-  KEROSENE_NATGAS:  # TODO: still not substituted Nat Gas!
+  KEROSENE_NATGAS:  # TODO: still not substituted Nat Gas! It will never happen as it is RoW
     production volume:
       variable: Share|Kerosene|NatGas
     ecoinvent alias:
@@ -178,7 +178,7 @@ production pathways:
       reference product: biodiesel, from forest residues
       exists in original database: True
 
-  DIESEL_NATGAS:  # TODO: still not substituted Nat Gas!
+  DIESEL_NATGAS:  # TODO: still not substituted Nat Gas! Same problem
     production volume:
       variable: Share|Diesel|NatGas
     ecoinvent alias:
@@ -195,6 +195,189 @@ production pathways:
       exists in original database: True
       regionalize: True
 
+  # LIQUEFIED PETROLEUM GAS: HYDROGEN, METHANOL, NATURAL GAS, OIL
+  LIQUEFIED_PETROLEUM_GAS_H2:
+    production volume:
+      variable: Share|LiquefiedPetroleumGas|H2
+    ecoinvent alias:
+      name: liquefied petroleum gas production, synthetic, Fischer Tropsch process, hydrogen from electrolysis, energy allocation
+      reference product: liquefied petroleum gas, synthetic
+      exists in original database: True
+
+  LIQUEFIED_PETROLEUM_GAS_METHANOL:
+    production volume:
+      variable: Share|LiquefiedPetroleumGas|Methanol
+    ecoinvent alias:
+      name: liquefied petroleum gas production, from methanol, hydrogen from electrolysis, CO2 from DAC, energy allocation
+      reference product: liquefied petroleum gas, synthetic
+      exists in original database: True
+
+  LIQUEFIED_PETROLEUM_GAS_NATGAS: # TODO: still not substituted Nat Gas! Same problem
+    production volume:
+      variable: Share|LiquefiedPetroleumGas|NatGas
+    ecoinvent alias:
+      name: liquefied petroleum gas production, synthetic, Fischer Tropsch process, from natural gas, energy allocation
+      reference product: liquefied petroleum gas, synthetic
+      exists in original database: True
+
+  LIQUEFIED_PETROLEUM_GAS_OIL:
+    production volume:
+      variable: Share|LiquefiedPetroleumGas|Oil
+    ecoinvent alias:
+      name: liquefied petroleum gas production, petroleum refinery operation
+      reference product: liquefied petroleum gas
+      exists in original database: True
+      regionalize: True
+
+  # BIOGAS (FOR A LATER UPGRADING TO METHANE): BIOWASTE, SEWAGE SLUDGE, MANURE, GRASS
+  BIOGAS_BIOWASTE:
+    production volume:
+      variable: Share|Biogas|Biowaste
+    ecoinvent alias:
+      name: treatment of biowaste by anaerobic digestion
+      reference product: biogas
+      exists in original database: True
+
+  BIOGAS_SEWAGE:
+    production volume:
+      variable: Share|Biogas|Sewage
+    ecoinvent alias:
+      name: treatment of sewage sludge by anaerobic digestion
+      reference product: biogas
+      exists in original database: True
+
+  BIOGAS_MANURE:
+    production volume:
+      variable: Share|Biogas|Manure
+    ecoinvent alias:
+      name: anaerobic digestion of manure
+      reference product: biogas
+      exists in original database: True
+
+  BIOGAS_GRASS:
+    production volume:
+      variable: Share|Biogas|Grass
+    ecoinvent alias:
+      name: biogas production from grass
+      reference product: biogas, from grass
+      exists in original database: True
+
+  # METHANE: (i) BIOGAS PURIFICATION: MEMBRANE, AMINO-WASHING, AMINO-SCRUBBING, SWING ADSORPTION; (ii) SABATIER METHANATION: BIOLOGICAL, ELECTROCHEMICAL
+  METHANE_MEMBRANE:
+    production volume:
+      variable: Share|Methane|Membrane
+    ecoinvent alias:
+      name: biogas purification to biomethane by membrane technique
+      reference product: biomethane, high pressure
+      exists in original database: True
+
+  METHANE_AMINOWASHING:
+    production volume:
+      variable: Share|Methane|AminoWashing
+    ecoinvent alias:
+      name: biogas purification to biomethane by amino washing
+      reference product: biomethane, high pressure
+      exists in original database: True
+
+  METHANE_AMINESCRUBBING:
+    production volume:
+      variable: Share|Methane|AmineScrubbing
+    ecoinvent alias:
+      name: biomethane production, from biogas upgrading, using amine scrubbing
+      reference product: biomethane, from biogas upgrading, using amine scrubbing
+      exists in original database: True
+
+  METHANE_SWING:
+    production volume:
+      variable: Share|Methane|Swing
+    ecoinvent alias:
+      name: biogas purification to biomethane by pressure swing adsorption
+      reference product: biomethane, high pressure
+      exists in original database: True
+
+  METHANE_SABATIER_BIOLOGICAL:
+    production volume:
+      variable: Share|Methane|SabatierBiological
+    ecoinvent alias:
+      name: methane, from biological methanation, with carbon from atmosphere
+      reference product: methane, from biological methanation
+      exists in original database: True
+      ratio: 0.235  # convert from kg to m3 and from normal conditions to 5 bar (density: 0.717 kg/Nm3)
+
+  METHANE_SABATIER_ELECTROCHEMICAL:
+    production volume:
+      variable: Share|Methane|SabatierElectrochemical
+    ecoinvent alias:
+      name: methane, from electrochemical methanation, with carbon from atmosphere
+      reference product: methane, from electrochemical methanation
+      exists in original database: True
+      ratio: 0.235  # convert from kg to m3 and from normal conditions to 5 bar (density: 0.717 kg/Nm3)
+
+  # CARBON DIOXIDE: (i) DAC: SOLVENT-BASED, SORBENT-BASED; (ii) CEMENT: DIRECT SEPARATION, OXYFUEL, MONOETHANOLAMINE
+  CO2_DAC_SOLVENT:
+    production volume:
+      variable: Share|CO2|DAC|Solvent
+    ecoinvent alias:
+      name: carbon dioxide, captured from atmosphere, with a solvent-based direct air capture system, 1MtCO2
+      reference product: carbon dioxide, captured from atmosphere
+      exists in original database: True
+
+  CO2_DAC_SORBENT:
+    production volume:
+      variable: Share|CO2|DAC|Sorbent
+    ecoinvent alias:
+      name: carbon dioxide, captured from atmosphere, with a sorbent-based direct air capture system, 100ktCO2
+      reference product: carbon dioxide, captured from atmosphere
+      exists in original database: True
+
+  CO2_CEMENT_DIRECT:
+    production volume:
+      variable: Share|CO2|Cement|Direct
+    ecoinvent alias:
+      name: carbon dioxide, captured at cement production plant, using direct separation
+      reference product: carbon dioxide, captured at cement plant
+      exists in original database: True
+
+  CO2_CEMENT_OXYFUEL:
+    production volume:
+      variable: Share|CO2|Cement|Oxyfuel
+    ecoinvent alias:
+      name: carbon dioxide, captured at cement production plant, using oxyfuel
+      reference product: carbon dioxide, captured at cement plant
+      exists in original database: True
+
+  CO2_CEMENT_MONOETHANOLAMINE:
+    production volume:
+      variable: Share|CO2|Cement|Monoethanolamine
+    ecoinvent alias:
+      name: carbon dioxide, captured at cement production plant, using monoethanolamine
+      reference product: carbon dioxide, captured at cement plant
+      exists in original database: True
+
+  # LUBRICATING OIL: HYDROGEN, NATURAL GAS, OIL
+  LUBRICATING_OIL_H2:
+    production volume:
+      variable: Share|LubricatingOil|H2
+    ecoinvent alias:
+      name: lubricating oil production, synthetic, Fischer Tropsch process, hydrogen from electrolysis, energy allocation
+      reference product: lubricating oil, synthetic
+      exists in original database: True
+
+  LUBRICATING_OIL_NATGAS:
+    production volume:
+      variable: Share|LubricatingOil|NatGas
+    ecoinvent alias:
+      name: lubricating oil production, synthetic, Fischer Tropsch process, from natural gas, energy allocation
+      reference product: lubricating oil, synthetic
+      exists in original database: True
+
+  LUBRICATING_OIL_OIL:
+    production volume:
+      variable: Share|LubricatingOil|Oil
+    ecoinvent alias:
+      name: lubricating oil production
+      reference product: lubricating oil
+      exists in original database: True
 
 markets:
   - name: market for biomass, used as fuel (new)
@@ -367,6 +550,262 @@ markets:
         operator: equals
       - name: diesel production, synthetic, Fischer Tropsch process, from natural gas, energy allocation
         product: diesel, synthetic
+        location: RER
+        operator: equals
+    replaces in:
+      - name: ""
+        operator: contains
+
+  - name: market for liquefied petroleum gas (new)
+    reference product: liquefied petroleum gas (new)
+    unit: kilogram
+    includes:
+      - LIQUEFIED_PETROLEUM_GAS_H2
+      - LIQUEFIED_PETROLEUM_GAS_METHANOL
+      - LIQUEFIED_PETROLEUM_GAS_NATGAS
+      - LIQUEFIED_PETROLEUM_GAS_OIL
+    replaces:
+      - name: market for liquefied petroleum gas
+        product: liquefied petroleum gas
+        location: Europe without Switzerland
+        operator: equals
+      - name: market for liquefied petroleum gas
+        product: liquefied petroleum gas
+        location: CH
+        operator: equals
+      - name: liquefied petroleum gas production, synthetic, Fischer Tropsch process, hydrogen from electrolysis, energy allocation
+        product: liquefied petroleum gas, synthetic
+        location: RER
+        operator: equals
+      - name: liquefied petroleum gas production, from methanol, hydrogen from electrolysis, CO2 from DAC, energy allocation
+        product: liquefied petroleum gas, synthetic
+        location: RER
+        operator: equals
+      - name: liquefied petroleum gas production, synthetic, Fischer Tropsch process, from natural gas, energy allocation
+        product: liquefied petroleum gas, synthetic
+        location: RER
+        operator: equals
+    replaces in:
+      - name: ""
+        operator: contains
+
+  - name: market for biogas (new)
+    reference product: biogas (new)
+    unit: cubic meter
+    includes:
+      - BIOGAS_BIOWASTE
+      - BIOGAS_SEWAGE
+      - BIOGAS_MANURE
+      - BIOGAS_GRASS
+    replaces:
+      - name: market for biogas
+        product: biogas
+        location: CH
+        operator: equals
+      - name: treatment of biowaste by anaerobic digestion
+        product: biogas
+        location: CH
+        operator: equals
+      - name: treatment of sewage sludge by anaerobic digestion
+        product: biogas
+        location: CH
+        operator: equals
+      - name: anaerobic digestion of manure
+        product: biogas
+        location: CH
+        operator: equals
+      - name: biogas production from grass
+        product: biogas, from grass
+        location: CH
+        operator: equals
+    replaces in:
+      - name: ""
+        operator: contains
+
+  - name: market for methane, high pressure (new)  # TODO: why is it making 3 locations?
+    reference product: methane, high pressure (new)
+    unit: cubic meter
+    includes:
+      - METHANE_MEMBRANE
+      - METHANE_AMINOWASHING
+      - METHANE_AMINESCRUBBING
+      - METHANE_SWING
+      - METHANE_SABATIER_BIOLOGICAL  # it's input will be in cubic meters, although kilograms are displayed (adapted via 'ratio').
+      - METHANE_SABATIER_ELECTROCHEMICAL  # it's input will be in cubic meters, although kilograms are displayed (adapted via 'ratio').
+    replaces:
+      - name: market for biomethane, high pressure
+        product: biomethane, high pressure
+        location: CH
+        operator: equals
+      - name: market for natural gas, high pressure  # TODO: substitutions not working
+        product: natural gas, high pressure
+        location: AT
+        operator: equals
+      - name: market for natural gas, high pressure
+        product: natural gas, high pressure
+        location: BE
+        operator: equals
+      - name: market for natural gas, high pressure
+        product: natural gas, high pressure
+        location: CH
+        operator: equals
+      - name: market for natural gas, high pressure
+        product: natural gas, high pressure
+        location: CZ
+        operator: equals
+      - name: market for natural gas, high pressure
+        product: natural gas, high pressure
+        location: DE
+        operator: equals
+      - name: market for natural gas, high pressure
+        product: natural gas, high pressure
+        location: DK
+        operator: equals
+      - name: market for natural gas, high pressure
+        product: natural gas, high pressure
+        location: ES
+        operator: equals
+      - name: market for natural gas, high pressure
+        product: natural gas, high pressure
+        location: FI
+        operator: equals
+      - name: market for natural gas, high pressure
+        product: natural gas, high pressure
+        location: FR
+        operator: equals
+      - name: market for natural gas, high pressure
+        product: natural gas, high pressure
+        location: GB
+        operator: equals
+      - name: market for natural gas, high pressure
+        product: natural gas, high pressure
+        location: GR
+        operator: equals
+      - name: market for natural gas, high pressure
+        product: natural gas, high pressure
+        location: HU
+        operator: equals
+      - name: market for natural gas, high pressure
+        product: natural gas, high pressure
+        location: IE
+        operator: equals
+      - name: market for natural gas, high pressure
+        product: natural gas, high pressure
+        location: IT
+        operator: equals
+      - name: market for natural gas, high pressure
+        product: natural gas, high pressure
+        location: NL
+        operator: equals
+      - name: market for natural gas, high pressure
+        product: natural gas, high pressure
+        location: "NO"
+        operator: equals
+      - name: market for natural gas, high pressure
+        product: natural gas, high pressure
+        location: PL
+        operator: equals
+      - name: market for natural gas, high pressure
+        product: natural gas, high pressure
+        location: RO
+        operator: equals
+      - name: market for natural gas, high pressure
+        product: natural gas, high pressure
+        location: SE
+        operator: equals
+      - name: market for natural gas, high pressure
+        product: natural gas, high pressure
+        location: SK
+        operator: equals
+      - name: market for natural gas, high pressure
+        product: natural gas, high pressure
+        location: RoE
+        operator: equals
+      - name: market group for natural gas, high pressure  # TODO: substitutions not working
+        product: natural gas, high pressure
+        location: Europe without Switzerland
+        operator: equals
+      - name: petroleum and gas production, offshore  # offshore production is usually liquefied and exported. We want to avoid that and that is why we substitute it.
+        product: natural gas, high pressure
+        location: DE
+        operator: equals
+      - name: petroleum and gas production, offshore
+        product: natural gas, high pressure
+        location: GB
+        operator: equals
+      - name: petroleum and gas production, offshore
+        product: natural gas, high pressure
+        location: NL
+        operator: equals
+      - name: petroleum and gas production, offshore
+        product: natural gas, high pressure
+        location: "NO"
+        operator: equals
+      - name: petroleum and gas production, offshore
+        product: natural gas, high pressure
+        location: RO
+        operator: equals
+    replaces in:
+      - name: ""
+        operator: contains
+
+  - name: market for carbon dioxide (new)
+    reference product: carbon dioxide (new)
+    unit: kilogram
+    includes:
+      - CO2_DAC_SOLVENT
+      - CO2_DAC_SORBENT
+      - CO2_CEMENT_DIRECT
+      - CO2_CEMENT_OXYFUEL
+      - CO2_CEMENT_MONOETHANOLAMINE
+
+    replaces:
+      - name: carbon dioxide, captured from atmosphere, with a solvent-based direct air capture system, 1MtCO2
+        product: carbon dioxide, captured from atmosphere
+        location: RER
+        operator: equals
+      - name: carbon dioxide, captured from atmosphere, with a sorbent-based direct air capture system, 100ktCO2
+        product: carbon dioxide, captured from atmosphere
+        location: RER
+        operator: equals
+      - name: carbon dioxide, captured at cement production plant, using direct separation
+        product: carbon dioxide, captured at cement plant
+        location: RER
+        operator: equals
+      - name: carbon dioxide, captured at cement production plant, using oxyfuel
+        product: carbon dioxide, captured at cement plant
+        location: RER
+        operator: equals
+      - name: carbon dioxide, captured at cement production plant, using monoethanolamine
+        product: carbon dioxide, captured at cement plant
+        location: RER
+        operator: equals
+    replaces in:
+      - name: ""
+        operator: contains
+
+  - name: market for lubricating oil (new)
+    reference product: lubricating oil (new)
+    unit: kilogram
+    includes:
+      - LUBRICATING_OIL_H2
+      - LUBRICATING_OIL_NATGAS
+      - LUBRICATING_OIL_OIL
+    replaces:
+      - name: market for lubricating oil
+        product: lubricating oil
+        location: RER
+        operator: equals
+      - name: lubricating oil production, synthetic, Fischer Tropsch process, hydrogen from electrolysis, energy allocation
+        product: lubricating oil, synthetic
+        location: RER
+        operator: equals
+      - name: lubricating oil production, synthetic, Fischer Tropsch process, from natural gas, energy allocation
+        product: lubricating oil, synthetic
+        location: RER
+        operator: equals
+      - name: lubricating oil production
+        product: lubricating oil
         location: RER
         operator: equals
     replaces in:
