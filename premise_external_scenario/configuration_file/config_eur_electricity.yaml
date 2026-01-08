@@ -1,0 +1,112 @@
+# Configuration file for custom scenarios for `premise`
+
+---
+
+production pathways:
+  # ELECTRICITY: (i) NON-RENEWABLES: COAL, COMBINED CYCLE; (ii) RENEWABLES: GEOTHERMAL, HYDRO (RUN-OF), SOLAR PV
+  ELECTRICITY_COAL:
+    production volume:
+      variable: Share|Electricity|Coal
+    ecoinvent alias:
+      name: electricity production, hard coal
+      reference product: electricity, high voltage
+      exists in original database: True
+      regionalize: True
+
+  ELECTRICITY_CC:
+    production volume:
+      variable: Share|Electricity|CombinedCycle
+    ecoinvent alias:
+      name: electricity production, natural gas, combined cycle power plant
+      reference product: electricity, high voltage
+      exists in original database: True
+      regionalize: True
+
+  ELECTRICITY_GEOTHERMAL:
+    production volume:
+      variable: Share|Electricity|Geothermal
+    ecoinvent alias:
+      name: electricity production, deep geothermal
+      reference product: electricity, high voltage
+      exists in original database: True
+      regionalize: True
+
+  ELECTRICITY_HYDRO_RIVER:
+    production volume:
+      variable: Share|Electricity|HydroRunofRiver
+    ecoinvent alias:
+      name: electricity production, hydro, run-of-river
+      reference product: electricity, high voltage
+      exists in original database: True
+      regionalize: True
+
+  ELECTRICITY_SOLAR_PV:  # NOTE: open-ground is not low-voltage, but rather high voltage
+    production volume:
+      variable: Share|Electricity|SolarPV
+    ecoinvent alias:
+      name: electricity production, photovoltaic, 570kWp open ground installation, multi-Si
+      reference product: electricity, low voltage
+      exists in original database: True
+      regionalize: True
+
+  ELECTRICITY_IMPORTS_FR:  # TODO: I'll need to include all imports to the EU
+    production volume:
+      variable: Share|Electricity|ImportsFR
+    ecoinvent alias:
+      name: electricity, high voltage, import from FR
+      reference product: electricity, high voltage
+      exists in original database: True
+      regionalize: True
+
+  ELECTRICITY_IMPORTS_ES:
+    production volume:
+      variable: Share|Electricity|ImportsES
+    ecoinvent alias:
+      name: electricity, high voltage, import from ES
+      reference product: electricity, high voltage
+      exists in original database: True
+      regionalize: True
+
+  # MEDIUM VOLTAGE
+  ELECTRICITY_TRANSFORMATION_HV_MV:
+    production volume:
+      variable: Share|Electricity|TransformationHVMV
+    ecoinvent alias:
+      name: electricity voltage transformation from high to medium voltage
+      reference product: electricity, medium voltage
+      exists in original database: True
+
+  # LOW VOLTAGE
+  ELECTRICITY_TRANSFORMATION_MV_LV:
+    production volume:
+      variable: Share|Electricity|TransformationMVLV
+    ecoinvent alias:
+      name: electricity voltage transformation from medium to low voltage
+      reference product: electricity, low voltage
+      exists in original database: True
+      ratio: 1.05  # transmission and distribution losses
+
+markets:
+  - name: market for electricity, high voltage (new)
+    reference product: electricity, high voltage (new)
+    unit: kilowatt hour
+    includes:
+      - ELECTRICITY_COAL
+      - ELECTRICITY_CC
+      - ELECTRICITY_GEOTHERMAL
+      - ELECTRICITY_HYDRO_RIVER
+      - ELECTRICITY_SOLAR_PV
+      - ELECTRICITY_IMPORTS_FR
+      - ELECTRICITY_IMPORTS_ES
+
+  - name: market for electricity, medium voltage (new)
+    reference product: electricity, medium voltage (new)
+    unit: kilowatt hour
+    includes:
+      - ELECTRICITY_TRANSFORMATION_HV_MV
+
+  - name: market for electricity, low voltage (new)
+    reference product: electricity, low voltage (new)
+    unit: kilowatt hour
+    includes:
+      - ELECTRICITY_TRANSFORMATION_MV_LV

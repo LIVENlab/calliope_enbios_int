@@ -1,0 +1,17 @@
+﻿model,pathway,scenario,region,variables,unit,2020,2050
+image,SSP2-Base,Business As Usual,ES,Share|Electricity|Coal,share,0.5,0.5
+image,SSP2-Base,Business As Usual,ES,Share|Electricity|CombinedCycle,share,0.1,0.1
+image,SSP2-Base,Business As Usual,ES,Share|Electricity|Geothermal,share,0.1,0.1
+image,SSP2-Base,Business As Usual,ES,Share|Electricity|HydroRunofRiver,share,0.1,0.1
+image,SSP2-Base,Business As Usual,ES,Share|Electricity|SolarPV,share,0.1,0.1
+image,SSP2-Base,Business As Usual,ES,Share|Electricity|ImportsFR,share,0.1,0.1
+image,SSP2-Base,Business As Usual,ES,Share|Electricity|TransformationHVMV,share,1.0,1.0
+image,SSP2-Base,Business As Usual,ES,Share|Electricity|TransformationMVLV,share,1.0,1.0
+image,SSP2-Base,Business As Usual,FR,Share|Electricity|Coal,share,0.5,0.5
+image,SSP2-Base,Business As Usual,FR,Share|Electricity|CombinedCycle,share,0.1,0.1
+image,SSP2-Base,Business As Usual,FR,Share|Electricity|Geothermal,share,0.1,0.1
+image,SSP2-Base,Business As Usual,FR,Share|Electricity|HydroRunofRiver,share,0.1,0.1
+image,SSP2-Base,Business As Usual,FR,Share|Electricity|SolarPV,share,0.1,0.1
+image,SSP2-Base,Business As Usual,FR,Share|Electricity|ImportsES,share,0.1,0.1
+image,SSP2-Base,Business As Usual,FR,Share|Electricity|TransformationHVMV,share,1.0,1.0
+image,SSP2-Base,Business As Usual,FR,Share|Electricity|TransformationMVLV,share,1.0,1.0

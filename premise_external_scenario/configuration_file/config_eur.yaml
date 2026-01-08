@@ -270,6 +270,7 @@ production pathways:
       name: biogas purification to biomethane by membrane technique
       reference product: biomethane, high pressure
       exists in original database: True
+      regionalize: True
 
   METHANE_AMINOWASHING:
     production volume:
@@ -278,6 +279,7 @@ production pathways:
       name: biogas purification to biomethane by amino washing
       reference product: biomethane, high pressure
       exists in original database: True
+      regionalize: True
 
   METHANE_AMINESCRUBBING:
     production volume:
@@ -294,6 +296,7 @@ production pathways:
       name: biogas purification to biomethane by pressure swing adsorption
       reference product: biomethane, high pressure
       exists in original database: True
+      regionalize: True
 
   METHANE_SABATIER_BIOLOGICAL:
     production volume:
@@ -622,7 +625,7 @@ markets:
       - name: ""
         operator: contains
 
-  - name: market for methane, high pressure (new)  # TODO: why is it making 3 locations?
+  - name: market for methane, high pressure (new)
     reference product: methane, high pressure (new)
     unit: cubic meter
     includes:
@@ -637,7 +640,7 @@ markets:
         product: biomethane, high pressure
         location: CH
         operator: equals
-      - name: market for natural gas, high pressure  # TODO: substitutions not working
+      - name: market for natural gas, high pressure
         product: natural gas, high pressure
         location: AT
         operator: equals
@@ -721,7 +724,7 @@ markets:
         product: natural gas, high pressure
         location: RoE
         operator: equals
-      - name: market group for natural gas, high pressure  # TODO: substitutions not working
+      - name: market group for natural gas, high pressure
         product: natural gas, high pressure
         location: Europe without Switzerland
         operator: equals

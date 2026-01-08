@@ -29,10 +29,10 @@ image,SSP2-Base,Business As Usual,CH,Share|Biogas|Biowaste,share,0.1,0.1
 image,SSP2-Base,Business As Usual,CH,Share|Biogas|Sewage,share,0.4,0.4
 image,SSP2-Base,Business As Usual,CH,Share|Biogas|Manure,share,0.4,0.4
 image,SSP2-Base,Business As Usual,CH,Share|Biogas|Grass,share,0.1,0.1
-image,SSP2-Base,Business As Usual,CH,Share|Methane|Membrane,share,0.1,0.1
-image,SSP2-Base,Business As Usual,CH,Share|Methane|AminoWashing,share,0.1,0.1
+image,SSP2-Base,Business As Usual,RER,Share|Methane|Membrane,share,0.1,0.1
+image,SSP2-Base,Business As Usual,RER,Share|Methane|AminoWashing,share,0.1,0.1
 image,SSP2-Base,Business As Usual,RER,Share|Methane|AmineScrubbing,share,0.4,0.4
-image,SSP2-Base,Business As Usual,CH,Share|Methane|Swing,share,0.1,0.1
+image,SSP2-Base,Business As Usual,RER,Share|Methane|Swing,share,0.1,0.1
 image,SSP2-Base,Business As Usual,RER,Share|Methane|SabatierBiological,share,0.1,0.1
 image,SSP2-Base,Business As Usual,RER,Share|Methane|SabatierElectrochemical,share,0.2,0.2
 image,SSP2-Base,Business As Usual,RER,Share|CO2|DAC|Solvent,share,0.4,0.4
