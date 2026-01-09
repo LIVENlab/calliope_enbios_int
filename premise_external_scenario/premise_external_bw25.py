@@ -6,7 +6,7 @@ import wurst.searching as ws
 import bw2io as bi
 
 bd.projects.set_current('bw25_matrix')
-# in case it is needed
+
 def import_ei_12():
     bi.import_ecoinvent_release(
         version="3.12",
@@ -72,8 +72,9 @@ for replaceable_act in acts_to_be_replaced:
     for act in data:
         for exchange in ws.technosphere(act):
             if exchange['product'] == replaceable_act['reference product'] and exchange['name'] == replaceable_act['name'] and exchange['unit'] == replaceable_act['unit'] and exchange['location'] == replaceable_act['location']:
-                exchange['product'] = replacing_act['reference product']
-                exchange['name'] = replacing_act['name']
+                if not exchange['name'] == replaceable_act['name']:
+                    exchange['product'] = replacing_act['reference product']
+                    exchange['name'] = replacing_act['name']
     counter += 1
 
 with open(pickle_path, "wb") as f:

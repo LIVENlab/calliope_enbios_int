@@ -923,7 +923,7 @@ markets:
     replaces: # it allows name, product, location and unit as filters!
       - name: market for wood chips, wet, measured as dry mass
         product: wood chips, wet, measured as dry mass
-        location: Europe without Switzerland
+        location: Europe without Switzerland  # TODO: I should add here all locations in Europe, and move this below ELECTRICITY. ELECTRICITY creates a regional heat and power co-generation that consumes de facto wood chips from their own regions!
         operator: equals  # it allows any string. If it is not 'equals' it will be ws.contains() automatically
       - name: market for wood chips, wet, measured as dry mass
         product: wood chips, wet, measured as dry mass
@@ -1156,7 +1156,7 @@ markets:
       - name: ""
         operator: contains
 
-  - name: market for methane, high pressure (new)
+  - name: market for methane, high pressure (new)  # TODO: where is the conventional natural gas production? Where are the imports!? Check with market for natural gas, high pressure
     reference product: methane, high pressure (new)
     unit: cubic meter
     includes:
