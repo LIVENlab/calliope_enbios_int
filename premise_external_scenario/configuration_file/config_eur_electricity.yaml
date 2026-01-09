@@ -6,7 +6,7 @@ production pathways:
   # ELECTRICITY: (i) NON-RENEWABLES: COAL, COMBINED CYCLE; (ii) RENEWABLES: GEOTHERMAL, HYDRO (RUN-OF), SOLAR PV
   ELECTRICITY_COAL:
     production volume:
-      variable: Share|Electricity|Coal
+      variable: Share|ElectricityHV|Coal
     ecoinvent alias:
       name: electricity production, hard coal
       reference product: electricity, high voltage
@@ -15,16 +15,52 @@ production pathways:
 
   ELECTRICITY_CC:
     production volume:
-      variable: Share|Electricity|CombinedCycle
+      variable: Share|ElectricityHV|CombinedCycle
     ecoinvent alias:
       name: electricity production, natural gas, combined cycle power plant
       reference product: electricity, high voltage
       exists in original database: True
       regionalize: True
 
+  ELECTRICITY_GAS_TURBINE:
+    production volume:
+      variable: Share|ElectricityHV|GasTurbine
+    ecoinvent alias:
+      name: electricity production, natural gas, conventional power plant
+      reference product: electricity, high voltage
+      exists in original database: True
+      regionalize: True
+
+  ELECTRICITY_CO_GENERATION_GAS:
+    production volume:
+      variable: Share|ElectricityHV|CogenerationGas
+    ecoinvent alias:
+      name: heat and power co-generation, natural gas, combined cycle power plant, 400MW electrical
+      reference product: electricity, high voltage
+      exists in original database: True
+      regionalize: True
+
+  ELECTRICITY_NUCLEAR:
+    production volume:
+      variable: Share|ElectricityHV|Nuclear
+    ecoinvent alias:
+      name: electricity production, nuclear, pressure water reactor
+      reference product: electricity, high voltage
+      exists in original database: True
+      regionalize: True
+
+  ELECTRICITY_OIL:
+    production volume:
+      variable: Share|ElectricityHV|Oil
+    ecoinvent alias:
+      name: electricity production, oil
+      reference product: electricity, high voltage
+      exists in original database: True
+      regionalize: True
+
   ELECTRICITY_GEOTHERMAL:
     production volume:
-      variable: Share|Electricity|Geothermal
+      variable: Share|ElectricityHV|Geothermal
     ecoinvent alias:
       name: electricity production, deep geothermal
       reference product: electricity, high voltage
@@ -33,58 +69,470 @@ production pathways:
 
   ELECTRICITY_HYDRO_RIVER:
     production volume:
-      variable: Share|Electricity|HydroRunofRiver
+      variable: Share|ElectricityHV|HydroRunofRiver
     ecoinvent alias:
       name: electricity production, hydro, run-of-river
       reference product: electricity, high voltage
       exists in original database: True
       regionalize: True
 
-  ELECTRICITY_SOLAR_PV:  # NOTE: open-ground is not low-voltage, but rather high voltage
+  ELECTRICITY_HYDRO_RESERVOIR:
     production volume:
-      variable: Share|Electricity|SolarPV
+      variable: Share|ElectricityHV|HydroReservoir
+    ecoinvent alias:
+      name: electricity production, hydro, reservoir, non-alpine region
+      reference product: electricity, high voltage
+      exists in original database: True
+      regionalize: True
+
+  ELECTRICITY_BIOMASS:
+    production volume:
+      variable: Share|ElectricityHV|Biomass
+    ecoinvent alias:
+      name: heat and power co-generation, wood chips, 6667 kW, state-of-the-art 2014
+      reference product: electricity, high voltage
+      exists in original database: True
+      regionalize: True
+
+  ELECTRICITY_BIOGAS:
+    production volume:
+      variable: Share|ElectricityHV|Biogas
+    ecoinvent alias:
+      name: heat and power co-generation, biogas, gas engine
+      reference product: electricity, high voltage
+      exists in original database: True
+      regionalize: True
+
+  ELECTRICITY_WIND_ONSHORE:
+    production volume:
+      variable: Share|ElectricityHV|WindOnshore
+    ecoinvent alias:
+      name: electricity production, wind, 1-3MW turbine, onshore
+      reference product: electricity, high voltage
+      exists in original database: True
+      regionalize: True
+
+  ELECTRICITY_WIND_OFFSHORE:
+    production volume:
+      variable: Share|ElectricityHV|WindOffshore
+    ecoinvent alias:
+      name: electricity production, wind, 1-3MW turbine, offshore
+      reference product: electricity, high voltage
+      exists in original database: True
+      regionalize: True
+
+  ELECTRICITY_SOLAR_THERMAL:
+    production volume:
+      variable: Share|ElectricityHV|SolarThermal
+    ecoinvent alias:
+      name: electricity production, solar thermal parabolic trough, 50 MW
+      reference product: electricity, high voltage
+      exists in original database: True
+      regionalize: True
+
+  ELECTRICITY_SOLAR_PV_OPEN: # NOTE: open-ground is not low-voltage, but rather high voltage
+    production volume:
+      variable: Share|ElectricityHV|SolarPVOpen
     ecoinvent alias:
       name: electricity production, photovoltaic, 570kWp open ground installation, multi-Si
       reference product: electricity, low voltage
       exists in original database: True
       regionalize: True
 
-  ELECTRICITY_IMPORTS_FR:  # TODO: I'll need to include all imports to the EU
+  ELECTRICITY_HYDROGEN:
     production volume:
-      variable: Share|Electricity|ImportsFR
+      variable: Share|ElectricityHV|Hydrogen
     ecoinvent alias:
-      name: electricity, high voltage, import from FR
+      name: electricity production, from hydrogen-fired one gigawatt gas turbine
       reference product: electricity, high voltage
       exists in original database: True
       regionalize: True
 
+  ELECTRICITY_BATTERY_HYDRO:
+    production volume:
+      variable: Share|ElectricityHV|BatteryHydro
+    ecoinvent alias:
+      name: electricity production, hydro, pumped storage
+      reference product: electricity, high voltage
+      exists in original database: True
+      regionalize: True
+
+  # IMPORTS (HIGH VOLTAGE)
+  ELECTRICITY_IMPORTS_NL:
+    production volume:
+      variable: Share|ElectricityHV|ImportsNL
+    ecoinvent alias:
+      name: electricity, high voltage, import from NL
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_HU:
+    production volume:
+      variable: Share|ElectricityHV|ImportsHU
+    ecoinvent alias:
+      name: electricity, high voltage, import from HU
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_GB:
+    production volume:
+      variable: Share|ElectricityHV|ImportsGB
+    ecoinvent alias:
+      name: electricity, high voltage, import from GB
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_PT:
+    production volume:
+      variable: Share|ElectricityHV|ImportsPT
+    ecoinvent alias:
+      name: electricity, high voltage, import from PT
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_MT:
+    production volume:
+      variable: Share|ElectricityHV|ImportsMT
+    ecoinvent alias:
+      name: electricity, high voltage, import from MT
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_RU:
+    production volume:
+      variable: Share|ElectricityHV|ImportsRU
+    ecoinvent alias:
+      name: electricity, high voltage, import from RU
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_IE:
+    production volume:
+      variable: Share|ElectricityHV|ImportsIE
+    ecoinvent alias:
+      name: electricity, high voltage, import from IE
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_RO:
+    production volume:
+      variable: Share|ElectricityHV|ImportsRO
+    ecoinvent alias:
+      name: electricity, high voltage, import from RO
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_ME:
+    production volume:
+      variable: Share|ElectricityHV|ImportsME
+    ecoinvent alias:
+      name: electricity, high voltage, import from ME
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_AL:
+    production volume:
+      variable: Share|ElectricityHV|ImportsAL
+    ecoinvent alias:
+      name: electricity, high voltage, import from AL
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_RS:
+    production volume:
+      variable: Share|ElectricityHV|ImportsRS
+    ecoinvent alias:
+      name: electricity, high voltage, import from RS
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_FI:
+    production volume:
+      variable: Share|ElectricityHV|ImportsFI
+    ecoinvent alias:
+      name: electricity, high voltage, import from FI
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_BG:
+    production volume:
+      variable: Share|ElectricityHV|ImportsBG
+    ecoinvent alias:
+      name: electricity, high voltage, import from BG
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_DK:
+    production volume:
+      variable: Share|ElectricityHV|ImportsDK
+    ecoinvent alias:
+      name: electricity, high voltage, import from DK
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_IT:
+    production volume:
+      variable: Share|ElectricityHV|ImportsIT
+    ecoinvent alias:
+      name: electricity, high voltage, import from IT
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_SI:
+    production volume:
+      variable: Share|ElectricityHV|ImportsSI
+    ecoinvent alias:
+      name: electricity, high voltage, import from SI
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_SE:
+    production volume:
+      variable: Share|ElectricityHV|ImportsSE
+    ecoinvent alias:
+      name: electricity, high voltage, import from SE
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_LV:
+    production volume:
+      variable: Share|ElectricityHV|ImportsLV
+    ecoinvent alias:
+      name: electricity, high voltage, import from LV
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_MK:
+    production volume:
+      variable: Share|ElectricityHV|ImportsMK
+    ecoinvent alias:
+      name: electricity, high voltage, import from MK
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_CZ:
+    production volume:
+      variable: Share|ElectricityHV|ImportsCZ
+    ecoinvent alias:
+      name: electricity, high voltage, import from CZ
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_UA:
+    production volume:
+      variable: Share|ElectricityHV|ImportsUA
+    ecoinvent alias:
+      name: electricity, high voltage, import from UA
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_DE:
+    production volume:
+      variable: Share|ElectricityHV|ImportsDE
+    ecoinvent alias:
+      name: electricity, high voltage, import from DE
+      reference product: electricity, high voltage
+      exists in original database: True
+
   ELECTRICITY_IMPORTS_ES:
     production volume:
-      variable: Share|Electricity|ImportsES
+      variable: Share|ElectricityHV|ImportsES
     ecoinvent alias:
       name: electricity, high voltage, import from ES
       reference product: electricity, high voltage
       exists in original database: True
-      regionalize: True
+
+  ELECTRICITY_IMPORTS_GR:
+    production volume:
+      variable: Share|ElectricityHV|ImportsGR
+    ecoinvent alias:
+      name: electricity, high voltage, import from GR
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_LT:
+    production volume:
+      variable: Share|ElectricityHV|ImportsLT
+    ecoinvent alias:
+      name: electricity, high voltage, import from LT
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_TR:
+    production volume:
+      variable: Share|ElectricityHV|ImportsTR
+    ecoinvent alias:
+      name: electricity, high voltage, import from TR
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_LU:
+    production volume:
+      variable: Share|ElectricityHV|ImportsLU
+    ecoinvent alias:
+      name: electricity, high voltage, import from LU
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_BY:
+    production volume:
+      variable: Share|ElectricityHV|ImportsBY
+    ecoinvent alias:
+      name: electricity, high voltage, import from BY
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_MD:
+    production volume:
+      variable: Share|ElectricityHV|ImportsMD
+    ecoinvent alias:
+      name: electricity, high voltage, import from MD
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_EE:
+    production volume:
+      variable: Share|ElectricityHV|ImportsEE
+    ecoinvent alias:
+      name: electricity, high voltage, import from EE
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_FR:
+    production volume:
+      variable: Share|ElectricityHV|ImportsFR
+    ecoinvent alias:
+      name: electricity, high voltage, import from FR
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_CH:
+    production volume:
+      variable: Share|ElectricityHV|ImportsCH
+    ecoinvent alias:
+      name: electricity, high voltage, import from CH
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_BA:
+    production volume:
+      variable: Share|ElectricityHV|ImportsBA
+    ecoinvent alias:
+      name: electricity, high voltage, import from BA
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_PL:
+    production volume:
+      variable: Share|ElectricityHV|ImportsPL
+    ecoinvent alias:
+      name: electricity, high voltage, import from PL
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_AT:
+    production volume:
+      variable: Share|ElectricityHV|ImportsAT
+    ecoinvent alias:
+      name: electricity, high voltage, import from AT
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_MA:
+    production volume:
+      variable: Share|ElectricityHV|ImportsMA
+    ecoinvent alias:
+      name: electricity, high voltage, import from MA
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_NO:
+    production volume:
+      variable: Share|ElectricityHV|ImportsNO
+    ecoinvent alias:
+      name: electricity, high voltage, import from NO
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_SK:
+    production volume:
+      variable: Share|ElectricityHV|ImportsSK
+    ecoinvent alias:
+      name: electricity, high voltage, import from SK
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_HR:
+    production volume:
+      variable: Share|ElectricityHV|ImportsHR
+    ecoinvent alias:
+      name: electricity, high voltage, import from HR
+      reference product: electricity, high voltage
+      exists in original database: True
+
+  ELECTRICITY_IMPORTS_BE:
+    production volume:
+      variable: Share|ElectricityHV|ImportsBE
+    ecoinvent alias:
+      name: electricity, high voltage, import from BE
+      reference product: electricity, high voltage
+      exists in original database: True
+
 
   # MEDIUM VOLTAGE
   ELECTRICITY_TRANSFORMATION_HV_MV:
     production volume:
-      variable: Share|Electricity|TransformationHVMV
+      variable: Share|ElectricityMV|TransformationHVMV
     ecoinvent alias:
       name: electricity voltage transformation from high to medium voltage
       reference product: electricity, medium voltage
       exists in original database: True
 
+  ELECTRICITY_SOLAR_PV_COMMERCIAL: # medium voltage
+    production volume:
+      variable: Share|ElectricityMV|SolarPVRoofCommercial
+    ecoinvent alias:
+      name: electricity production, photovoltaic, commercial
+      reference product: electricity, low voltage
+      exists in original database: True
+      regionalize: True
+
+  ELECTRICITY_WASTE: # medium voltage
+    production volume:
+      variable: Share|ElectricityMV|Waste
+    ecoinvent alias:
+      name: electricity, from municipal waste incineration to generic market for electricity, medium voltage
+      reference product: electricity, medium voltage
+      exists in original database: True
+      regionalize: True
+
   # LOW VOLTAGE
   ELECTRICITY_TRANSFORMATION_MV_LV:
     production volume:
-      variable: Share|Electricity|TransformationMVLV
+      variable: Share|ElectricityLV|TransformationMVLV
     ecoinvent alias:
       name: electricity voltage transformation from medium to low voltage
       reference product: electricity, low voltage
       exists in original database: True
       ratio: 1.05  # transmission and distribution losses
+
+  ELECTRICITY_BATTERY_CHEMICAL: # low voltage
+    production volume:
+      variable: Share|ElectricityLV|BatteryChemical
+    ecoinvent alias:
+      name: electricity supply, from stationary battery (CONT scenario)
+      reference product: electricity, low voltage
+      exists in original database: True
+      regionalize: True
+
+  ELECTRICITY_SOLAR_PV_RESIDENTIAL: # low voltage
+    production volume:
+      variable: Share|ElectricityLV|SolarPVRoofResidential
+    ecoinvent alias:
+      name: electricity production, photovoltaic, residential
+      reference product: electricity, low voltage
+      exists in original database: True
+      regionalize: True
 
 markets:
   - name: market for electricity, high voltage (new)
@@ -93,20 +541,74 @@ markets:
     includes:
       - ELECTRICITY_COAL
       - ELECTRICITY_CC
+      - ELECTRICITY_GAS_TURBINE
+      - ELECTRICITY_CO_GENERATION_GAS
+      - ELECTRICITY_NUCLEAR
+      - ELECTRICITY_OIL
       - ELECTRICITY_GEOTHERMAL
       - ELECTRICITY_HYDRO_RIVER
-      - ELECTRICITY_SOLAR_PV
+      - ELECTRICITY_HYDRO_RESERVOIR
+      - ELECTRICITY_BIOMASS
+      - ELECTRICITY_BIOGAS
+      - ELECTRICITY_WIND_ONSHORE
+      - ELECTRICITY_WIND_OFFSHORE
+      - ELECTRICITY_SOLAR_THERMAL
+      - ELECTRICITY_SOLAR_PV_OPEN
+      - ELECTRICITY_HYDROGEN
+      - ELECTRICITY_BATTERY_HYDRO
+      - ELECTRICITY_IMPORTS_NL
+      - ELECTRICITY_IMPORTS_HU
+      - ELECTRICITY_IMPORTS_GB
+      - ELECTRICITY_IMPORTS_PT
+      - ELECTRICITY_IMPORTS_MT
+      - ELECTRICITY_IMPORTS_RU
+      - ELECTRICITY_IMPORTS_IE
+      - ELECTRICITY_IMPORTS_RO
+      - ELECTRICITY_IMPORTS_ME
+      - ELECTRICITY_IMPORTS_AL
+      - ELECTRICITY_IMPORTS_RS
+      - ELECTRICITY_IMPORTS_FI
+      - ELECTRICITY_IMPORTS_BG
+      - ELECTRICITY_IMPORTS_DK
+      - ELECTRICITY_IMPORTS_IT
+      - ELECTRICITY_IMPORTS_SI
+      - ELECTRICITY_IMPORTS_SE
+      - ELECTRICITY_IMPORTS_LV
+      - ELECTRICITY_IMPORTS_MK
+      - ELECTRICITY_IMPORTS_CZ
+      - ELECTRICITY_IMPORTS_UA
+      - ELECTRICITY_IMPORTS_DE
       - ELECTRICITY_IMPORTS_FR
       - ELECTRICITY_IMPORTS_ES
+      - ELECTRICITY_IMPORTS_GR
+      - ELECTRICITY_IMPORTS_LT
+      - ELECTRICITY_IMPORTS_TR
+      - ELECTRICITY_IMPORTS_LU
+      - ELECTRICITY_IMPORTS_BY
+      - ELECTRICITY_IMPORTS_MD
+      - ELECTRICITY_IMPORTS_EE
+      - ELECTRICITY_IMPORTS_CH
+      - ELECTRICITY_IMPORTS_BA
+      - ELECTRICITY_IMPORTS_PL
+      - ELECTRICITY_IMPORTS_AT
+      - ELECTRICITY_IMPORTS_MA
+      - ELECTRICITY_IMPORTS_NO
+      - ELECTRICITY_IMPORTS_SK
+      - ELECTRICITY_IMPORTS_HR
+      - ELECTRICITY_IMPORTS_BE
 
   - name: market for electricity, medium voltage (new)
     reference product: electricity, medium voltage (new)
     unit: kilowatt hour
     includes:
       - ELECTRICITY_TRANSFORMATION_HV_MV
+      - ELECTRICITY_SOLAR_PV_COMMERCIAL
+      - ELECTRICITY_WASTE
 
   - name: market for electricity, low voltage (new)
     reference product: electricity, low voltage (new)
     unit: kilowatt hour
     includes:
       - ELECTRICITY_TRANSFORMATION_MV_LV
+      - ELECTRICITY_BATTERY_CHEMICAL
+      - ELECTRICITY_SOLAR_PV_RESIDENTIAL
