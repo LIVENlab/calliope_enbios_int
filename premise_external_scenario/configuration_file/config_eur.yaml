@@ -178,7 +178,7 @@ production pathways:
       reference product: biodiesel, from forest residues
       exists in original database: True
 
-  DIESEL_NATGAS:  # TODO: still not substituted Nat Gas! Same problem
+  DIESEL_NATGAS:
     production volume:
       variable: Share|Diesel|NatGas
     ecoinvent alias:
@@ -186,7 +186,7 @@ production pathways:
       reference product: diesel, synthetic
       exists in original database: True
 
-  DIESEL_OIL:
+  DIESEL_OIL:  # TODO: check regionalization. Look-up the code where it is implemented!
     production volume:
       variable: Share|Diesel|Oil
     ecoinvent alias:
@@ -212,7 +212,7 @@ production pathways:
       reference product: liquefied petroleum gas, synthetic
       exists in original database: True
 
-  LIQUEFIED_PETROLEUM_GAS_NATGAS: # TODO: still not substituted Nat Gas! Same problem
+  LIQUEFIED_PETROLEUM_GAS_NATGAS:
     production volume:
       variable: Share|LiquefiedPetroleumGas|NatGas
     ecoinvent alias:
@@ -220,7 +220,7 @@ production pathways:
       reference product: liquefied petroleum gas, synthetic
       exists in original database: True
 
-  LIQUEFIED_PETROLEUM_GAS_OIL:
+  LIQUEFIED_PETROLEUM_GAS_OIL: # TODO: regionalize is problematic!
     production volume:
       variable: Share|LiquefiedPetroleumGas|Oil
     ecoinvent alias:
@@ -262,7 +262,7 @@ production pathways:
       reference product: biogas, from grass
       exists in original database: True
 
-  # METHANE: (i) BIOGAS PURIFICATION: MEMBRANE, AMINO-WASHING, AMINO-SCRUBBING, SWING ADSORPTION; (ii) SABATIER METHANATION: BIOLOGICAL, ELECTROCHEMICAL
+  # METHANE: (i) BIOGAS PURIFICATION: MEMBRANE, AMINO-WASHING, AMINO-SCRUBBING, SWING ADSORPTION; (ii) SABATIER METHANATION: BIOLOGICAL, ELECTROCHEMICAL; (iii) FOSSIL, AND IMPORTS
   METHANE_MEMBRANE:
     production volume:
       variable: Share|Methane|Membrane
@@ -288,6 +288,8 @@ production pathways:
       name: biomethane production, from biogas upgrading, using amine scrubbing
       reference product: biomethane, from biogas upgrading, using amine scrubbing
       exists in original database: True
+      ratio: 0.235  # convert from kg to m3 and from normal conditions to 5 bar (density: 0.717 kg/Nm3)
+      regionalize: True
 
   METHANE_SWING:
     production volume:
@@ -306,6 +308,7 @@ production pathways:
       reference product: methane, from biological methanation
       exists in original database: True
       ratio: 0.235  # convert from kg to m3 and from normal conditions to 5 bar (density: 0.717 kg/Nm3)
+      regionalize: True
 
   METHANE_SABATIER_ELECTROCHEMICAL:
     production volume:
@@ -315,6 +318,147 @@ production pathways:
       reference product: methane, from electrochemical methanation
       exists in original database: True
       ratio: 0.235  # convert from kg to m3 and from normal conditions to 5 bar (density: 0.717 kg/Nm3)
+      regionalize: True
+
+  METHANE_FOSSIL_ONSHORE:  # TODO: when regionalized, its impacts change a lot compared to NON-Regionalized! How can I deal with it? Check: 1. Original code; 2. What happens if I do not regionalize. Which region does it take by default? Is it always the same if I make it twice?
+    production volume:
+      variable: Share|Methane|FossilOnshore
+    ecoinvent alias:
+      name: petroleum and gas production, onshore
+      reference product: natural gas, high pressure
+      exists in original database: True
+      regionalize: True
+
+  METHANE_FOSSIL_OFFSHORE:  # TODO: when regionalized, its impacts change a lot compared to NON-Regionalized! How can I deal with it?
+    production volume:
+      variable: Share|Methane|FossilOffshore
+    ecoinvent alias:
+      name: petroleum and gas production, offshore
+      reference product: natural gas, high pressure
+      exists in original database: True
+      regionalize: True
+
+  METHANE_IMPORT_GB:
+    production volume:
+      variable: Share|Methane|ImportGB
+    ecoinvent alias:
+      name: natural gas, high pressure, import from GB
+      reference product: natural gas, high pressure
+      exists in original database: True
+
+  METHANE_IMPORT_DE:
+    production volume:
+      variable: Share|Methane|ImportDE
+    ecoinvent alias:
+      name: natural gas, high pressure, import from DE
+      reference product: natural gas, high pressure
+      exists in original database: True
+
+  METHANE_IMPORT_IT:
+    production volume:
+      variable: Share|Methane|ImportIT
+    ecoinvent alias:
+      name: natural gas, high pressure, import from IT
+      reference product: natural gas, high pressure
+      exists in original database: True
+
+  METHANE_IMPORT_FR:
+    production volume:
+      variable: Share|Methane|ImportFR
+    ecoinvent alias:
+      name: natural gas, high pressure, import from FR
+      reference product: natural gas, high pressure
+      exists in original database: True
+
+  METHANE_IMPORT_FI:
+    production volume:
+      variable: Share|Methane|ImportFI
+    ecoinvent alias:
+      name: natural gas, high pressure, import from FI
+      reference product: natural gas, high pressure
+      exists in original database: True
+
+  METHANE_IMPORT_QA:
+    production volume:
+      variable: Share|Methane|ImportQA
+    ecoinvent alias:
+      name: natural gas, high pressure, import from QA
+      reference product: natural gas, high pressure
+      exists in original database: True
+
+  METHANE_IMPORT_NO:
+    production volume:
+      variable: Share|Methane|ImportNO
+    ecoinvent alias:
+      name: natural gas, high pressure, import from NO
+      reference product: natural gas, high pressure
+      exists in original database: True
+
+  METHANE_IMPORT_BE:
+    production volume:
+      variable: Share|Methane|ImportBE
+    ecoinvent alias:
+      name: natural gas, high pressure, import from BE
+      reference product: natural gas, high pressure
+      exists in original database: True
+
+  METHANE_IMPORT_LY:
+    production volume:
+      variable: Share|Methane|ImportLY
+    ecoinvent alias:
+      name: natural gas, high pressure, import from LY
+      reference product: natural gas, high pressure
+      exists in original database: True
+
+  METHANE_IMPORT_RU:
+    production volume:
+      variable: Share|Methane|ImportRU
+    ecoinvent alias:
+      name: natural gas, high pressure, import from RU
+      reference product: natural gas, high pressure
+      exists in original database: True
+
+  METHANE_IMPORT_DZ:  # Algeria
+    production volume:
+      variable: Share|Methane|ImportDZ
+    ecoinvent alias:
+      name: natural gas, high pressure, import from DZ
+      reference product: natural gas, high pressure
+      exists in original database: True
+
+  METHANE_IMPORT_NL:
+    production volume:
+      variable: Share|Methane|ImportNL
+    ecoinvent alias:
+      name: natural gas, high pressure, import from NL
+      reference product: natural gas, high pressure
+      exists in original database: True
+
+  METHANE_IMPORT_TR:  # Turkey
+    production volume:
+      variable: Share|Methane|ImportTR
+    ecoinvent alias:
+      name: natural gas, high pressure, import from TR
+      reference product: natural gas, high pressure
+      exists in original database: True
+
+  METHANE_IMPORT_US:
+    production volume:
+      variable: Share|Methane|ImportUS
+    ecoinvent alias:
+      name: natural gas, high pressure, import from US
+      reference product: natural gas, high pressure
+      exists in original database: True
+
+  METHANE_IMPORT_NG:  # Nigeria
+    production volume:
+      variable: Share|Methane|ImportNG
+    ecoinvent alias:
+      name: natural gas, high pressure, import from NG
+      reference product: natural gas, high pressure
+      exists in original database: True
+
+
 
   # CARBON DIOXIDE: (i) DAC: SOLVENT-BASED, SORBENT-BASED; (ii) CEMENT: DIRECT SEPARATION, OXYFUEL, MONOETHANOLAMINE
   CO2_DAC_SOLVENT:
@@ -1156,16 +1300,33 @@ markets:
       - name: ""
         operator: contains
 
-  - name: market for methane, high pressure (new)  # TODO: where is the conventional natural gas production? Where are the imports!? Check with market for natural gas, high pressure
+  - name: market for methane, high pressure (new)  # TODO: where is the conventional natural gas production? Where are the losses (burning gas to produce gas)? Check with market for natural gas, high pressure
     reference product: methane, high pressure (new)
     unit: cubic meter
     includes:
       - METHANE_MEMBRANE
       - METHANE_AMINOWASHING
-      - METHANE_AMINESCRUBBING
+      - METHANE_AMINESCRUBBING # it's input will be in cubic meters, although kilograms are displayed (adapted via 'ratio').
       - METHANE_SWING
       - METHANE_SABATIER_BIOLOGICAL  # it's input will be in cubic meters, although kilograms are displayed (adapted via 'ratio').
       - METHANE_SABATIER_ELECTROCHEMICAL  # it's input will be in cubic meters, although kilograms are displayed (adapted via 'ratio').
+      - METHANE_FOSSIL_ONSHORE  # Country of origin determined via csv
+      - METHANE_FOSSIL_OFFSHORE  # Country of origin determined via csv
+      - METHANE_IMPORT_GB
+      - METHANE_IMPORT_DE
+      - METHANE_IMPORT_IT
+      - METHANE_IMPORT_FR
+      - METHANE_IMPORT_FI
+      - METHANE_IMPORT_QA
+      - METHANE_IMPORT_NO
+      - METHANE_IMPORT_BE
+      - METHANE_IMPORT_LY
+      - METHANE_IMPORT_RU
+      - METHANE_IMPORT_DZ
+      - METHANE_IMPORT_NL
+      - METHANE_IMPORT_TR
+      - METHANE_IMPORT_US
+      - METHANE_IMPORT_NG
     replaces:
       - name: market for biomethane, high pressure
         product: biomethane, high pressure
@@ -1282,6 +1443,10 @@ markets:
     replaces in:
       - name: ""
         operator: contains
+    add:  # add the losses (burning gas to supply energy to processes in the liquefaction/evaporation, (transport) transmission, and distribution of natural gas)
+      - name: natural gas, burned in gas turbine
+        reference product: natural gas, burned in gas turbine
+        amount: 0.1764792
 
   - name: market for carbon dioxide (new)
     reference product: carbon dioxide (new)
