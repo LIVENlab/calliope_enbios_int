@@ -40,6 +40,7 @@ ndb = NewDatabase(
 ndb.update("external")
 
 # electricity mixes substitutions
+print('Starting electricity mix substitutions')
 pickle_path = ndb.scenarios[0]['database filepath']
 try:
     with open(pickle_path, "rb") as f:
