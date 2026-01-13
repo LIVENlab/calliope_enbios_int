@@ -67,16 +67,70 @@ for act in all_voltages:
     act_to_be_replaced = [a for a in data if a['name'] == act['name'][:-6] and a['reference product'] == act['reference product'][:-6] and a['location'] == act['location']]
     acts_to_be_replaced.append(act_to_be_replaced[0])
 
+# TODO: create a function
 counter = 0
 for replaceable_act in acts_to_be_replaced:
     replacing_act = all_voltages[counter]
     for act in data:
         for exchange in ws.technosphere(act):
             if exchange['product'] == replaceable_act['reference product'] and exchange['name'] == replaceable_act['name'] and exchange['unit'] == replaceable_act['unit'] and exchange['location'] == replaceable_act['location']:
-                if not exchange['name'] == replaceable_act['name']:
+                if not exchange['name'] == act['name']:
                     exchange['product'] = replacing_act['reference product']
                     exchange['name'] = replacing_act['name']
     counter += 1
+
+# natural gas substitutions
+print('Starting natural gas substitutions')
+locations = [
+    "AT", "BE", "CH", "CZ", "DE", "DK", "ES", "FI", "FR", "GB", "GR", "HU", "IE", "IT",
+    "NL", "NO", "PL", "RO", "SE", "SK", "RoE"
+]
+acts_to_be_replaced = [a for a in data if a['name'] == 'market for natural gas, high pressure' and a['location'] in locations]
+counter = 0
+for replaceable_act in acts_to_be_replaced:
+    for act in data:
+        for exchange in ws.technosphere(act):
+            if (exchange['product'] == replaceable_act['reference product'] and
+                    exchange['name'] == replaceable_act['name'] and
+                    exchange['unit'] == replaceable_act['unit'] and
+                    exchange['location'] == replaceable_act['location']):
+                if not exchange['name'] == act['name']:
+                    exchange['product'] = 'methane, high pressure (new)'
+                    exchange['name'] = 'market for methane, high pressure (new)'
+    counter += 1
+locations = [
+    "DE", "GB", "NL", "NO", "RO"
+]
+acts_to_be_replaced = [a for a in data if a['name'] == 'petroleum and gas production, offshore' and a['reference product'] == 'natural gas, high pressure' and a['location'] in locations]
+counter = 0
+for replaceable_act in acts_to_be_replaced:
+    for act in data:
+        for exchange in ws.technosphere(act):
+            if (exchange['product'] == replaceable_act['reference product'] and
+                    exchange['name'] == replaceable_act['name'] and
+                    exchange['unit'] == replaceable_act['unit'] and
+                    exchange['location'] == replaceable_act['location']):
+                if not exchange['name'] == act['name']:
+                    exchange['product'] = 'methane, high pressure (new)'
+                    exchange['name'] = 'market for methane, high pressure (new)'
+    counter += 1
+locations = [
+    "NL", "RO", "GB", "DE"
+]
+acts_to_be_replaced = [a for a in data if a['name'] == 'petroleum and gas production, onshore' and a['reference product'] == 'natural gas, high pressure' and a['location'] in locations]
+counter = 0
+for replaceable_act in acts_to_be_replaced:
+    for act in data:
+        for exchange in ws.technosphere(act):
+            if (exchange['product'] == replaceable_act['reference product'] and
+                    exchange['name'] == replaceable_act['name'] and
+                    exchange['unit'] == replaceable_act['unit'] and
+                    exchange['location'] == replaceable_act['location']):
+                if not exchange['name'] == act['name']:
+                    exchange['product'] = 'methane, high pressure (new)'
+                    exchange['name'] = 'market for methane, high pressure (new)'
+    counter += 1
+
 
 with open(pickle_path, "wb") as f:
     pickle.dump(data, f)
