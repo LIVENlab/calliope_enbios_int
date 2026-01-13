@@ -1,5 +1,18 @@
 # Configuration file for custom scenarios for `premise`
 
+# IMPORTANT before starting: in external.py line 799, substitute "possible_locations" for
+# new_regions = self.external_scenarios_data[i]["regions"]
+# possible_locations = [
+#                                region,
+#                                *new_regions,
+#                                *ecoinvent_regions,
+#                                "RoW",
+#                                "GLO",
+#                                "RER",
+#                                "Europe without Switzerland",
+#                                # add all ecoinvent locations
+#                                *[fetch_loc(loc) for loc in list(self.geo.geo.keys())],
+#                            ]
 ---
 
 production pathways:
@@ -20,7 +33,6 @@ production pathways:
       name: market for wood chips, wet, measured as dry mass
       reference product: wood chips, wet, measured as dry mass
       exists in original database: True
-      regionalize: True
 
   # HYDROGEN: WOOD GASIFICATION (WITH OR WITHOUT CCS), STEAM REFORMING, AUTOTHERMAL REFORMING, COAL GASIFICATION (WITH
   # OR WITHOUT CCS), ELECTROLYSIS
@@ -100,7 +112,6 @@ production pathways:
       name: methanol production, from synthetic gas
       reference product: methanol, from biomass
       exists in original database: True
-      regionalize: True
 
   METHANOL_NATURAL_GAS:
     production volume:
@@ -109,7 +120,6 @@ production pathways:
       name: methanol production
       reference product: methanol
       exists in original database: True
-      regionalize: True
 
   # KEROSENE: HYDROGEN, METHANOL, BIOMASS, NATURAL GAS, OIL
   KEROSENE_H2:
@@ -151,7 +161,6 @@ production pathways:
       name: kerosene production, petroleum refinery operation
       reference product: kerosene
       exists in original database: True
-      regionalize: True
 
   # DIESEL: HYDROGEN, METHANOL, BIOMASS, NATURAL GAS, OIL
   DIESEL_H2:
@@ -186,14 +195,13 @@ production pathways:
       reference product: diesel, synthetic
       exists in original database: True
 
-  DIESEL_OIL:  # TODO: check regionalization. Look-up the code where it is implemented!
+  DIESEL_OIL:
     production volume:
       variable: Share|Diesel|Oil
     ecoinvent alias:
       name: diesel production, petroleum refinery operation
       reference product: diesel
       exists in original database: True
-      regionalize: True
 
   # LIQUEFIED PETROLEUM GAS: HYDROGEN, METHANOL, NATURAL GAS, OIL
   LIQUEFIED_PETROLEUM_GAS_H2:
@@ -220,14 +228,13 @@ production pathways:
       reference product: liquefied petroleum gas, synthetic
       exists in original database: True
 
-  LIQUEFIED_PETROLEUM_GAS_OIL: # TODO: regionalize is problematic!
+  LIQUEFIED_PETROLEUM_GAS_OIL:
     production volume:
       variable: Share|LiquefiedPetroleumGas|Oil
     ecoinvent alias:
       name: liquefied petroleum gas production, petroleum refinery operation
       reference product: liquefied petroleum gas
       exists in original database: True
-      regionalize: True
 
   # BIOGAS (FOR A LATER UPGRADING TO METHANE): BIOWASTE, SEWAGE SLUDGE, MANURE, GRASS
   BIOGAS_BIOWASTE:
@@ -270,7 +277,6 @@ production pathways:
       name: biogas purification to biomethane by membrane technique
       reference product: biomethane, high pressure
       exists in original database: True
-      regionalize: True
 
   METHANE_AMINOWASHING:
     production volume:
@@ -279,7 +285,6 @@ production pathways:
       name: biogas purification to biomethane by amino washing
       reference product: biomethane, high pressure
       exists in original database: True
-      regionalize: True
 
   METHANE_AMINESCRUBBING:
     production volume:
@@ -289,7 +294,6 @@ production pathways:
       reference product: biomethane, from biogas upgrading, using amine scrubbing
       exists in original database: True
       ratio: 0.235  # convert from kg to m3 and from normal conditions to 5 bar (density: 0.717 kg/Nm3)
-      regionalize: True
 
   METHANE_SWING:
     production volume:
@@ -298,7 +302,6 @@ production pathways:
       name: biogas purification to biomethane by pressure swing adsorption
       reference product: biomethane, high pressure
       exists in original database: True
-      regionalize: True
 
   METHANE_SABATIER_BIOLOGICAL:
     production volume:
@@ -308,7 +311,6 @@ production pathways:
       reference product: methane, from biological methanation
       exists in original database: True
       ratio: 0.235  # convert from kg to m3 and from normal conditions to 5 bar (density: 0.717 kg/Nm3)
-      regionalize: True
 
   METHANE_SABATIER_ELECTROCHEMICAL:
     production volume:
@@ -318,25 +320,22 @@ production pathways:
       reference product: methane, from electrochemical methanation
       exists in original database: True
       ratio: 0.235  # convert from kg to m3 and from normal conditions to 5 bar (density: 0.717 kg/Nm3)
-      regionalize: True
 
-  METHANE_FOSSIL_ONSHORE:  # TODO: when regionalized, its impacts change a lot compared to NON-Regionalized! How can I deal with it? Check: 1. Original code; 2. What happens if I do not regionalize. Which region does it take by default? Is it always the same if I make it twice?
+  METHANE_FOSSIL_ONSHORE:  # it takes RO by default, for some reason (it's 3 times more impactful than NO)
     production volume:
       variable: Share|Methane|FossilOnshore
     ecoinvent alias:
       name: petroleum and gas production, onshore
       reference product: natural gas, high pressure
       exists in original database: True
-      regionalize: True
 
-  METHANE_FOSSIL_OFFSHORE:  # TODO: when regionalized, its impacts change a lot compared to NON-Regionalized! How can I deal with it?
+  METHANE_FOSSIL_OFFSHORE:  # it takes RO by default, for some reason (it's 3 times more impactful than NO)
     production volume:
       variable: Share|Methane|FossilOffshore
     ecoinvent alias:
       name: petroleum and gas production, offshore
       reference product: natural gas, high pressure
       exists in original database: True
-      regionalize: True
 
   METHANE_IMPORT_GB:
     production volume:
@@ -1046,7 +1045,6 @@ production pathways:
       name: electricity supply, from stationary battery (CONT scenario)
       reference product: electricity, low voltage
       exists in original database: True
-      regionalize: True
 
   ELECTRICITY_SOLAR_PV_RESIDENTIAL: # low voltage
     production volume:
@@ -1067,7 +1065,7 @@ markets:
     replaces: # it allows name, product, location and unit as filters!
       - name: market for wood chips, wet, measured as dry mass
         product: wood chips, wet, measured as dry mass
-        location: Europe without Switzerland  # TODO: I should add here all locations in Europe, and move this below ELECTRICITY. ELECTRICITY creates a regional heat and power co-generation that consumes de facto wood chips from their own regions!
+        location: Europe without Switzerland
         operator: equals  # it allows any string. If it is not 'equals' it will be ws.contains() automatically
       - name: market for wood chips, wet, measured as dry mass
         product: wood chips, wet, measured as dry mass
@@ -1300,7 +1298,7 @@ markets:
       - name: ""
         operator: contains
 
-  - name: market for methane, high pressure (new)  # TODO: where is the conventional natural gas production? Where are the losses (burning gas to produce gas)? Check with market for natural gas, high pressure
+  - name: market for methane, high pressure (new)
     reference product: methane, high pressure (new)
     unit: cubic meter
     includes:
@@ -1331,114 +1329,6 @@ markets:
       - name: market for biomethane, high pressure
         product: biomethane, high pressure
         location: CH
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: AT
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: BE
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: CH
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: CZ
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: DE
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: DK
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: ES
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: FI
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: FR
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: GB
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: GR
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: HU
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: IE
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: IT
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: NL
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: "NO"
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: PL
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: RO
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: SE
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: SK
-        operator: equals
-      - name: market for natural gas, high pressure
-        product: natural gas, high pressure
-        location: RoE
-        operator: equals
-      - name: market group for natural gas, high pressure
-        product: natural gas, high pressure
-        location: Europe without Switzerland
-        operator: equals
-      - name: petroleum and gas production, offshore  # offshore production is usually liquefied and exported. We want to avoid that and that is why we substitute it.
-        product: natural gas, high pressure
-        location: DE
-        operator: equals
-      - name: petroleum and gas production, offshore
-        product: natural gas, high pressure
-        location: GB
-        operator: equals
-      - name: petroleum and gas production, offshore
-        product: natural gas, high pressure
-        location: NL
-        operator: equals
-      - name: petroleum and gas production, offshore
-        product: natural gas, high pressure
-        location: "NO"
-        operator: equals
-      - name: petroleum and gas production, offshore
-        product: natural gas, high pressure
-        location: RO
         operator: equals
     replaces in:
       - name: ""
