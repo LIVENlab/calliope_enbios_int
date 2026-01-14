@@ -131,6 +131,55 @@ for replaceable_act in acts_to_be_replaced:
                     exchange['name'] = 'market for methane, high pressure (new)'
     counter += 1
 
+# biomass substitution
+print('Starting biomass substitutions')
+# 1. Caluclate LHV of new market:
+new_biomass_act = [a for a in data if a['name'] == 'market for biomass, used as fuel (new)'][0]
+for ex in ws.technosphere(new_biomass_act):
+    if ex['name'] == 'supply of forest residue':
+        forest_heat = ex['amount'] * 19
+    elif ex['name'] == 'market for wood chips, wet, measured as dry mass':
+        chips_heat = ex['amount'] * 8.7
+
+new_biomass_act_lhv = forest_heat + chips_heat
+# 2. replace acts
+locations = ['CH', 'Europe without Switzerland']
+acts_to_be_replaced_wet = [a for a in data if a['name'] == 'market for wood chips, wet, measured as dry mass' and a['location'] in locations]
+acts_to_be_replaced_dry = [a for a in data if a['name'] == 'market for wood chips, dry, measured as dry mass' and a['location'] == 'RER']
+acts_to_be_replaced_pellet = [a for a in data if a['name'] == 'market for wood pellet, measured as dry mass' and a['location'] == 'RER']
+acts_to_be_replaced = acts_to_be_replaced_wet + acts_to_be_replaced_dry + acts_to_be_replaced_pellet
+counter = 0
+indirect_energy_acts = ['ethanol production', 'synthetic natural gas', 'biomethane production', 'syngas', 'hydrogen production']
+energy_data = [
+    a for a in data
+    if (
+        ('heat' in a['reference product'] and 'megajoule' in a['unit'])
+        or ('electricity, high voltage' in a['reference product'] and 'kilowatt hour' in a['unit'])
+        or any(name in a['name'] for name in indirect_energy_acts)
+    )
+]
+for replaceable_act in acts_to_be_replaced:
+    for act in energy_data:  # only substitute heat uses of the new biomass market
+        for exchange in ws.technosphere(act):
+            if (exchange['product'] == replaceable_act['reference product'] and
+                    exchange['name'] == replaceable_act['name'] and
+                    exchange['unit'] == replaceable_act['unit']):
+                if replaceable_act['name'] == 'market for wood chips, wet, measured as dry mass':
+                    exchange['product'] = 'biomass, used as fuel (new)'
+                    exchange['name'] = 'market for biomass, used as fuel (new)'
+                    exchange['location'] = 'Europe without Switzerland'
+                    exchange['amount'] = exchange['amount'] * 8.7 / new_biomass_act_lhv
+                elif replaceable_act['name'] == 'market for wood chips, dry, measured as dry mass':
+                    exchange['product'] = 'biomass, used as fuel (new)'
+                    exchange['name'] = 'market for biomass, used as fuel (new)'
+                    exchange['location'] = 'Europe without Switzerland'
+                    exchange['amount'] = exchange['amount'] * 19 / new_biomass_act_lhv
+                elif replaceable_act['name'] == 'market for wood pellet, measured as dry mass':
+                    exchange['product'] = 'biomass, used as fuel (new)'
+                    exchange['name'] = 'market for biomass, used as fuel (new)'
+                    exchange['location'] = 'Europe without Switzerland'
+                    exchange['amount'] = exchange['amount'] * 17 / new_biomass_act_lhv
+    counter += 1
 
 with open(pickle_path, "wb") as f:
     pickle.dump(data, f)
