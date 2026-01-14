@@ -1054,6 +1054,104 @@ production pathways:
       exists in original database: True
       regionalize: True
 
+  # HEAT, CENTRAL OR SMALL SCALE: (i) RENEWABLE: BIOMASS, HEAT PUMP; (ii) NON-RENEWABLES: HARD COAL, OIL; (iii) DEPENDS: NAT GAS
+  HEAT_SMALL_BIOMASS:
+    production volume:
+      variable: Share|HeatSmall|Biomass
+    ecoinvent alias:
+      name: heat production, wood pellet, at furnace 9kW
+      reference product: heat, central or small-scale, other than natural gas
+      exists in original database: True
+
+  HEAT_SMALL_PUMP:
+    production volume:
+      variable: Share|HeatSmall|HeatPump
+    ecoinvent alias:
+      name: heat production, at heat pump 30kW, allocation exergy
+      reference product: heat, central or small-scale, other than natural gas
+      exists in original database: True
+
+  HEAT_SMALL_METHANE:
+    production volume:
+      variable: Share|HeatSmall|Methane
+    ecoinvent alias:
+      name: market for heat, central or small-scale, natural gas
+      reference product: heat, central or small-scale, natural gas
+      exists in original database: True
+
+  HEAT_SMALL_COAL:
+    production volume:
+      variable: Share|HeatSmall|Coal
+    ecoinvent alias:
+      name: heat production, anthracite, at stove 5-15kW
+      reference product: heat, central or small-scale, other than natural gas
+      exists in original database: True
+
+  HEAT_SMALL_OIL:
+    production volume:
+      variable: Share|HeatSmall|Oil
+    ecoinvent alias:
+      name: heat production, light fuel oil, at boiler 100kW condensing, non-modulating
+      reference product: heat, central or small-scale, other than natural gas
+      exists in original database: True
+
+  # HEAT, DISTRICT OR INDUSTRIAL: METHANE, COAL FURNACE, COAL CO-GEN, OIL FURNACE, OIL COGEN, WASTE, BIOMASS
+  HEAT_INDUSTRIAL_METHANE:
+    production volume:
+      variable: Share|HeatIndustrial|Methane
+    ecoinvent alias:
+      name: market for heat, district or industrial, natural gas
+      reference product: heat, district or industrial, natural gas
+      exists in original database: True
+
+  HEAT_INDUSTRIAL_COAL_FURNACE:
+    production volume:
+      variable: Share|HeatIndustrial|CoalFurnace
+    ecoinvent alias:
+      name: heat production, at hard coal industrial furnace 1-10MW
+      reference product: heat, district or industrial, other than natural gas
+      exists in original database: True
+
+  HEAT_INDUSTRIAL_OIL_FURNACE:
+    production volume:
+      variable: Share|HeatIndustrial|OilFurnace
+    ecoinvent alias:
+      name: heat production, heavy fuel oil, at industrial furnace 1MW
+      reference product: heat, district or industrial, other than natural gas
+      exists in original database: True
+
+  HEAT_INDUSTRIAL_COAL_COGENERATION:
+    production volume:
+      variable: Share|HeatIndustrial|CoalCogeneration
+    ecoinvent alias:
+      name: heat and power co-generation, hard coal
+      reference product: heat, district or industrial, other than natural gas
+      exists in original database: True  # NOTE: by default it takes BG
+
+  HEAT_INDUSTRIAL_OIL_COGENERATION:
+    production volume:
+      variable: Share|HeatIndustrial|OilCogeneration
+    ecoinvent alias:
+      name: heat and power co-generation, oil
+      reference product: heat, district or industrial, other than natural gas
+      exists in original database: True  # NOTE: by default it takes ES
+
+  HEAT_INDUSTRIAL_WASTE:
+    production volume:
+      variable: Share|HeatIndustrial|Waste
+    ecoinvent alias:
+      name: heat, from municipal waste incineration to generic market for heat district or industrial, other than natural gas
+      reference product: heat, district or industrial, other than natural gas
+      exists in original database: True  # NOTE: by default it takes CH
+
+  HEAT_INDUSTRIAL_BIOMASS:
+    production volume:
+      variable: Share|HeatIndustrial|Biomass
+    ecoinvent alias:
+      name: heat and power co-generation, wood chips, 6667 kW, state-of-the-art 2014
+      reference product: heat, district or industrial, other than natural gas
+      exists in original database: True  # NOTE: by default it takes CH
+
 markets:
   - name: market for biomass, used as fuel (new)
     reference product: biomass, used as fuel (new)
@@ -1476,3 +1574,65 @@ markets:
       - ELECTRICITY_TRANSFORMATION_MV_LV
       - ELECTRICITY_BATTERY_CHEMICAL
       - ELECTRICITY_SOLAR_PV_RESIDENTIAL
+
+  - name: market for heat, central or small-scale (new)
+    reference product: heat, central or small-scale (new)
+    unit: megajoule
+    includes:
+      - HEAT_SMALL_BIOMASS
+      - HEAT_SMALL_PUMP
+      - HEAT_SMALL_METHANE
+      - HEAT_SMALL_COAL
+      - HEAT_SMALL_OIL
+    replaces:
+      - name: market for heat, central or small-scale, natural gas
+        product: heat, central or small-scale, natural gas
+        location: Europe without Switzerland
+        operator: equals
+      - name: market for heat, central or small-scale, natural gas
+        product: heat, central or small-scale, natural gas
+        location: CH
+        operator: equals
+      - name: market for heat, central or small-scale, other than natural gas
+        product: heat, central or small-scale, other than natural gas
+        location: Europe without Switzerland
+        operator: equals
+      - name: market for heat, central or small-scale, other than natural gas
+        product: heat, central or small-scale, other than natural gas
+        location: CH
+        operator: equals
+    replaces in:
+      - name: ""
+        operator: contains
+
+  - name: market for heat, district or industrial (new)
+    reference product: heat, district or industrial (new)
+    unit: megajoule
+    includes:
+      - HEAT_INDUSTRIAL_METHANE
+      - HEAT_INDUSTRIAL_COAL_FURNACE
+      - HEAT_INDUSTRIAL_OIL_FURNACE
+      - HEAT_INDUSTRIAL_COAL_COGENERATION
+      - HEAT_INDUSTRIAL_OIL_COGENERATION
+      - HEAT_INDUSTRIAL_WASTE
+      - HEAT_INDUSTRIAL_BIOMASS
+    replaces:
+      - name: market for heat, district or industrial, natural gas
+        product: heat, district or industrial, natural gas
+        location: Europe without Switzerland
+        operator: equals
+      - name: market for heat, district or industrial, natural gas
+        product: heat, district or industrial, natural gas
+        location: CH
+        operator: equals
+      - name: market for heat, district or industrial, other than natural gas
+        product: heat, district or industrial, other than natural gas
+        location: Europe without Switzerland
+        operator: equals
+      - name: market for heat, district or industrial, other than natural gas
+        product: heat, district or industrial, other than natural gas
+        location: CH
+        operator: equals
+    replaces in:
+      - name: ""
+        operator: contains
