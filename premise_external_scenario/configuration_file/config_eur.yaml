@@ -16,9 +16,8 @@
 ---
 
 production pathways:
-  # BIOMASS: RESIUDES OR WOOD CHIPS
-  # TODO: deal with Lower Heating Values. At the moment we are substituting the 'wood chips, wet' with the new market, but 'wood chips, dry' as well as 'wood pellet' also have energy uses. In order to be able to substitute them, I should deal with the fact that the LHV of the three are different!
-  BIOMASS_RESIDUES:
+  # BIOMASS: RESIDUES OR WOOD CHIPS
+  BIOMASS_RESIDUES:  # NOTE: LHV 19 MJ/kg, as stated in the inventory. This assumed it is only used once dried!
     production volume:
       variable: Share|Biomass|Residues
     ecoinvent alias:
@@ -26,7 +25,7 @@ production pathways:
       reference product: forest residue
       exists in original database: True
 
-  BIOMASS_WOOD_CHIPS:
+  BIOMASS_WOOD_CHIPS:  # NOTE: LHV 8.7 MJ/kg, derived from heat and power co-generation, wood chips, 6667 kW, state-of-the-art 2014 (FR)
     production volume:
       variable: Share|Biomass|Wood
     ecoinvent alias:
@@ -146,7 +145,7 @@ production pathways:
       reference product: kerosene, from forest residues
       exists in original database: True
 
-  KEROSENE_NATGAS:  # TODO: still not substituted Nat Gas! It will never happen as it is RoW
+  KEROSENE_NATGAS:  # TODO: still not substituted Nat Gas! It will never happen as it is RoW. We do want to do it ex-post!
     production volume:
       variable: Share|Kerosene|NatGas
     ecoinvent alias:
@@ -1062,27 +1061,6 @@ markets:
     includes:
       - BIOMASS_RESIDUES
       - BIOMASS_WOOD_CHIPS
-    replaces: # it allows name, product, location and unit as filters!
-      - name: market for wood chips, wet, measured as dry mass
-        product: wood chips, wet, measured as dry mass
-        location: Europe without Switzerland
-        operator: equals  # it allows any string. If it is not 'equals' it will be ws.contains() automatically
-      - name: market for wood chips, wet, measured as dry mass
-        product: wood chips, wet, measured as dry mass
-        location: CH
-        operator: equals
-      - name: supply of forest residue
-        product: forest residue
-        location: RER
-        operator: equals
-    replaces in:
-      - name: ""
-        operator: contains
-    # now it replaces both energy and non energy uses. 'replaces in' could give it more specificity. However,
-    # replaces in only allows to filter out one item. This means, we cannot filer out all energy production activities
-    # replaces in:
-    # It allows "name", "reference product", "location", "unit" to be filtered. This refers to the characteristics of the ex.output activity!
-    # It also allows "operator" (being ws.contains() if it is not "equals"), as well as "excludes" (being a dictionary that contains any of "name", "reference product", "location", "unit" as keys and the string to be filtered as values.
 
   - name: market for hydrogen (new)
     reference product: hydrogen, gaseous (new)
