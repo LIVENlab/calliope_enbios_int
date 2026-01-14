@@ -3160,3 +3160,15 @@ image,SSP2-Base,Business As Usual,GB,Share|Methane|ImportNL,share,0.1,0.1
 image,SSP2-Base,Business As Usual,GB,Share|Methane|ImportTR,share,0.02,0.02
 image,SSP2-Base,Business As Usual,GB,Share|Methane|ImportUS,share,0.08,0.08
 image,SSP2-Base,Business As Usual,GB,Share|Methane|ImportNG,share,0.03,0.03
+image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|HeatSmall|Biomass,share,0.1,0.1
+image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|HeatSmall|HeatPump,share,0.2,0.2
+image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|HeatSmall|Methane,share,0.2,0.2
+image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|HeatSmall|Coal,share,0.2,0.2
+image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|HeatSmall|Oil,share,0.3,0.3
+image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|HeatIndustrial|Methane,share,0.1,0.1
+image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|HeatIndustrial|CoalFurnace,share,0.2,0.2
+image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|HeatIndustrial|OilFurnace,share,0.2,0.2
+image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|HeatIndustrial|CoalCogeneration,share,0.1,0.1
+image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|HeatIndustrial|OilCogeneration,share,0.1,0.1
+image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|HeatIndustrial|Waste,share,0.2,0.2
+image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|HeatIndustrial|Biomass,share,0.1,0.1
