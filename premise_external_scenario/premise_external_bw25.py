@@ -4,8 +4,11 @@ import bw2data as bd
 import pickle
 import wurst.searching as ws
 import bw2io as bi
-
-bd.projects.set_current('bw25_matrix')
+from WindTrace import WindTrace_onshore, WindTrace_offshore
+from functions import create_additional_acts_db
+import sys
+from typing import Dict, List, Union, Any
+import config_parameters
 
 def import_ei_12():
     bi.import_ecoinvent_release(
@@ -18,170 +21,321 @@ def import_ei_12():
         # optional:
         biosphere_name='ecoinvent-3.12-biosphere',         # Default name like "ecoinvent-3.10-biosphere"
     )
+def create_custom_database():
+    bd.projects.set_current('bw25_matrix')
+    pkg = Package(r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\datapackage.json")
 
-pkg = Package(r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\datapackage.json")
-
-external_scenario = [
-    {"scenario": "Business As Usual", "data": pkg},
-]
-ndb = NewDatabase(
-    scenarios=[
-        {
-            "model": "image",
-            "pathway": "SSP2-L",
-            "year": 2020,
-            "external scenarios": external_scenario,
-        }
-    ],
-    source_db="cutoff391",   # change to what you actually use
-    source_version="3.9.1",
-    key="tUePmX_S5B8ieZkkM7WUU2CnO8SmShwmAeWK9x2rTFo=",
-)
-ndb.update("external")
-
-# electricity mixes substitutions
-print('Starting electricity mix substitutions')
-pickle_path = ndb.scenarios[0]['database filepath']
-try:
-    with open(pickle_path, "rb") as f:
-        data = pickle.load(f)
-except:
-    print("There is no pickled database")
-
-# delete "World" markets
-data = [a for a in data if a['location'] != 'World']
-
-voltages = ["high", "medium", "low"]
-
-all_voltages = [
-    a for a in data
-    if any(
-        a["name"] == f"market for electricity, {v} voltage (new)"
-        and a["reference product"] == f"electricity, {v} voltage (new)"
-        for v in voltages
+    external_scenario = [
+        {"scenario": "Business As Usual", "data": pkg},
+    ]
+    ndb = NewDatabase(
+        scenarios=[
+            {
+                "model": "image",
+                "pathway": "SSP2-L",
+                "year": 2020,
+                "external scenarios": external_scenario,
+            }
+        ],
+        source_db="cutoff391",   # change to what you actually use
+        source_version="3.9.1",
+        key="tUePmX_S5B8ieZkkM7WUU2CnO8SmShwmAeWK9x2rTFo=",
     )
-]
+    ndb.update("external")
 
-acts_to_be_replaced = []
-for act in all_voltages:
-    act_to_be_replaced = [a for a in data if a['name'] == act['name'][:-6] and a['reference product'] == act['reference product'][:-6] and a['location'] == act['location']]
-    acts_to_be_replaced.append(act_to_be_replaced[0])
+    # electricity mixes substitutions
+    print('Starting electricity mix substitutions')
+    pickle_path = ndb.scenarios[0]['database filepath']
+    try:
+        with open(pickle_path, "rb") as f:
+            data = pickle.load(f)
+    except:
+        print("There is no pickled database")
 
-# TODO: create a function
-counter = 0
-for replaceable_act in acts_to_be_replaced:
-    replacing_act = all_voltages[counter]
-    for act in data:
-        for exchange in ws.technosphere(act):
-            if exchange['product'] == replaceable_act['reference product'] and exchange['name'] == replaceable_act['name'] and exchange['unit'] == replaceable_act['unit'] and exchange['location'] == replaceable_act['location']:
-                if not exchange['name'] == act['name']:
-                    exchange['product'] = replacing_act['reference product']
-                    exchange['name'] = replacing_act['name']
-    counter += 1
+    # delete "World" markets
+    data = [a for a in data if a['location'] != 'World']
 
-# natural gas substitutions
-print('Starting natural gas substitutions')
-locations = [
-    "AT", "BE", "CH", "CZ", "DE", "DK", "ES", "FI", "FR", "GB", "GR", "HU", "IE", "IT",
-    "NL", "NO", "PL", "RO", "SE", "SK", "RoE"
-]
-acts_to_be_replaced = [a for a in data if a['name'] == 'market for natural gas, high pressure' and a['location'] in locations]
-counter = 0
-for replaceable_act in acts_to_be_replaced:
-    for act in data:
-        for exchange in ws.technosphere(act):
-            if (exchange['product'] == replaceable_act['reference product'] and
-                    exchange['name'] == replaceable_act['name'] and
-                    exchange['unit'] == replaceable_act['unit'] and
-                    exchange['location'] == replaceable_act['location']):
-                if not exchange['name'] == act['name']:
-                    exchange['product'] = 'methane, high pressure (new)'
-                    exchange['name'] = 'market for methane, high pressure (new)'
-    counter += 1
-locations = [
-    "DE", "GB", "NL", "NO", "RO"
-]
-acts_to_be_replaced = [a for a in data if a['name'] == 'petroleum and gas production, offshore' and a['reference product'] == 'natural gas, high pressure' and a['location'] in locations]
-counter = 0
-for replaceable_act in acts_to_be_replaced:
-    for act in data:
-        for exchange in ws.technosphere(act):
-            if (exchange['product'] == replaceable_act['reference product'] and
-                    exchange['name'] == replaceable_act['name'] and
-                    exchange['unit'] == replaceable_act['unit'] and
-                    exchange['location'] == replaceable_act['location']):
-                if not exchange['name'] == act['name']:
-                    exchange['product'] = 'methane, high pressure (new)'
-                    exchange['name'] = 'market for methane, high pressure (new)'
-    counter += 1
-locations = [
-    "NL", "RO", "GB", "DE"
-]
-acts_to_be_replaced = [a for a in data if a['name'] == 'petroleum and gas production, onshore' and a['reference product'] == 'natural gas, high pressure' and a['location'] in locations]
-counter = 0
-for replaceable_act in acts_to_be_replaced:
-    for act in data:
-        for exchange in ws.technosphere(act):
-            if (exchange['product'] == replaceable_act['reference product'] and
-                    exchange['name'] == replaceable_act['name'] and
-                    exchange['unit'] == replaceable_act['unit'] and
-                    exchange['location'] == replaceable_act['location']):
-                if not exchange['name'] == act['name']:
-                    exchange['product'] = 'methane, high pressure (new)'
-                    exchange['name'] = 'market for methane, high pressure (new)'
-    counter += 1
+    voltages = ["high", "medium", "low"]
 
-# biomass substitution
-print('Starting biomass substitutions')
-# 1. Caluclate LHV of new market:
-new_biomass_act = [a for a in data if a['name'] == 'market for biomass, used as fuel (new)'][0]
-for ex in ws.technosphere(new_biomass_act):
-    if ex['name'] == 'supply of forest residue':
-        forest_heat = ex['amount'] * 19
-    elif ex['name'] == 'market for wood chips, wet, measured as dry mass':
-        chips_heat = ex['amount'] * 8.7
+    all_voltages = [
+        a for a in data
+        if any(
+            a["name"] == f"market for electricity, {v} voltage (new)"
+            and a["reference product"] == f"electricity, {v} voltage (new)"
+            for v in voltages
+        )
+    ]
 
-new_biomass_act_lhv = forest_heat + chips_heat
-# 2. replace acts
-locations = ['CH', 'Europe without Switzerland']
-acts_to_be_replaced_wet = [a for a in data if a['name'] == 'market for wood chips, wet, measured as dry mass' and a['location'] in locations]
-acts_to_be_replaced_dry = [a for a in data if a['name'] == 'market for wood chips, dry, measured as dry mass' and a['location'] == 'RER']
-acts_to_be_replaced_pellet = [a for a in data if a['name'] == 'market for wood pellet, measured as dry mass' and a['location'] == 'RER']
-acts_to_be_replaced = acts_to_be_replaced_wet + acts_to_be_replaced_dry + acts_to_be_replaced_pellet
-counter = 0
-indirect_energy_acts = ['ethanol production', 'synthetic natural gas', 'biomethane production', 'syngas', 'hydrogen production']
-energy_data = [
-    a for a in data
-    if (
-        ('heat' in a['reference product'] and 'megajoule' in a['unit'])
-        or ('electricity, high voltage' in a['reference product'] and 'kilowatt hour' in a['unit'])
-        or any(name in a['name'] for name in indirect_energy_acts)
+    acts_to_be_replaced = []
+    for act in all_voltages:
+        act_to_be_replaced = [a for a in data if a['name'] == act['name'][:-6] and a['reference product'] == act['reference product'][:-6] and a['location'] == act['location']]
+        acts_to_be_replaced.append(act_to_be_replaced[0])
+
+    # TODO: create a function
+    counter = 0
+    for replaceable_act in acts_to_be_replaced:
+        replacing_act = all_voltages[counter]
+        for act in data:
+            for exchange in ws.technosphere(act):
+                if exchange['product'] == replaceable_act['reference product'] and exchange['name'] == replaceable_act['name'] and exchange['unit'] == replaceable_act['unit'] and exchange['location'] == replaceable_act['location']:
+                    if not exchange['name'] == act['name']:
+                        exchange['product'] = replacing_act['reference product']
+                        exchange['name'] = replacing_act['name']
+        counter += 1
+
+    # natural gas substitutions
+    print('Starting natural gas substitutions')
+    locations = [
+        "AT", "BE", "CH", "CZ", "DE", "DK", "ES", "FI", "FR", "GB", "GR", "HU", "IE", "IT",
+        "NL", "NO", "PL", "RO", "SE", "SK", "RoE"
+    ]
+    acts_to_be_replaced = [a for a in data if a['name'] == 'market for natural gas, high pressure' and a['location'] in locations]
+    for replaceable_act in acts_to_be_replaced:
+        for act in data:
+            for exchange in ws.technosphere(act):
+                if (exchange['product'] == replaceable_act['reference product'] and
+                        exchange['name'] == replaceable_act['name'] and
+                        exchange['unit'] == replaceable_act['unit'] and
+                        exchange['location'] == replaceable_act['location']):
+                    if not exchange['name'] == act['name']:
+                        exchange['product'] = 'methane, high pressure (new)'
+                        exchange['name'] = 'market for methane, high pressure (new)'
+    locations = [
+        "DE", "GB", "NL", "NO", "RO"
+    ]
+    acts_to_be_replaced = [a for a in data if a['name'] == 'petroleum and gas production, offshore' and a['reference product'] == 'natural gas, high pressure' and a['location'] in locations]
+    for replaceable_act in acts_to_be_replaced:
+        for act in data:
+            for exchange in ws.technosphere(act):
+                if (exchange['product'] == replaceable_act['reference product'] and
+                        exchange['name'] == replaceable_act['name'] and
+                        exchange['unit'] == replaceable_act['unit'] and
+                        exchange['location'] == replaceable_act['location']):
+                    if not exchange['name'] == act['name']:
+                        exchange['product'] = 'methane, high pressure (new)'
+                        exchange['name'] = 'market for methane, high pressure (new)'
+
+    locations = [
+        "NL", "RO", "GB", "DE"
+    ]
+    acts_to_be_replaced = [a for a in data if a['name'] == 'petroleum and gas production, onshore' and a['reference product'] == 'natural gas, high pressure' and a['location'] in locations]
+
+    for replaceable_act in acts_to_be_replaced:
+        for act in data:
+            for exchange in ws.technosphere(act):
+                if (exchange['product'] == replaceable_act['reference product'] and
+                        exchange['name'] == replaceable_act['name'] and
+                        exchange['unit'] == replaceable_act['unit'] and
+                        exchange['location'] == replaceable_act['location']):
+                    if not exchange['name'] == act['name']:
+                        exchange['product'] = 'methane, high pressure (new)'
+                        exchange['name'] = 'market for methane, high pressure (new)'
+
+
+    # biomass substitution
+    print('Starting biomass substitutions')
+    # 1. Caluclate LHV of new market:
+    new_biomass_act = [a for a in data if a['name'] == 'market for biomass, used as fuel (new)'][0]
+    for ex in ws.technosphere(new_biomass_act):
+        if ex['name'] == 'supply of forest residue':
+            forest_heat = ex['amount'] * 19
+        elif ex['name'] == 'market for wood chips, wet, measured as dry mass':
+            chips_heat = ex['amount'] * 8.7
+
+    new_biomass_act_lhv = forest_heat + chips_heat
+    # 2. replace acts
+    locations = ['CH', 'Europe without Switzerland']
+    acts_to_be_replaced_wet = [a for a in data if a['name'] == 'market for wood chips, wet, measured as dry mass' and a['location'] in locations]
+    acts_to_be_replaced_dry = [a for a in data if a['name'] == 'market for wood chips, dry, measured as dry mass' and a['location'] == 'RER']
+    acts_to_be_replaced_pellet = [a for a in data if a['name'] == 'market for wood pellet, measured as dry mass' and a['location'] == 'RER']
+    acts_to_be_replaced = acts_to_be_replaced_wet + acts_to_be_replaced_dry + acts_to_be_replaced_pellet
+
+    indirect_energy_acts = ['ethanol production', 'synthetic natural gas', 'biomethane production', 'syngas', 'hydrogen production']
+    energy_data = [
+        a for a in data
+        if (
+            ('heat' in a['reference product'] and 'megajoule' in a['unit'])
+            or ('electricity, high voltage' in a['reference product'] and 'kilowatt hour' in a['unit'])
+            or any(name in a['name'] for name in indirect_energy_acts)
+        )
+    ]
+    for replaceable_act in acts_to_be_replaced:
+        for act in energy_data:  # only substitute heat uses of the new biomass market
+            for exchange in ws.technosphere(act):
+                if (exchange['product'] == replaceable_act['reference product'] and
+                        exchange['name'] == replaceable_act['name'] and
+                        exchange['unit'] == replaceable_act['unit']):
+                    if replaceable_act['name'] == 'market for wood chips, wet, measured as dry mass':
+                        exchange['product'] = 'biomass, used as fuel (new)'
+                        exchange['name'] = 'market for biomass, used as fuel (new)'
+                        exchange['location'] = 'Europe without Switzerland'
+                        exchange['amount'] = exchange['amount'] * 8.7 / new_biomass_act_lhv
+                    elif replaceable_act['name'] == 'market for wood chips, dry, measured as dry mass':
+                        exchange['product'] = 'biomass, used as fuel (new)'
+                        exchange['name'] = 'market for biomass, used as fuel (new)'
+                        exchange['location'] = 'Europe without Switzerland'
+                        exchange['amount'] = exchange['amount'] * 19 / new_biomass_act_lhv
+                    elif replaceable_act['name'] == 'market for wood pellet, measured as dry mass':
+                        exchange['product'] = 'biomass, used as fuel (new)'
+                        exchange['name'] = 'market for biomass, used as fuel (new)'
+                        exchange['location'] = 'Europe without Switzerland'
+                        exchange['amount'] = exchange['amount'] * 17 / new_biomass_act_lhv
+
+
+    # coal and lignite substitutions
+    print('Starting coal and lignite substitutions')
+    # 1. Caluclate LHV of new lignite market:
+    new_lignite_act = [a for a in data if a['name'] == 'market for lignite, for energy uses (new)'][0]
+    for ex in ws.technosphere(new_lignite_act):
+        if ex['name'] == 'market for lignite':
+            lignite_heat = ex['amount'] * 11
+        elif ex['product'] == 'charcoal':
+            charcoal_heat = ex['amount'] * 30
+    new_lignite_act_lhv = lignite_heat + charcoal_heat
+    # 2. replace acts
+    coal_act = [a for a in data if a['name'] == 'market for hard coal' and a['reference product'] == 'hard coal'
+                           and a['location'] == 'Europe, without Russia and Turkey'][0]
+    lignite_act = [a for a in data if a['name'] == 'market for lignite' and a['reference product'] == 'lignite'
+                           and a['location'] == 'RER'][0]
+    acts_to_be_replaced = [coal_act, lignite_act]
+    energy_data = [
+        a for a in data
+        if (
+            ('heat' in a['reference product'] and ('heat' in a['name'] or 'electricity' in a['name']))
+            or ('electricity' in a['reference product'] and ('heat' in a['name'] or 'electricity' in a['name']))
+            )
+
+    ]
+    for replaceable_act in acts_to_be_replaced:
+        for act in energy_data:
+            for exchange in ws.technosphere(act):
+                if (exchange['product'] == replaceable_act['reference product'] and
+                            exchange['name'] == replaceable_act['name'] and
+                            exchange['unit'] == replaceable_act['unit'] and
+                            exchange['location'] == replaceable_act['location']):
+                    if replaceable_act['name'] == 'market for hard coal':
+                        exchange['product'] = 'coal (new)'
+                        exchange['name'] = 'market for coal, for energy uses (new)'
+                        exchange['location'] = 'Europe, without Russia and Turkey'
+                    elif replaceable_act['name'] == 'market for lignite':
+                        exchange['product'] = 'lignite (new)'
+                        exchange['name'] = 'market for lignite, for energy uses (new)'
+                        exchange['location'] = 'RER'
+                        exchange['amount'] = exchange['amount'] * 11 / new_lignite_act_lhv
+
+    # Fix syngas (only European inputs)
+    print('Starting syngas substitutions')
+    syngas_act = [a for a in data if a['name'] == 'syngas production, from natural gas' and a['location'] == 'RER'
+                  and a['reference product'] == 'syngas, from natural gas'][0]
+    input_amounts = []
+    for ex in ws.technosphere(syngas_act):
+        input_amounts.append(ex['amount'])
+    inputs_sum = sum(input_amounts)
+    new_exchanges = [ex for ex in syngas_act['exchanges'] if ex['type'] != 'technosphere']
+    syngas_act['exchanges'] = new_exchanges
+    syngas_act['exchanges'].append({'amount': inputs_sum,
+                               'comment': 'It should be low pressure, but we prefer location representativeness',
+                               'location': 'Europe without Switzerland',
+                               'name': 'market group for natural gas, high pressure',
+                               'product': 'natural gas, high pressure',
+                               'reference product': 'natural gas, high pressure',
+                               'type': 'technosphere',
+                               'uncertainty type': 0,
+                               'unit': 'cubic meter'})
+
+
+    with open(pickle_path, "wb") as f:
+        pickle.dump(data, f)
+
+    ndb.write_db_to_brightway('test_2')
+
+###################
+# APPLY WINDTRACE #
+###################
+
+def apply_windtrace_onshore(db_wind_name: str, location: str,
+                       fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]],
+                       biosphere3: bd.Database = bd.Database('biosphere3')):
+    print('create onshore wind fleet')
+    bd.projects.set_current(config_parameters.PROJECT_NAME)
+    create_additional_acts_db()
+
+    expected_keys = {'power', 'manufacturer', 'rotor_diameter', 'hub_height', 'commissioning_year',
+                     'generator_type', 'recycled_share_steel', 'lifetime', 'eol_scenario'}
+    park_names = []
+    for turbine, info in fleet_turbines_definition.items():
+        turbine_parameters = info[0]
+        park_name = f'{turbine}_{turbine_parameters["power"]}_{location}'
+        park_names.append(park_name)
+        if turbine_parameters.keys() != expected_keys:
+            raise ValueError(f'The keys introduced {turbine_parameters.keys()} do not match '
+                             f'the expected keys {expected_keys}')
+    try:
+        # Check if lengths match, meaning no duplicates
+        if len(park_names) == len(list(set(park_names))):
+            print("No duplicates found in park names")
+        else:
+            print("Park name duplicates found. Try other names")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        sys.exit()
+
+    # create individual turbines
+    for turbine, info in fleet_turbines_definition.items():
+        turbine_parameters = info[0]
+        park_name = f'{turbine}_{turbine_parameters["power"]}_{location}'
+        WindTrace_onshore.lci_wind_turbine(
+            new_db=bd.Database('additional_acts'), cutoff391=bd.Database(db_wind_name),
+            park_name=park_name, park_power=turbine_parameters['power'], number_of_turbines=1,
+            park_location=location, park_coordinates=(51.181, 13.655),
+            manufacturer=turbine_parameters['manufacturer'], rotor_diameter=turbine_parameters['rotor_diameter'],
+            turbine_power=turbine_parameters['power'], hub_height=turbine_parameters['hub_height'],
+            commissioning_year=turbine_parameters['commissioning_year'],
+            generator_type=turbine_parameters['generator_type'],
+            recycled_share_steel=turbine_parameters['recycled_share_steel'],
+            lifetime=turbine_parameters['lifetime'], eol_scenario=turbine_parameters['eol_scenario'],
+            biosphere3=biosphere3
+        )
+
+    # create wind fleet activity (per 1 kWh)
+    fleet_activity = bd.Database('additional_acts').new_activity(
+        name=f'electricity production, onshore wind fleet, {location}',
+        code=f'electricity production, onshore wind fleet, {location}',
+        unit='kilowatt hour',
+        location=location
     )
-]
-for replaceable_act in acts_to_be_replaced:
-    for act in energy_data:  # only substitute heat uses of the new biomass market
-        for exchange in ws.technosphere(act):
-            if (exchange['product'] == replaceable_act['reference product'] and
-                    exchange['name'] == replaceable_act['name'] and
-                    exchange['unit'] == replaceable_act['unit']):
-                if replaceable_act['name'] == 'market for wood chips, wet, measured as dry mass':
-                    exchange['product'] = 'biomass, used as fuel (new)'
-                    exchange['name'] = 'market for biomass, used as fuel (new)'
-                    exchange['location'] = 'Europe without Switzerland'
-                    exchange['amount'] = exchange['amount'] * 8.7 / new_biomass_act_lhv
-                elif replaceable_act['name'] == 'market for wood chips, dry, measured as dry mass':
-                    exchange['product'] = 'biomass, used as fuel (new)'
-                    exchange['name'] = 'market for biomass, used as fuel (new)'
-                    exchange['location'] = 'Europe without Switzerland'
-                    exchange['amount'] = exchange['amount'] * 19 / new_biomass_act_lhv
-                elif replaceable_act['name'] == 'market for wood pellet, measured as dry mass':
-                    exchange['product'] = 'biomass, used as fuel (new)'
-                    exchange['name'] = 'market for biomass, used as fuel (new)'
-                    exchange['location'] = 'Europe without Switzerland'
-                    exchange['amount'] = exchange['amount'] * 17 / new_biomass_act_lhv
-    counter += 1
+    fleet_activity['reference product'] = 'electricity, high voltage'
+    fleet_activity.save()
+    new_ex = fleet_activity.new_exchange(input=fleet_activity.key, type='production', amount=1)
+    new_ex.save()
+    # add inputs
+    for turbine, info in fleet_turbines_definition.items():
+        share = info[1]
+        turbine_parameters = info[0]
+        park_name = f'{turbine}_{turbine_parameters["power"]}_{location}'
+        turbine_activity = bd.Database('additional_acts').get(park_name + '_turbine_kwh')
+        # to fleet activity (infrastructure)
+        new_ex = fleet_activity.new_exchange(input=turbine_activity, type='technosphere',
+                                             amount=share)  # TODO: fix in paper 2!! (change 1 for share)
+        new_ex.save()
 
-with open(pickle_path, "wb") as f:
-    pickle.dump(data, f)
+    return park_names
 
-ndb.write_db_to_brightway('test_2')
+
+def apply_windtrace_offshore(db_wind_name: str, location: str,
+                             fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]]
+                            ):
+    # TODO: still not per kWh
+    pass
+
+##########################
+# CREATE SCENARIO VALUES #
+##########################
+
+def create_scenario_values(new_db_name: str, csv_file):
+    # find new acts
+    new_acts = [a for a in bd.Database(new_db_name) if ['(new)' in a['name']]]
+
+    pass
+apply_windtrace_onshore(db_wind_name='test_2', location='RER', fleet_turbines_definition=config_parameters.BALANCED_ON_WIND_FLEET)
+pass
