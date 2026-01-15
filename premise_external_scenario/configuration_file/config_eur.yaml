@@ -145,7 +145,7 @@ production pathways:
       reference product: kerosene, from forest residues
       exists in original database: True
 
-  KEROSENE_NATGAS:  # TODO: still not substituted Nat Gas! It will never happen as it is RoW. We do want to do it ex-post!
+  KEROSENE_NATGAS:
     production volume:
       variable: Share|Kerosene|NatGas
     ecoinvent alias:
@@ -455,8 +455,6 @@ production pathways:
       name: natural gas, high pressure, import from NG
       reference product: natural gas, high pressure
       exists in original database: True
-
-
 
   # CARBON DIOXIDE: (i) DAC: SOLVENT-BASED, SORBENT-BASED; (ii) CEMENT: DIRECT SEPARATION, OXYFUEL, MONOETHANOLAMINE
   CO2_DAC_SOLVENT:
