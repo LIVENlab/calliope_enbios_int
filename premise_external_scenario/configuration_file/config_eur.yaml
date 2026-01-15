@@ -1152,6 +1152,88 @@ production pathways:
       reference product: heat, district or industrial, other than natural gas
       exists in original database: True  # NOTE: by default it takes CH
 
+  # COAL (ENERGY USES): HARD COAL, HARD COAL IMPORTS, CHARCOAL.
+  # LIGNITE (ENERGY USES): LIGNITE, CHARCOAL.
+  COAL_HARD:
+    production volume:
+      variable: Share|Coal|HardCoal
+    ecoinvent alias:
+      name: hard coal mine operation and hard coal preparation
+      reference product: hard coal
+      exists in original database: True  # Europe without Russia and Turkey
+
+  COAL_HARD_IMPORTS_RU:
+    production volume:
+      variable: Share|Coal|HardCoalImportsRU
+    ecoinvent alias:
+      name: hard coal, import from RU
+      reference product: hard coal
+      exists in original database: True
+
+  COAL_HARD_IMPORTS_RLA:  # RLA: Region Latin America
+    production volume:
+      variable: Share|Coal|HardCoalImportsRLA
+    ecoinvent alias:
+      name: hard coal, import from RLA
+      reference product: hard coal
+      exists in original database: True
+
+  COAL_HARD_IMPORTS_RNA: # RNA: Region North America
+    production volume:
+      variable: Share|Coal|HardCoalImportsRNA
+    ecoinvent alias:
+      name: hard coal, import from RNA
+      reference product: hard coal
+      exists in original database: True
+
+  COAL_HARD_IMPORTS_AU: # AU: Australia
+    production volume:
+      variable: Share|Coal|HardCoalImportsAU
+    ecoinvent alias:
+      name: hard coal, import from AU
+      reference product: hard coal
+      exists in original database: True
+
+  COAL_HARD_IMPORTS_ZA: # ZA: South Africa
+    production volume:
+      variable: Share|Coal|HardCoalImportsZA
+    ecoinvent alias:
+      name: hard coal, import from ZA
+      reference product: hard coal
+      exists in original database: True
+
+  COAL_HARD_IMPORTS_ID: # ID: Indonesia
+    production volume:
+      variable: Share|Coal|HardCoalImportsID
+    ecoinvent alias:
+      name: hard coal, import from ID
+      reference product: hard coal
+      exists in original database: True
+
+  COAL_CHARCOAL:  # GLO (only option)
+    production volume:
+      variable: Share|Coal|Charcoal
+    ecoinvent alias:
+      name: charcoal production
+      reference product: charcoal
+      exists in original database: True
+
+  LIGNITE:
+    production volume:
+      variable: Share|Lignite|Lignite
+    ecoinvent alias:
+      name: market for lignite
+      reference product: lignite
+      exists in original database: True
+
+  LIGNITE_CHARCOAL: # GLO (only option)
+    production volume:
+      variable: Share|Lignite|Charcoal
+    ecoinvent alias:
+      name: charcoal production
+      reference product: charcoal
+      exists in original database: True
+
 markets:
   - name: market for biomass, used as fuel (new)
     reference product: biomass, used as fuel (new)
@@ -1636,3 +1718,23 @@ markets:
     replaces in:
       - name: ""
         operator: contains
+
+  - name: market for coal, for energy uses (new)
+    reference product: coal (new)
+    unit: kilogram
+    includes:
+      - COAL_HARD
+      - COAL_HARD_IMPORTS_RU
+      - COAL_HARD_IMPORTS_RLA
+      - COAL_HARD_IMPORTS_RNA
+      - COAL_HARD_IMPORTS_AU
+      - COAL_HARD_IMPORTS_ZA
+      - COAL_HARD_IMPORTS_ID
+      - COAL_CHARCOAL
+
+  - name: market for lignite, for energy uses (new)
+    reference product: lignite (new)
+    unit: kilogram
+    includes:
+      - LIGNITE
+      - LIGNITE_CHARCOAL
