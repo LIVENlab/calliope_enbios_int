@@ -3,7 +3,7 @@ import os
 ###### ----- MODELLING CONFIG ----- ######
 
 # variables to be set by the user
-PROJECT_NAME = 'paper_pniec_enbios'
+PROJECT_NAME = 'bw25_matrix'
 NEW_DB_NAME = 'additional_acts'
 SPOLDS_CUTOFF = r"C:\ecoinvent_data\3.9.1\cutoff\datasets"
 SPOLDS_APOS = r"C:\ecoinvent_data\3.9.1\apos\datasets"
@@ -185,7 +185,7 @@ SPAIN_2030_OFF_WIND_FLEET = \
             'generator_type': "dd_pmsg", 'recycled_share_steel': None, 'lifetime': 25, 'eol_scenario': 4,
             'offshore_type': 'floating', 'floating_platform': 'tension_leg', 'sea_depth': 100, 'distance_to_shore': 24  # based on Parc Tramuntana
         }, 0.25],  # based on the SG 14-222 DD
-        'turbine_24': [
+        'turbine_4': [
             {
                 'power': 15.0, 'manufacturer': "Vestas", 'rotor_diameter': 236, 'hub_height': 150,
                 'commissioning_year': 2030,
@@ -194,3 +194,20 @@ SPAIN_2030_OFF_WIND_FLEET = \
             }, 0.25],  # based on the V236-15.0 MW
     }
 
+# (3) Balanced: 14 MW (based on the SG 14-222 DD), monopile: 80%, floating (spar-buoy): 20%.
+BALANCED_OFF_WIND_FLEET = \
+    {'turbine_1': [
+            {
+                'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
+                'commissioning_year': 2030,
+                'generator_type': "dd_pmsg", 'recycled_share_steel': None, 'lifetime': 25, 'eol_scenario': 4,
+                'offshore_type': 'monopile', 'floating_platform': None, 'sea_depth': 30, 'distance_to_shore': 24
+            }, 0.8],  # based on the SG 14-222 DD
+     'turbine_2': [
+            {
+                'power': 14.0, 'manufacturer': "Siemens Gamesa", 'rotor_diameter': 222, 'hub_height': 125,
+                'commissioning_year': 2030,
+                'generator_type': "dd_pmsg", 'recycled_share_steel': None, 'lifetime': 25, 'eol_scenario': 4,
+                'offshore_type': 'floating', 'floating_platform': 'spar_buoy_steel', 'sea_depth': 100, 'distance_to_shore': 24
+            }, 0.2]
+    }
