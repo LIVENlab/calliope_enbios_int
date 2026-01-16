@@ -454,12 +454,13 @@ def substation_platform(new_db, cutoff391, biosphere3, ei_index,
         new_exc.save()
 
         # iron
-        iron = cutoff391.get(code='e6ba5991b1ecab06c9e5ebc33af41364')  # market for cast iron
+        iron = [a for a in cutoff391 if a['name'] == 'market for cast iron' and a['reference product'] == 'cast iron'][0]  # market for cast iron
         new_exc = new_act.new_exchange(input=iron, amount=ballast_fixed, unit="kilogram", type='technosphere')
         new_exc.save()
 
         # water
-        water = biosphere3.get('478e8437-1c21-4032-8438-872a6b5ddcdf')  # water
+        water = [a for a in biosphere3 if a['name'] == 'Water, unspecified natural origin' and
+                 a['categories'] == ('natural resource', 'in ground')][0]  # water
         new_exc = new_act.new_exchange(input=water, amount=ballast_fluid / 1000, unit="cubic meter",
                                        type='biosphere')
         new_exc.save()
@@ -777,7 +778,8 @@ def transport_offshore(new_db, cutoff391,
                                                                floating_platform=floating_platform,
                                                                new_db=new_db)
     # based on García-Teruel, 2022.
-    ferry_act = cutoff391.get('150cb5f77b0346f4f65ba8ec9c178aff')
+    ferry_act = [a for a in cutoff391 if a['name'] == 'transport, freight, sea, ferry' and
+                 a['location'] == 'GLO' and a['reference product'] == 'transport, freight, sea, ferry'][0]
     # amount reported in Garcia-Teruel / (mass * distance_to_shore) * our_mass * our_distance_to_shore
     amount = 7842117.12 / (43575 * 25) * mass_turbine_substation_and_foundations / 1000 * distance_to_shore
     new_ex = transport_act.new_exchange(input=ferry_act, type='technosphere', amount=amount)
@@ -836,7 +838,8 @@ def installation_offshore(new_db, cutoff391, biosphere3,
                                                                floating_platform=floating_platform,
                                                                new_db=new_db)
     # based on García-Teruel, 2022.
-    ferry_act = cutoff391.get('150cb5f77b0346f4f65ba8ec9c178aff')
+    ferry_act = [a for a in cutoff391 if a['name'] == 'transport, freight, sea, ferry' and
+                 a['location'] == 'GLO' and a['reference product'] == 'transport, freight, sea, ferry'][0]
     # amount reported in Garcia-Teruel / (mass) * our_mass. Distance to shore does not play an important role this time, since most operations happen on the installation site.
     amount = 58696743.55 / 43575 * mass_turbine_substation_and_foundations / 1000
     new_ex = installation_act.new_exchange(input=ferry_act, type='technosphere', amount=amount)
@@ -868,7 +871,8 @@ def maintenance_offshore(new_db, cutoff391,
     new_ex.save()
 
     # based on García-Teruel, 2022.
-    ferry_act = cutoff391.get('150cb5f77b0346f4f65ba8ec9c178aff')
+    ferry_act = [a for a in cutoff391 if a['name'] == 'transport, freight, sea, ferry' and
+                 a['location'] == 'GLO' and a['reference product'] == 'transport, freight, sea, ferry'][0]
     # amount reported in Garcia-Teruel / (LT * number of turbines) * our_LT. Distance to shore does not play an important role this time, since most operations happen on the installation site.
     amount = 61059273.48 / (25 * 5) * lifetime
     new_ex = maintenance_act.new_exchange(input=ferry_act, type='technosphere', amount=amount)
@@ -1194,7 +1198,8 @@ def offshore_eol(new_db, cutoff391, ei_index,
                                                                floating_platform=floating_platform,
                                                                new_db=new_db)
     # based on García-Teruel, 2022.
-    ferry_act = cutoff391.get('150cb5f77b0346f4f65ba8ec9c178aff')
+    ferry_act = [a for a in cutoff391 if a['name'] == 'transport, freight, sea, ferry' and
+                 a['location'] == 'GLO' and a['reference product'] == 'transport, freight, sea, ferry'][0]
     # amount reported in Garcia-Teruel / (mass) * our_mass. Distance to shore does not play an important role this time, since most operations happen on the installation site.
     amount = 58696743.55 / 43575 * mass_turbine_substation_and_foundations / 1000
     new_ex = eol_operations_act.new_exchange(input=ferry_act, type='technosphere', amount=amount)
@@ -1235,6 +1240,7 @@ def lci_offshore_turbine(new_db, cutoff391, biosphere3,
                          turbine_power: float, hub_height: float, commissioning_year: int,
                          offshore_type: List[Literal['monopile', 'gravity', 'tripod', 'floating']],
                          sea_depth: float, distance_to_shore: float,
+                         cf: float = 0.4, time_adjusted_cf: float = 0.009,
                          floating_platform: List[Literal['semi_sub', 'spar_buoy_concrete', 'spar_buoy_iron',
                          'spar_buoy_steel', 'tension_leg', 'barge']] = None,
                          recycled_share_steel: float = None,
@@ -1249,9 +1255,10 @@ def lci_offshore_turbine(new_db, cutoff391, biosphere3,
     """
     ei_index = build_bw_index(cutoff391)
     # create offshore turbine activity
+    comment = 'Lifetime=' + str(lifetime) + ', Turbine power=' + str(turbine_power)
     offshore_turbine_act = new_db.new_activity(name=f'{park_name}_offshore_turbine',
                                                code=f'{park_name}_offshore_turbine',
-                                               unit='unit', location=park_location)
+                                               unit='unit', location=park_location, comment=comment)
     offshore_turbine_act['reference product'] = 'offshore turbine'
     offshore_turbine_act.save()
     new_ex = offshore_turbine_act.new_exchange(input=offshore_turbine_act.key, type='production', amount=1)
@@ -1309,7 +1316,70 @@ def lci_offshore_turbine(new_db, cutoff391, biosphere3,
 
     delete_unnecesary_acts(park_name=park_name, park_power=park_power, new_db=new_db)
 
+    # Create electricity_production activity per turbine and per park (per kWh)
+    try:
+        # turbine
+        if time_adjusted_cf != 0:
+            cf_comment = 'CF: ' + str(cf) + '. Attrition rate: ' + str(time_adjusted_cf)
+        else:
+            cf_comment = 'CF: ' + str(cf) + '. Constant CF (no attrition rate)'
+        elec_prod_turbine_act = new_db.new_activity(name=f'{park_name}_offshore_turbine_kwh',
+                                                    code=f'{park_name}_offshore_turbine_kwh',
+                                                    location=park_location, unit='kilowatt hour', comment=cf_comment)
+        elec_prod_turbine_act['reference product'] = f'{park_name}_turbine_kwh'
+        elec_prod_turbine_act.save()
+        new_exc = elec_prod_turbine_act.new_exchange(input=elec_prod_turbine_act.key, amount=1.0, unit='kilowatt hour',
+                                                     type='production')
+        new_exc.save()
+
+    except bd.errors.DuplicateNode:
+        print(f'An inventory for a park with the name {park_name} was already created before in the database "new_db"')
+        print('Give another name to the wind park. Otherwise, you may want to delete '
+              'the content of "new_db" by running delete_new_db().')
+        print(
+            'WARNING: if you run delete_new_db() '
+            'ALL WIND PARKS STORED IN THAT DATABASE WILL '
+            'BE DELETED!')
+        sys.exit()
+
+    # add infrastructure
+    elec_turbine, elec_park = electricity_production(park_power=park_power,
+                                                     cf=cf, time_adjusted_cf=time_adjusted_cf, lifetime=lifetime,
+                                                     turbine_power=turbine_power
+                                                     )
+    # to turbine activity
+    turbine_amount = 1 / elec_turbine
+    turbine_act = new_db.get(f'{park_name}_offshore_turbine')
+    new_exc = elec_prod_turbine_act.new_exchange(input=turbine_act, amount=turbine_amount, type='technosphere')
+    new_exc.save()
+    elec_prod_turbine_act.save()
+
     return offshore_turbine_act
+
+
+def electricity_production(park_power: float, cf: float, time_adjusted_cf: float,
+                           lifetime: int, turbine_power: float):
+    if time_adjusted_cf == 0:
+        print('Constant cf (time-adjusted cf not applied)')
+        elec_prod_turbine = cf * lifetime * 365 * 24 * turbine_power / 1000
+        elec_prod_park = cf * lifetime * 365 * 24 * park_power / 1000
+    else:
+        # adjust a decay in yearly production according to CFage = CF2 * (1-time_adjusted_cf)^age [Xu et al. (2023)]
+        print('Time-adjusted cf applied with an attrition coefficient of ' + str(time_adjusted_cf))
+        year = 1
+        adjusted_time = []
+        while year <= lifetime:
+            if year == 1:
+                yearly_adjusted_time = 1
+            else:
+                yearly_adjusted_time = (1 - time_adjusted_cf) ** year
+            adjusted_time.append(yearly_adjusted_time)
+            year += 1
+        adjusted_time = sum(adjusted_time)
+        elec_prod_turbine = cf * 365 * 24 * turbine_power * adjusted_time * 1000
+        elec_prod_park = cf * 365 * 24 * park_power * adjusted_time * 1000
+
+    return elec_prod_turbine, elec_prod_park
 
 
 def offshore_substation(new_db,
@@ -1382,6 +1452,7 @@ def offshore_park(new_db, cutoff391, biosphere3, ei_index,
                   sea_depth: float, distance_to_shore: float,
                   floating_platform: List[Literal['semi_sub', 'spar_buoy_concrete', 'spar_buoy_iron',
                   'spar_buoy_steel', 'tension_leg', 'barge']] = None,
+                  cf: float = 0.4, time_adjusted_cf: float = 0.009,
                   recycled_share_steel: float = None,
                   scenario: int = 1,
                   lifetime: int = 20,
@@ -1426,6 +1497,42 @@ def offshore_park(new_db, cutoff391, biosphere3, ei_index,
     new_ex = park_act.new_exchange(input=cabling_act, type='technosphere', amount=1)
     new_ex.save()
 
+    # Create electricity_production activity per turbine and per park (per kWh)
+    try:
+        # park
+        if time_adjusted_cf != 0:
+            cf_comment = 'CF: ' + str(cf) + '. Attrition rate: ' + str(time_adjusted_cf)
+        else:
+            cf_comment = 'CF: ' + str(cf) + '. Constant CF (no attrition rate)'
+        elec_prod_park_act = new_db.new_activity(name=f'{park_name}_offshore_park_kwh',
+                                                 code=f'{park_name}_offshore_park_kwh',
+                                                 location=park_location, unit='kilowatt hour', comment=cf_comment)
+        elec_prod_park_act['reference product'] = f'{park_name}_park_kwh'
+        elec_prod_park_act.save()
+        new_exc = elec_prod_park_act.new_exchange(input=elec_prod_park_act.key, amount=1.0, unit='kilowatt hour',
+                                                  type='production')
+        new_exc.save()
+    except bd.errors.DuplicateNode:
+        print(f'An inventory for a park with the name {park_name} was already created before in the database "new_db"')
+        print('Give another name to the wind park. Otherwise, you may want to delete '
+              'the content of "new_db" by running delete_new_db().')
+        print(
+            'WARNING: if you run delete_new_db() '
+            'ALL WIND PARKS STORED IN THAT DATABASE WILL '
+            'BE DELETED!')
+        sys.exit()
+
+    # add infrastructure
+    elec_turbine, elec_park = electricity_production(park_power=park_power,
+                                                     cf=cf, time_adjusted_cf=time_adjusted_cf, lifetime=lifetime,
+                                                     turbine_power=turbine_power
+                                                     )
+    # to park activity
+    park_amount = 1 / elec_park
+    park_act = new_db.get(park_name + '_' + str(park_power))
+    new_exc = elec_prod_park_act.new_exchange(input=park_act, amount=park_amount, type='technosphere')
+    new_exc.save()
+    elec_prod_park_act.save()
 
 def delete_unnecesary_acts(new_db, park_name: str, park_power: float):
     onshore_turbine = new_db.get(f'{park_name}_single_turbine')

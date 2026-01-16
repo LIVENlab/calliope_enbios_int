@@ -551,7 +551,7 @@ def create_fleets(
                        biosphere3=biosphere3)
 
     # Offshore wind fleets
-    # TODO: 1. offshore per kWh, 2. maintenance emissions are onsite!
+    # TODO: maintenance emissions are onsite!
     wind_offshore_fleet(db_wind_name='original_cutoff391', location='ES', fleet_turbines_definition=offshore_wind_fleet)
 
 
