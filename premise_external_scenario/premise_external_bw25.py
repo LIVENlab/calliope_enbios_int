@@ -466,75 +466,105 @@ def create_scenario_values(new_db_name: str, csv_file):
     pass
 
 
-def plot_input_data():
-    # TODO: fix legend and plot ELectricityMV, ElectricityLV, ElectricityHV, Methane
-    # 1. Load data
-    path = r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_eur_template_random.csv'
+def plot_input_data(
+    path,
+    save_path,
+    year="2050",
+    region=None,
+    region_agg="mean",   # "mean" or "sum" when region is None
+    cols=4,
+    figsize_per_row=5,
+):
     df = pd.read_csv(path)
-
-    # 2. Parse names into carriers and routes
-    # .str.split('|', expand=True) is faster and avoids the iterrows loop
-    split_cols = df['variables'].str.split('|', expand=True)
-    df['carriers'] = split_cols[1]
-    df['routes'] = split_cols[2]
-
-    # 3. Rename ALL import routes to a single "Imports" tag
-    # This happens globally, but the next step (groupby) keeps them per-carrier
-    df['routes'] = df['routes'].apply(
-        lambda x: 'Imports' if 'Import' in str(x) else x
-    )
-
-    ##### Plot all carriers with unique region  #####
-    excluded_items = ['ElectricityHV', 'ElectricityLV', 'ElectricityMV', 'Methane']
-    df_plot = df[~df['carriers'].isin(excluded_items)]
-    # 4. Consolidate: Sum '2050' values for each (carrier, route) pair
-    # .reset_index() is CRITICAL here to prevent the 'Series' AttributeError
-    df_plot = df_plot.groupby(['carriers', 'routes'])['2050'].sum().reset_index()
-
-    # 5. Define unique items and color palette after processing
-    unique_carriers = df_plot['carriers'].unique()
-    all_routes = df_plot['routes'].unique()
-    cmap = plt.get_cmap('tab20')
+    if "variables" not in df.columns:
+        raise ValueError("Expected a 'variables' column in the CSV.")
+    if year not in df.columns:
+        raise ValueError(f"Expected a '{year}' column in the CSV.")
+    split_cols = df["variables"].astype(str).str.split("|", expand=True)
+    if split_cols.shape[1] < 3:
+        raise ValueError("Expected variables formatted like 'Share|Carrier|Route'.")
+    df["carriers"] = split_cols[1]
+    df["routes"] = split_cols[2]
+    df["routes"] = df["routes"].apply(lambda x: "Imports" if "Import" in str(x) else x)
+    keep_cols = ["region", "carriers", "routes", year]
+    missing = [c for c in keep_cols if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
+    df = df[keep_cols].copy()
+    if region is not None:
+        df_plot = df[df["region"] == region].copy()
+        if df_plot.empty:
+            available = sorted(df["region"].unique())
+            raise ValueError(
+                f"Region '{region}' not found. Available regions include: {available[:10]} ..."
+            )
+        df_plot = df_plot.groupby(["carriers", "routes"], as_index=False)[year].sum()
+    else:
+        per_region = df.groupby(["region", "carriers", "routes"], as_index=False)[year].sum()
+        if region_agg == "mean":
+            df_plot = per_region.groupby(["carriers", "routes"], as_index=False)[year].mean()
+        elif region_agg == "sum":
+            df_plot = per_region.groupby(["carriers", "routes"], as_index=False)[year].sum()
+        else:
+            raise ValueError("region_agg must be 'mean' or 'sum'.")
+    unique_carriers = sorted(df_plot["carriers"].unique())
+    all_routes = sorted(df_plot["routes"].unique())
+    cmap = plt.get_cmap("tab20")
     route_color_map = {route: cmap(i % 20) for i, route in enumerate(all_routes)}
-
-    # Configure the grid
-    cols = 4
     rows = math.ceil(len(unique_carriers) / cols)
-    fig, axes = plt.subplots(rows, cols, figsize=(22, 5 * rows))
+    fig, axes = plt.subplots(rows, cols, figsize=(30, figsize_per_row * rows))
     axes = axes.flatten()
-
-    # 6. Plot snippets
     for i, carrier in enumerate(unique_carriers):
         ax = axes[i]
-        # Filter the pre-grouped dataframe for the current carrier
-        carrier_df = df_plot[df_plot['carriers'] == carrier]
-
-        bottom = 0
-        # Now iterrows() works because df_plot is a DataFrame
-        for _, row in carrier_df.iterrows():
-            route = row['routes']
-            share = row['2050']
-
-            ax.bar(carrier, share,
-                   bottom=bottom,
-                   color=route_color_map[route],
-                   label=route,
-                   edgecolor='black')
+        carrier_df = df_plot[df_plot["carriers"] == carrier]
+        bottom = 0.0
+        for _, r in carrier_df.iterrows():
+            route = r["routes"]
+            share = float(r[year])
+            ax.bar(
+                carrier,
+                share,
+                bottom=bottom,
+                color=route_color_map[route],
+                label=route,
+                edgecolor="black",
+                linewidth=0.5,
+            )
             bottom += share
-
-        # Snippet styling
-        ax.set_title(carrier, fontsize=12, fontweight='bold')
+        ax.set_title(carrier, fontsize=24, fontweight="bold")
+        ax.set_ylabel("Share", fontsize=18)
+        ax.set_xticks([])
+        ax.tick_params(axis="y", labelsize=18)
         ax.set_ylim(0, 1.05)
-        ax.set_ylabel('Share')
-        # Legend showing the routes for this carrier
-        ax.legend(loc='upper left', bbox_to_anchor=(1, 1), fontsize=12, frameon=False)
-
-    # Clean up empty subplots
-    for j in range(i + 1, len(axes)):
-        axes[j].axis('off')
-
-    # Save to your local path
-    plt.savefig(r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data.png')
+        ax.grid(axis="y", linestyle=":", linewidth=0.6, alpha=0.6)
+        # -------- Per-snippet legend (upper-right, vertical) --------
+        handles, labels = ax.get_legend_handles_labels()
+        uniq = dict(zip(labels, handles))  # deduplicate
+        if carrier == 'ElectricityHV':
+            legend_fontsize = 11
+        else:
+            legend_fontsize = 16
+        leg = ax.legend(
+            uniq.values(),
+            uniq.keys(),
+            loc="upper right",
+            bbox_to_anchor=(1.0, 1.0),
+            ncol=1,  # <-- vertical legend
+            fontsize=legend_fontsize,
+            frameon=True,
+            borderaxespad=0.2,
+            handlelength=1.2,
+            labelspacing=0.4,
+        )
+        leg.get_frame().set_alpha(0.70)
+        # -----------------------------------------------------------
+        # -----------------------------------------------------
+    for j in range(len(unique_carriers), len(axes)):
+        axes[j].axis("off")
+    # Leave space at the top of each axes legend; tighten overall
+    plt.tight_layout()
+    fig.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
 
 
 #create_custom_database()
@@ -546,5 +576,10 @@ def plot_input_data():
 #                            fleet_turbines_definition=config_parameters.BALANCED_OFF_WIND_FLEET,
 #                              european_locations_only=True)
 
-plot_input_data()
+plot_input_data(
+    path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_eur_template_random.csv",
+    save_path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data.png",
+    region=None,          # aggregate across all regions
+    region_agg="mean",    # mean is usually what you want for “average country”
+)
 pass
