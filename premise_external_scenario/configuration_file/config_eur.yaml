@@ -37,7 +37,7 @@ production pathways:
   # OR WITHOUT CCS), ELECTROLYSIS
   H2_WOOD_GASIFICATION_CCS:
     production volume:
-      variable: Share|H2|Wood|CCS
+      variable: Share|H2|WoodCCS
     ecoinvent alias:
       name: hydrogen production, gaseous, 25 bar, from gasification of woody biomass in entrained flow gasifier, with CCS, at gasification plant
       reference product: hydrogen, gaseous, 25 bar
@@ -45,7 +45,7 @@ production pathways:
 
   H2_WOOD_GASIFICATION_NO_CCS:
     production volume:
-      variable: Share|H2|Wood|NoCCS
+      variable: Share|H2|WoodNoCCS
     ecoinvent alias:
       name: hydrogen production, gaseous, 25 bar, from gasification of woody biomass in entrained flow gasifier, at gasification plant
       mask: CCS
@@ -72,7 +72,7 @@ production pathways:
 
   H2_COAL_GASIFICATION_CCS:
     production volume:
-      variable: Share|H2|Coal|CCS
+      variable: Share|H2|CoalCCS
     ecoinvent alias:
       name: hydrogen production, coal gasification, with CCS
       reference product: hydrogen, gaseous, low pressure
@@ -80,7 +80,7 @@ production pathways:
 
   H2_COAL_GASIFICATION_NO_CCS:
     production volume:
-      variable: Share|H2|Coal|NoCCS
+      variable: Share|H2|CoalNoCCS
     ecoinvent alias:
       name: hydrogen production, coal gasification
       mask: CCS
@@ -459,7 +459,7 @@ production pathways:
   # CARBON DIOXIDE: (i) DAC: SOLVENT-BASED, SORBENT-BASED; (ii) CEMENT: DIRECT SEPARATION, OXYFUEL, MONOETHANOLAMINE
   CO2_DAC_SOLVENT:
     production volume:
-      variable: Share|CO2|DAC|Solvent
+      variable: Share|CO2|DACSolvent
     ecoinvent alias:
       name: carbon dioxide, captured, with a solvent-based direct air capture system, 1MtCO2  #carbon dioxide, captured from atmosphere, with a solvent-based direct air capture system, 1MtCO2
       reference product: carbon dioxide, captured  #carbon dioxide, captured from atmosphere
@@ -467,7 +467,7 @@ production pathways:
 
   CO2_DAC_SORBENT:
     production volume:
-      variable: Share|CO2|DAC|Sorbent
+      variable: Share|CO2|DACSorbent
     ecoinvent alias:
       name: carbon dioxide, captured, with a sorbent-based direct air capture system, 100ktCO2  #carbon dioxide, captured from atmosphere, with a sorbent-based direct air capture system, 100ktCO2
       reference product: carbon dioxide, captured  #carbon dioxide, captured from atmosphere
@@ -475,7 +475,7 @@ production pathways:
 
   CO2_CEMENT_DIRECT:
     production volume:
-      variable: Share|CO2|Cement|Direct
+      variable: Share|CO2|CementDirect
     ecoinvent alias:
       name: carbon dioxide, captured, at cement production plant, using direct separation  #carbon dioxide, captured at cement production plant, using direct separation
       reference product: carbon dioxide, captured  #carbon dioxide, captured at cement plant
@@ -483,7 +483,7 @@ production pathways:
 
   CO2_CEMENT_OXYFUEL:
     production volume:
-      variable: Share|CO2|Cement|Oxyfuel
+      variable: Share|CO2|CementOxyfuel
     ecoinvent alias:
       name: carbon dioxide, captured, at cement production plant, using oxyfuel  #carbon dioxide, captured at cement production plant, using oxyfuel
       reference product: carbon dioxide, captured  #carbon dioxide, captured at cement plant
@@ -491,7 +491,7 @@ production pathways:
 
   CO2_CEMENT_MONOETHANOLAMINE:
     production volume:
-      variable: Share|CO2|Cement|Monoethanolamine
+      variable: Share|CO2|CementMonoethanolamine
     ecoinvent alias:
       name: carbon dioxide, captured, at cement production plant, using monoethanolamine  #carbon dioxide, captured at cement production plant, using monoethanolamine
       reference product: carbon dioxide, captured  #carbon dioxide, captured at cement plant

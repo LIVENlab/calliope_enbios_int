@@ -1,12 +1,12 @@
 model,pathway,scenario,region,variables,unit,2020,2050
 image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|Biomass|Residues,share,0.4048985710473579,0.5360434144463667
 image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|Biomass|Wood,share,0.5951014289526421,0.4639565855536332
-image,SSP2-Base,Business As Usual,RER,Share|H2|Wood|CCS,share,0.1811747197584049,0.0850420884345749
-image,SSP2-Base,Business As Usual,RER,Share|H2|Wood|NoCCS,share,0.0885063588792601,0.223990928116371
+image,SSP2-Base,Business As Usual,RER,Share|H2|WoodCCS,share,0.1811747197584049,0.0850420884345749
+image,SSP2-Base,Business As Usual,RER,Share|H2|WoodNoCCS,share,0.0885063588792601,0.223990928116371
 image,SSP2-Base,Business As Usual,RER,Share|H2|SteamReforming,share,0.1287709326318874,0.2016971736289678
 image,SSP2-Base,Business As Usual,RER,Share|H2|AutothermalReforming,share,0.1179255267428446,0.0768301851547795
-image,SSP2-Base,Business As Usual,RER,Share|H2|Coal|CCS,share,0.1810402304747003,0.2405296740767813
-image,SSP2-Base,Business As Usual,RER,Share|H2|Coal|NoCCS,share,0.0682025872885808,0.1209860027962201
+image,SSP2-Base,Business As Usual,RER,Share|H2|CoalCCS,share,0.1810402304747003,0.2405296740767813
+image,SSP2-Base,Business As Usual,RER,Share|H2|CoalNoCCS,share,0.0682025872885808,0.1209860027962201
 image,SSP2-Base,Business As Usual,RER,Share|H2|Electrolysis,share,0.2343796442243217,0.0509239477923051
 image,SSP2-Base,Business As Usual,RER,Share|Methanol|H2,share,0.7416727190313618,0.2177599936940501
 image,SSP2-Base,Business As Usual,RER,Share|Methanol|Biomass,share,0.0828340115605633,0.4213889236608883
@@ -29,11 +29,11 @@ image,SSP2-Base,Business As Usual,CH,Share|Biogas|Biowaste,share,0.4067015550961
 image,SSP2-Base,Business As Usual,CH,Share|Biogas|Sewage,share,0.2895269327326917,0.569692270228204
 image,SSP2-Base,Business As Usual,CH,Share|Biogas|Manure,share,0.097635218485416,0.0431757880779104
 image,SSP2-Base,Business As Usual,CH,Share|Biogas|Grass,share,0.2061362936857286,0.1924067927513567
-image,SSP2-Base,Business As Usual,RER,Share|CO2|DAC|Solvent,share,0.4557961145087363,0.0552447403780832
-image,SSP2-Base,Business As Usual,RER,Share|CO2|DAC|Sorbent,share,0.1530331650948312,0.0293474354337694
-image,SSP2-Base,Business As Usual,RER,Share|CO2|Cement|Direct,share,0.0145866283353706,0.4917375068778468
-image,SSP2-Base,Business As Usual,RER,Share|CO2|Cement|Oxyfuel,share,0.1709370707356674,0.2041248461273727
-image,SSP2-Base,Business As Usual,RER,Share|CO2|Cement|Monoethanolamine,share,0.2056470213253945,0.2195454711829278
+image,SSP2-Base,Business As Usual,RER,Share|CO2|DACSolvent,share,0.4557961145087363,0.0552447403780832
+image,SSP2-Base,Business As Usual,RER,Share|CO2|DACSorbent,share,0.1530331650948312,0.0293474354337694
+image,SSP2-Base,Business As Usual,RER,Share|CO2|CementDirect,share,0.0145866283353706,0.4917375068778468
+image,SSP2-Base,Business As Usual,RER,Share|CO2|CementOxyfuel,share,0.1709370707356674,0.2041248461273727
+image,SSP2-Base,Business As Usual,RER,Share|CO2|CementMonoethanolamine,share,0.2056470213253945,0.2195454711829278
 image,SSP2-Base,Business As Usual,RER,Share|LubricatingOil|H2,share,0.4410666206040315,0.0388499614768675
 image,SSP2-Base,Business As Usual,RER,Share|LubricatingOil|NatGas,share,0.244651660266618,0.7724576409499
 image,SSP2-Base,Business As Usual,RER,Share|LubricatingOil|Oil,share,0.3142817191293504,0.1886923975732323
