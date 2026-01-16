@@ -10,6 +10,8 @@ import sys
 from typing import Dict, List, Union, Any
 import config_parameters
 import pandas as pd
+import matplotlib.pyplot as plt
+import math
 
 def import_ei_12():
     bi.import_ecoinvent_release(
@@ -463,18 +465,86 @@ def create_scenario_values(new_db_name: str, csv_file):
 
     pass
 
-def plot_input_data():
-    df = pd.read_csv(filepath_or_buffer=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_eur_template_random.csv')
 
-    pass
+def plot_input_data():
+    # TODO: fix legend and plot ELectricityMV, ElectricityLV, ElectricityHV, Methane
+    # 1. Load data
+    path = r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_eur_template_random.csv'
+    df = pd.read_csv(path)
+
+    # 2. Parse names into carriers and routes
+    # .str.split('|', expand=True) is faster and avoids the iterrows loop
+    split_cols = df['variables'].str.split('|', expand=True)
+    df['carriers'] = split_cols[1]
+    df['routes'] = split_cols[2]
+
+    # 3. Rename ALL import routes to a single "Imports" tag
+    # This happens globally, but the next step (groupby) keeps them per-carrier
+    df['routes'] = df['routes'].apply(
+        lambda x: 'Imports' if 'Import' in str(x) else x
+    )
+
+    ##### Plot all carriers with unique region  #####
+    excluded_items = ['ElectricityHV', 'ElectricityLV', 'ElectricityMV', 'Methane']
+    df_plot = df[~df['carriers'].isin(excluded_items)]
+    # 4. Consolidate: Sum '2050' values for each (carrier, route) pair
+    # .reset_index() is CRITICAL here to prevent the 'Series' AttributeError
+    df_plot = df_plot.groupby(['carriers', 'routes'])['2050'].sum().reset_index()
+
+    # 5. Define unique items and color palette after processing
+    unique_carriers = df_plot['carriers'].unique()
+    all_routes = df_plot['routes'].unique()
+    cmap = plt.get_cmap('tab20')
+    route_color_map = {route: cmap(i % 20) for i, route in enumerate(all_routes)}
+
+    # Configure the grid
+    cols = 4
+    rows = math.ceil(len(unique_carriers) / cols)
+    fig, axes = plt.subplots(rows, cols, figsize=(22, 5 * rows))
+    axes = axes.flatten()
+
+    # 6. Plot snippets
+    for i, carrier in enumerate(unique_carriers):
+        ax = axes[i]
+        # Filter the pre-grouped dataframe for the current carrier
+        carrier_df = df_plot[df_plot['carriers'] == carrier]
+
+        bottom = 0
+        # Now iterrows() works because df_plot is a DataFrame
+        for _, row in carrier_df.iterrows():
+            route = row['routes']
+            share = row['2050']
+
+            ax.bar(carrier, share,
+                   bottom=bottom,
+                   color=route_color_map[route],
+                   label=route,
+                   edgecolor='black')
+            bottom += share
+
+        # Snippet styling
+        ax.set_title(carrier, fontsize=12, fontweight='bold')
+        ax.set_ylim(0, 1.05)
+        ax.set_ylabel('Share')
+        # Legend showing the routes for this carrier
+        ax.legend(loc='upper left', bbox_to_anchor=(1, 1), fontsize=12, frameon=False)
+
+    # Clean up empty subplots
+    for j in range(i + 1, len(axes)):
+        axes[j].axis('off')
+
+    # Save to your local path
+    plt.savefig(r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data.png')
+
 
 #create_custom_database()
-substitute_windtrace_onshore(ecoinvent_database_name='test_2', location_new_wind_act='RER',
-                             fleet_turbines_definition=config_parameters.BALANCED_ON_WIND_FLEET,
-                             biosphere3=bd.Database('biosphere3'), european_locations_only=True)
+#substitute_windtrace_onshore(ecoinvent_database_name='test_2', location_new_wind_act='RER',
+#                             fleet_turbines_definition=config_parameters.BALANCED_ON_WIND_FLEET,
+#                             biosphere3=bd.Database('biosphere3'), european_locations_only=True)
 
-substitute_windtrace_offshore(ecoinvent_database_name='test_2', location_new_wind_act='RER',
-                            fleet_turbines_definition=config_parameters.BALANCED_OFF_WIND_FLEET,
-                              european_locations_only=True)
+#substitute_windtrace_offshore(ecoinvent_database_name='test_2', location_new_wind_act='RER',
+#                            fleet_turbines_definition=config_parameters.BALANCED_OFF_WIND_FLEET,
+#                              european_locations_only=True)
 
+plot_input_data()
 pass
