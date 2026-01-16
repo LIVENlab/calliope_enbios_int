@@ -316,10 +316,35 @@ def apply_windtrace_onshore(db_wind_name: str, location: str,
         turbine_activity = bd.Database('additional_acts').get(park_name + '_turbine_kwh')
         # to fleet activity (infrastructure)
         new_ex = fleet_activity.new_exchange(input=turbine_activity, type='technosphere',
-                                             amount=share)  # TODO: fix in paper 2!! (change 1 for share)
+                                             amount=share)
         new_ex.save()
 
-    return park_names
+    return fleet_activity
+
+def substitute_windtrace_onshore(ecoinvent_database_name: str,
+                                 location_new_wind_act: str,
+                                 fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]],
+                                 biosphere3: bd.Database = bd.Database('biosphere3'),
+                                 european_locations_only: bool = True):
+    new_onshore_act = apply_windtrace_onshore(db_wind_name=ecoinvent_database_name, location=location_new_wind_act,
+                                              fleet_turbines_definition=fleet_turbines_definition, biosphere3=biosphere3
+                                              )
+    european_locations = ['ES', 'BG', 'SE', 'AT', 'MK', 'MD', 'HR', 'XK', 'LU', 'GR', 'IS', 'BA', 'EE', 'SK',
+                          'ME', 'LT', 'SI', 'IE', 'BE', 'RS', 'RO', 'NL', 'UA', 'PL', 'FR', 'GB', 'NO', 'CZ',
+                          'MT', 'DK', 'IT', 'LV', 'DE', 'PT', 'FI', 'BY', 'GI', 'AL', 'HU', 'CH']
+    onshore_wind_names = ['electricity production, wind, 1-3MW turbine, onshore',
+                          'electricity production, wind, <1MW turbine, onshore',
+                          'electricity production, wind, >3MW turbine, onshore']
+    if european_locations_only:
+        wind_acts_to_substitute = [a for a in bd.Database(ecoinvent_database_name) if a['name'] in onshore_wind_names
+                               and a['location'] in european_locations]
+    else:
+        wind_acts_to_substitute = [a for a in bd.Database(ecoinvent_database_name) if a['name'] in onshore_wind_names]
+
+    for act in wind_acts_to_substitute:
+        for ex in act.consumers():
+            ex.input = new_onshore_act
+            ex.save()
 
 
 def apply_windtrace_offshore(db_wind_name: str, location: str,
@@ -337,5 +362,8 @@ def create_scenario_values(new_db_name: str, csv_file):
     new_acts = [a for a in bd.Database(new_db_name) if ['(new)' in a['name']]]
 
     pass
-apply_windtrace_onshore(db_wind_name='test_2', location='RER', fleet_turbines_definition=config_parameters.BALANCED_ON_WIND_FLEET)
+
+substitute_windtrace_onshore(ecoinvent_database_name='test_2', location_new_wind_act='RER',
+                             fleet_turbines_definition=config_parameters.BALANCED_ON_WIND_FLEET,
+                             biosphere3=bd.Database('biosphere3'), european_locations_only=True)
 pass
