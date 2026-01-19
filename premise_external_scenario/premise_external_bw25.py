@@ -756,22 +756,23 @@ def plot_input_data(
     plt.close(fig)
 
 
-def _compute_and_store_lcia_scores(act, lcia_methods):
+def _compute_and_store_lcia_scores(act, lcia_methods, year: str):
     lca_obj = act.lca(amount=1)
-    lcia_results = {'name': act['name'], 'location': act['location'], 'product': act['reference product']}
+    lcia_results = {'name': act['name'], 'location': act['location'],
+                    'product': act['reference product'], 'scenario': year}
     for m in lcia_methods:
         lca_obj.switch_method(m)
         lca_obj.lcia()
-        lcia_results[str(m[1]) + str(m[2])] = lca_obj.score
+        lcia_results[f"{str(m[1])}; {str(m[2])}"] = lca_obj.score
     return lcia_results
 
-def analysis(custom_db_name: str, cutoff_db_name: str = 'premise_original_update', bw25_project_name: str = 'bw25_matrix'):
+def analysis(custom_db_names: list,
+             cutoff_db_name: str = 'premise_original_update', bw25_project_name: str = 'bw25_matrix'):
     # Set bw25 project
     bd.projects.set_current(bw25_project_name)
 
     # Set LCIA methods
     ef_31 = [m for m in bd.methods if str(m[0]) == 'EF v3.1']
-    cc_ef_31 = ('EF v3.1', 'climate change', 'global warming potential (GWP100)')
 
     ### STEEL ###
     # Original steel
@@ -779,23 +780,24 @@ def analysis(custom_db_name: str, cutoff_db_name: str = 'premise_original_update
     steel_original_glo = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market for steel, low-alloyed'
                           and a['reference product'] == 'steel, low-alloyed'
                           and a['location'] == 'GLO'][0]
-    lcia_results = _compute_and_store_lcia_scores(steel_original_glo, ef_31)
+    lcia_results = _compute_and_store_lcia_scores(steel_original_glo, ef_31, year='current')
     steel_results['steel current (GLO)'] = lcia_results
     try:
         steel_original_rer = [a for a in bd.Database('additional_acts') if a['name'] == 'market for steel, low-alloyed, 2029'][0]
-        lcia_results = _compute_and_store_lcia_scores(steel_original_rer, ef_31)
+        lcia_results = _compute_and_store_lcia_scores(steel_original_rer, ef_31, year='current')
         steel_results['steel current (RER)'] = lcia_results
     except:
         pass
 
     # steel new pathways
-    steel_new_acts = [a for a in bd.Database(custom_db_name) if
-                  'steel production' in a['name'] and a['reference product'] == 'steel, low-alloyed' and (
-                              a['location'] == 'RER' or ('electric' in a['name'] and a[
-                          'location'] == 'Europe without Switzerland and Austria'))]
-    for act in steel_new_acts:
-        _compute_and_store_lcia_scores(act, ef_31)
-        steel_results[f"steel custom - {act['name']}"] = lcia_results
+    for custom_db_name in custom_db_names:
+        steel_new_acts = [a for a in bd.Database(custom_db_name) if
+                      'steel production' in a['name'] and a['reference product'] == 'steel, low-alloyed' and (
+                                  a['location'] == 'RER' or ('electric' in a['name'] and a[
+                              'location'] == 'Europe without Switzerland and Austria'))]
+        for act in steel_new_acts:
+            lcia_results = _compute_and_store_lcia_scores(act, ef_31, year=custom_db_name[-4:])
+            steel_results[f"steel custom - {act['name']} {custom_db_name[-4:]}"] = lcia_results
 
     ### ELECTRICITY ###
     # Original electricity
@@ -807,7 +809,7 @@ def analysis(custom_db_name: str, cutoff_db_name: str = 'premise_original_update
               a['name'] == 'market group for electricity, low voltage' and a['location'] == 'RER'][0]
 
     for act in [act_hv, act_mv, act_lv]:
-        _compute_and_store_lcia_scores(act, ef_31)
+        lcia_results = _compute_and_store_lcia_scores(act, ef_31, year='current')
         electricity_results[f"electricity current - {act['name']}"] = lcia_results
 
     # new production routes
@@ -818,48 +820,60 @@ def analysis(custom_db_name: str, cutoff_db_name: str = 'premise_original_update
     act_lv = [a for a in bd.Database(custom_db_name) if
               a['name'] == 'market group for electricity, low voltage' and a['location'] == 'RER'][0]
 
-    for act in [act_hv, act_mv, act_lv]:
-        _compute_and_store_lcia_scores(act, ef_31)
-        electricity_results[f"electricity custom - {act['name']}"] = lcia_results
+    for custom_db_name in custom_db_names:
+        for act in [act_hv, act_mv, act_lv]:
+            lcia_results = _compute_and_store_lcia_scores(act, ef_31, year=custom_db_name[-4:])
+            electricity_results[f"electricity custom - {act['name']} {custom_db_name[-4:]}"] = lcia_results
+
+    # TODO: add all other ECs
+    all_results = steel_results | electricity_results
+    df = pd.DataFrame(all_results)
+    return df
 
 
-#create_custom_database(output_database_name='custom_2020',
-#                       year=2020,
-#                       )
+def plot_analysis(df: pd.DataFrame, ):
+    # TODO
+    pass
 
-substitute_windtrace_onshore(database_windtrace_should_substitute='custom_2020',
-                             ecoinvent_database_name='cutoff391', location_new_wind_act='RER',
-                                 fleet_turbines_definition=config_parameters.BALANCED_ON_WIND_FLEET,
-                         biosphere3=bd.Database('biosphere3'), european_locations_only=True)
+def run():
+    # create_custom_database(output_database_name='custom_2020',
+    #                       year=2020,
+    #                       )
+    substitute_windtrace_onshore(database_windtrace_should_substitute='custom_2020',
+                                 ecoinvent_database_name='cutoff391', location_new_wind_act='RER',
+                                     fleet_turbines_definition=config_parameters.BALANCED_ON_WIND_FLEET,
+                             biosphere3=bd.Database('biosphere3'), european_locations_only=True)
 
-substitute_windtrace_offshore(database_windtrace_should_substitute='custom_2020',
-    ecoinvent_database_name='cutoff391', location_new_wind_act='RER',
-                                fleet_turbines_definition=config_parameters.BALANCED_OFF_WIND_FLEET,
-                          european_locations_only=True)
+    substitute_windtrace_offshore(database_windtrace_should_substitute='custom_2020',
+        ecoinvent_database_name='cutoff391', location_new_wind_act='RER',
+                                    fleet_turbines_definition=config_parameters.BALANCED_OFF_WIND_FLEET,
+                              european_locations_only=True)
 
-substitute_windtrace_onshore(database_windtrace_should_substitute='custom_2050',
-                             ecoinvent_database_name='cutoff391', location_new_wind_act='RER',
-                                 fleet_turbines_definition=config_parameters.BALANCED_ON_WIND_FLEET,
-                         biosphere3=bd.Database('biosphere3'), european_locations_only=True)
+    substitute_windtrace_onshore(database_windtrace_should_substitute='custom_2050',
+                                 ecoinvent_database_name='cutoff391', location_new_wind_act='RER',
+                                     fleet_turbines_definition=config_parameters.BALANCED_ON_WIND_FLEET,
+                             biosphere3=bd.Database('biosphere3'), european_locations_only=True)
 
-substitute_windtrace_offshore(database_windtrace_should_substitute='custom_2050',
-    ecoinvent_database_name='cutoff391', location_new_wind_act='RER',
-                                fleet_turbines_definition=config_parameters.BALANCED_OFF_WIND_FLEET,
-                          european_locations_only=True)
+    substitute_windtrace_offshore(database_windtrace_should_substitute='custom_2050',
+        ecoinvent_database_name='cutoff391', location_new_wind_act='RER',
+                                    fleet_turbines_definition=config_parameters.BALANCED_OFF_WIND_FLEET,
+                              european_locations_only=True)
 
-plot_input_data(
-    path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_eur_custom_2020_2050.csv",
-    year='2020',
-    save_path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data_2020.png",
-    region=None,          # aggregate across all regions
-    region_agg="mean",    # mean is usually what you want for “average country”
-)
-plot_input_data(
-    path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_eur_custom_2020_2050.csv",
-    year='2050',
-    save_path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data_2050.png",
-    region=None,          # aggregate across all regions
-    region_agg="mean",    # mean is usually what you want for “average country”
-)
+    plot_input_data(
+        path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_eur_custom_2020_2050.csv",
+        year='2020',
+        save_path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data_2020.png",
+        region=None,          # aggregate across all regions
+        region_agg="mean",    # mean is usually what you want for “average country”
+    )
+    plot_input_data(
+        path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_eur_custom_2020_2050.csv",
+        year='2050',
+        save_path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data_2050.png",
+        region=None,          # aggregate across all regions
+        region_agg="mean",    # mean is usually what you want for “average country”
+    )
 
+
+df_2020 = analysis(custom_db_names=['custom_2020', 'custom_2050'])
 pass
