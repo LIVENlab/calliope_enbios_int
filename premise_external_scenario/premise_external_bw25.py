@@ -511,12 +511,14 @@ def apply_windtrace_onshore(db_wind_name: str, location: str,
     return fleet_activity
 
 def substitute_windtrace_onshore(ecoinvent_database_name: str,
+                                 database_windtrace_should_substitute: str,
                                  location_new_wind_act: str,
                                  fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]],
                                  biosphere3: bd.Database = bd.Database('biosphere3'),
                                  european_locations_only: bool = True,
                                  ):
     bd.projects.set_current(config_parameters.PROJECT_NAME)
+    create_additional_acts_db()
     turbines_exist = _test_onshore_wind_turbine_existance(fleet_turbines_definition=fleet_turbines_definition,
                                                           location=location_new_wind_act, new_db_name='additional_acts')
 
@@ -534,10 +536,10 @@ def substitute_windtrace_onshore(ecoinvent_database_name: str,
                           'electricity production, wind, <1MW turbine, onshore',
                           'electricity production, wind, >3MW turbine, onshore']
     if european_locations_only:
-        wind_acts_to_substitute = [a for a in bd.Database(ecoinvent_database_name) if a['name'] in onshore_wind_names
+        wind_acts_to_substitute = [a for a in bd.Database(database_windtrace_should_substitute) if a['name'] in onshore_wind_names
                                and a['location'] in european_locations]
     else:
-        wind_acts_to_substitute = [a for a in bd.Database(ecoinvent_database_name) if a['name'] in onshore_wind_names]
+        wind_acts_to_substitute = [a for a in bd.Database(database_windtrace_should_substitute) if a['name'] in onshore_wind_names]
 
     for act in wind_acts_to_substitute:
         for ex in act.consumers():
@@ -608,10 +610,12 @@ def apply_windtrace_offshore(db_wind_name: str, location: str,
 
 
 def substitute_windtrace_offshore(ecoinvent_database_name: str,
+                                 database_windtrace_should_substitute: str,
                                  location_new_wind_act: str,
                                  fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]],
                                  european_locations_only: bool = True):
     bd.projects.set_current(config_parameters.PROJECT_NAME)
+    create_additional_acts_db()
     turbines_exist = _test_offshore_wind_turbine_existence(fleet_turbines_definition=fleet_turbines_definition,
                                                           location=location_new_wind_act, new_db_name='additional_acts')
     if not turbines_exist:
@@ -625,17 +629,20 @@ def substitute_windtrace_offshore(ecoinvent_database_name: str,
                           'ME', 'LT', 'SI', 'IE', 'BE', 'RS', 'RO', 'NL', 'UA', 'PL', 'FR', 'GB', 'NO', 'CZ',
                           'MT', 'DK', 'IT', 'LV', 'DE', 'PT', 'FI', 'BY', 'GI', 'AL', 'HU', 'CH']
     if european_locations_only:
-        wind_acts_to_substitute = [a for a in bd.Database(ecoinvent_database_name) if
+        wind_acts_to_substitute = [a for a in bd.Database(database_windtrace_should_substitute) if
                                    a['name'] == 'electricity production, wind, 1-3MW turbine, offshore'
                                    and a['location'] in european_locations]
     else:
-        wind_acts_to_substitute = [a for a in bd.Database(ecoinvent_database_name) if
+        wind_acts_to_substitute = [a for a in bd.Database(database_windtrace_should_substitute) if
                                    a['name'] == 'electricity production, wind, 1-3MW turbine, offshore']
 
     for act in wind_acts_to_substitute:
         for ex in act.consumers():
             ex.input = new_offshore_act
             ex.save()
+
+    # TODO: VERY IMPORTANT REFLECTION! inputs for steel are from cutoff391, not custom_XXXX. This means the steel used to produce the wind turbine
+    #  is made of the steel from cutoff391. This is actually a good idea! Should I consider NOT substituting exchanges that are used to create infrastructure???
 
 ##########################
 # CREATE SCENARIO VALUES #
@@ -749,23 +756,94 @@ def plot_input_data(
     plt.close(fig)
 
 
+def _compute_and_store_lcia_scores(act, lcia_methods):
+    lca_obj = act.lca(amount=1)
+    lcia_results = {'name': act['name'], 'location': act['location'], 'product': act['reference product']}
+    for m in lcia_methods:
+        lca_obj.switch_method(m)
+        lca_obj.lcia()
+        lcia_results[str(m[1]) + str(m[2])] = lca_obj.score
+    return lcia_results
+
+def analysis(custom_db_name: str, cutoff_db_name: str = 'premise_original_update', bw25_project_name: str = 'bw25_matrix'):
+    # Set bw25 project
+    bd.projects.set_current(bw25_project_name)
+
+    # Set LCIA methods
+    ef_31 = [m for m in bd.methods if str(m[0]) == 'EF v3.1']
+    cc_ef_31 = ('EF v3.1', 'climate change', 'global warming potential (GWP100)')
+
+    ### STEEL ###
+    # Original steel
+    steel_results = {}
+    steel_original_glo = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market for steel, low-alloyed'
+                          and a['reference product'] == 'steel, low-alloyed'
+                          and a['location'] == 'GLO'][0]
+    lcia_results = _compute_and_store_lcia_scores(steel_original_glo, ef_31)
+    steel_results['steel current (GLO)'] = lcia_results
+    try:
+        steel_original_rer = [a for a in bd.Database('additional_acts') if a['name'] == 'market for steel, low-alloyed, 2029'][0]
+        lcia_results = _compute_and_store_lcia_scores(steel_original_rer, ef_31)
+        steel_results['steel current (RER)'] = lcia_results
+    except:
+        pass
+
+    # steel new pathways
+    steel_new_acts = [a for a in bd.Database(custom_db_name) if
+                  'steel production' in a['name'] and a['reference product'] == 'steel, low-alloyed' and (
+                              a['location'] == 'RER' or ('electric' in a['name'] and a[
+                          'location'] == 'Europe without Switzerland and Austria'))]
+    for act in steel_new_acts:
+        _compute_and_store_lcia_scores(act, ef_31)
+        steel_results[f"steel custom - {act['name']}"] = lcia_results
+
+    ### ELECTRICITY ###
+    # Original electricity
+    electricity_results = {}
+    act_hv = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market group for electricity, high voltage' and a['location'] == 'RER'][0]
+    act_mv = [a for a in bd.Database(cutoff_db_name) if
+              a['name'] == 'market group for electricity, medium voltage' and a['location'] == 'RER'][0]
+    act_lv = [a for a in bd.Database(cutoff_db_name) if
+              a['name'] == 'market group for electricity, low voltage' and a['location'] == 'RER'][0]
+
+    for act in [act_hv, act_mv, act_lv]:
+        _compute_and_store_lcia_scores(act, ef_31)
+        electricity_results[f"electricity current - {act['name']}"] = lcia_results
+
+    # new production routes
+    act_hv = [a for a in bd.Database(custom_db_name) if
+              a['name'] == 'market group for electricity, high voltage' and a['location'] == 'RER'][0]
+    act_mv = [a for a in bd.Database(custom_db_name) if
+              a['name'] == 'market group for electricity, medium voltage' and a['location'] == 'RER'][0]
+    act_lv = [a for a in bd.Database(custom_db_name) if
+              a['name'] == 'market group for electricity, low voltage' and a['location'] == 'RER'][0]
+
+    for act in [act_hv, act_mv, act_lv]:
+        _compute_and_store_lcia_scores(act, ef_31)
+        electricity_results[f"electricity custom - {act['name']}"] = lcia_results
+
+
 #create_custom_database(output_database_name='custom_2020',
 #                       year=2020,
 #                       )
 
-substitute_windtrace_onshore(ecoinvent_database_name='custom_2020', location_new_wind_act='RER',
+substitute_windtrace_onshore(database_windtrace_should_substitute='custom_2020',
+                             ecoinvent_database_name='cutoff391', location_new_wind_act='RER',
                                  fleet_turbines_definition=config_parameters.BALANCED_ON_WIND_FLEET,
                          biosphere3=bd.Database('biosphere3'), european_locations_only=True)
 
-substitute_windtrace_offshore(ecoinvent_database_name='custom_2020', location_new_wind_act='RER',
+substitute_windtrace_offshore(database_windtrace_should_substitute='custom_2020',
+    ecoinvent_database_name='cutoff391', location_new_wind_act='RER',
                                 fleet_turbines_definition=config_parameters.BALANCED_OFF_WIND_FLEET,
                           european_locations_only=True)
 
-substitute_windtrace_onshore(ecoinvent_database_name='custom_2050', location_new_wind_act='RER',
+substitute_windtrace_onshore(database_windtrace_should_substitute='custom_2050',
+                             ecoinvent_database_name='cutoff391', location_new_wind_act='RER',
                                  fleet_turbines_definition=config_parameters.BALANCED_ON_WIND_FLEET,
                          biosphere3=bd.Database('biosphere3'), european_locations_only=True)
 
-substitute_windtrace_offshore(ecoinvent_database_name='custom_2050', location_new_wind_act='RER',
+substitute_windtrace_offshore(database_windtrace_should_substitute='custom_2050',
+    ecoinvent_database_name='cutoff391', location_new_wind_act='RER',
                                 fleet_turbines_definition=config_parameters.BALANCED_OFF_WIND_FLEET,
                           european_locations_only=True)
 
