@@ -15,7 +15,7 @@
   ],
   "resources": [
     {
-      "path": "scenario_data/scenario_data_eur_template_random.csv",
+      "path": "scenario_data/scenario_data_eur_custom_2020_2050.csv",
       "profile": "tabular-data-resource",
       "name": "scenario_data",
       "format": "csv",
