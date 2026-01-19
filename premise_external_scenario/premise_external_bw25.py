@@ -12,6 +12,7 @@ import config_parameters
 import pandas as pd
 import matplotlib.pyplot as plt
 import math
+import copy
 
 def import_ei_12():
     bi.import_ecoinvent_release(
@@ -46,8 +47,6 @@ def create_custom_database():
     )
     ndb.update("external")
 
-    # electricity mixes substitutions
-    print('Starting electricity mix substitutions')
     pickle_path = ndb.scenarios[0]['database filepath']
     try:
         with open(pickle_path, "rb") as f:
@@ -57,6 +56,13 @@ def create_custom_database():
 
     # delete "World" markets
     data = [a for a in data if a['location'] != 'World']
+
+    # european production routes for steel
+    print('Creating European production routes for steel')
+    regionalise_steel_production(data=data)
+
+    # electricity mixes substitutions
+    print('Starting electricity mix substitutions')
 
     voltages = ["high", "medium", "low"]
 
@@ -251,6 +257,105 @@ def create_custom_database():
         pickle.dump(data, f)
 
     ndb.write_db_to_brightway('test_2')
+
+
+def regionalise_steel_production(data):
+    act_names_to_be_replaced = [
+    "iron pellet production",
+    "pig iron production, blast furnace, with carbon capture and storage",
+    "steel production, blast furnace-basic oxygen furnace, with carbon capture and storage, low-alloyed",
+    "pig iron production, top gas recycling-blast furnace",
+    "steel production, blast furnace-basic oxygen furnace, with top gas recycling, low-alloyed",
+    "pig iron production, blast furnace, with top gas recycling, with carbon capture and storage",
+    "steel production, blast furnace-basic oxygen furnace, with top gas recycling, with carbon capture and storage, low-alloyed",
+    "pig iron production, by electrowinning",
+    "steel production, electrowinning-electric arc furnace, low-alloyed",
+    "pig iron production, hydrogen-based direct reduction iron",
+    "preheating of iron ore pellets",
+    "preheating of hydrogen",
+    "steel production, hydrogen-based direct reduction iron-electric arc furnace, low-alloyed",
+    "pig iron production, with natural gas-based direct reduction",
+    "steel production, natural gas-based direct reduction iron-electric arc furnace, low-alloyed",
+    "steel production, natural gas-based direct reduction iron-electric arc furnace, with carbon capture and storage, low-alloyed",
+    "pig iron production, with natural gas-based direct reduction, with carbon capture and storage",
+    "steel production, blast furnace-basic oxygen furnace, unalloyed",
+    "steel production, blast furnace-basic oxygen furnace, with carbon capture and storage, unalloyed",
+        "steel production, blast furnace-basic oxygen furnace, with top gas recycling, unalloyed",
+        "steel production, blast furnace-basic oxygen furnace, with top gas recycling, with carbon capture and storage, unalloyed",
+        "steel production, natural gas-based direct reduction iron-electric arc furnace, unalloyed",
+        "steel production, natural gas-based direct reduction iron-electric arc furnace, with carbon capture and storage, unalloyed",
+        "steel production, hydrogen-based direct reduction iron-electric arc furnace, unalloyed",
+        "steel production, electrowinning-electric arc furnace, unalloyed",
+        "carbon dioxide, captured at steel production plant using direct reduction iron, using vacuum pressure swing adsorption"  # NOTE: we assume the CO2 used is the one captured at the steel production plant
+]
+    acts_to_be_replaced = [a for a in data if a['name'] in act_names_to_be_replaced][2:]
+    for act in acts_to_be_replaced:
+        new_act = copy.deepcopy(act)
+        new_act['location'] = 'RER'
+        for prod_ex in ws.production(new_act):
+            prod_ex['location'] = 'RER'
+        data.append(new_act)
+
+        electricity_map = {
+            "high": {
+                "names": ["market for electricity, high voltage", "market group for electricity, high voltage"],
+                "product": "electricity, high voltage",
+            },
+            "medium": {
+                "names": ["market for electricity, medium voltage", "market group for electricity, medium voltage"],
+                "product": "electricity, medium voltage",
+            },
+            "low": {
+                "names": ["market for electricity, low voltage", "market group for electricity, low voltage"],
+                "product": "electricity, low voltage",
+            },
+        }
+        for ex in ws.technosphere(new_act):
+            ### SUBSTITUTE INPUTS ###
+            # electricity
+            for level, cfg in electricity_map.items():
+                if ex["name"] in cfg["names"]:
+                    ex["name"] = f"market group for electricity, {level} voltage"
+                    ex["product"] = cfg["product"]
+                    ex["location"] = "RER"
+                    break
+
+            # natural gas
+            if ex["name"] in ['market group for natural gas, high pressure', 'market for natural gas, high pressure']:
+                ex['name'] = "market group for natural gas, high pressure"
+                ex['product'] = "natural gas, high pressure"
+                ex['location'] = "Europe without Switzerland"
+
+            # heat
+            elif (
+                    any(s in ex["name"] for s in [
+                        "heat production,",
+                        "market for heat, district or industrial",
+                        "market group for heat, district or industrial",
+                    ])
+                    and "heat, district or industrial" in ex["product"]
+            ):
+                ex['name'] = "market group for heat, district or industrial, natural gas"
+                ex['product'] = "heat, district or industrial, natural gas"
+                ex['location'] = "RER"
+
+            elif ( any(s in ex["name"] for s in [
+                        'heat production,', 'market heat, central or small-scale',
+                        'market group for heat, central or small-scale'
+                    ])
+                 and "heat, central or small-scale" in ex["product"]):
+                ex['name'] = "market group for heat, central or small-scale, natural gas"
+                ex['product'] = "heat, central or small-scale, natural gas"
+                ex['location'] = "RER"
+
+
+            ### RELINK ###
+            if ex['name'] in act_names_to_be_replaced:
+                ex['location'] = 'RER'
+            elif ex['name'] == 'market for iron pellet':
+                ex['name'] = "iron pellet production"
+                ex['location'] = 'RER'
+
 
 ###################
 # APPLY WINDTRACE #
@@ -567,14 +672,14 @@ def plot_input_data(
     plt.close(fig)
 
 
-#create_custom_database()
-#substitute_windtrace_onshore(ecoinvent_database_name='test_2', location_new_wind_act='RER',
-#                             fleet_turbines_definition=config_parameters.BALANCED_ON_WIND_FLEET,
-#                             biosphere3=bd.Database('biosphere3'), european_locations_only=True)
+create_custom_database()
+substitute_windtrace_onshore(ecoinvent_database_name='test_2', location_new_wind_act='RER',
+                             fleet_turbines_definition=config_parameters.BALANCED_ON_WIND_FLEET,
+                             biosphere3=bd.Database('biosphere3'), european_locations_only=True)
 
-#substitute_windtrace_offshore(ecoinvent_database_name='test_2', location_new_wind_act='RER',
-#                            fleet_turbines_definition=config_parameters.BALANCED_OFF_WIND_FLEET,
-#                              european_locations_only=True)
+substitute_windtrace_offshore(ecoinvent_database_name='test_2', location_new_wind_act='RER',
+                            fleet_turbines_definition=config_parameters.BALANCED_OFF_WIND_FLEET,
+                              european_locations_only=True)
 
 plot_input_data(
     path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_eur_template_random.csv",
