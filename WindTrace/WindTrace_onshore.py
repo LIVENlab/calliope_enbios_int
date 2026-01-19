@@ -1900,8 +1900,8 @@ def electricity_production(new_db: bd.Database, park_name: str, park_power: floa
 
     if time_adjusted_cf == 0:
         print('Constant cf (time-adjusted cf not applied)')
-        elec_prod_turbine = cf * lifetime * 365 * 24 * turbine_power / 1000
-        elec_prod_park = cf * lifetime * 365 * 24 * park_power / 1000
+        elec_prod_turbine = cf * lifetime * 365 * 24 * turbine_power * 1000
+        elec_prod_park = cf * lifetime * 365 * 24 * park_power * 1000
     else:
         # adjust a decay in yearly production according to CFage = CF2 * (1-time_adjusted_cf)^age [Xu et al. (2023)]
         print('Time-adjusted cf applied with an attrition coefficient of ' + str(time_adjusted_cf))
