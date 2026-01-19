@@ -25,9 +25,12 @@ def import_ei_12():
         # optional:
         biosphere_name='ecoinvent-3.12-biosphere',         # Default name like "ecoinvent-3.10-biosphere"
     )
-def create_custom_database():
-    bd.projects.set_current('bw25_matrix')
-    pkg = Package(r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\datapackage.json")
+def create_custom_database(output_database_name: str,
+                           year: int,
+                           external_scenario_json_path = r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\datapackage.json",
+                           bw25_project_name: str = 'bw25_matrix'):
+    bd.projects.set_current(bw25_project_name)
+    pkg = Package(external_scenario_json_path)
 
     external_scenario = [
         {"scenario": "Business As Usual", "data": pkg},
@@ -37,7 +40,7 @@ def create_custom_database():
             {
                 "model": "image",
                 "pathway": "SSP2-L",
-                "year": 2020,
+                "year": year,
                 "external scenarios": external_scenario,
             }
         ],
@@ -145,12 +148,19 @@ def create_custom_database():
     print('Starting biomass substitutions')
     # 1. Caluclate LHV of new market:
     new_biomass_act = [a for a in data if a['name'] == 'market for biomass, used as fuel (new)'][0]
+    forest_act = False
+    chips_act = False
     for ex in ws.technosphere(new_biomass_act):
         if ex['name'] == 'supply of forest residue':
             forest_heat = ex['amount'] * 19
+            forest_act = True
         elif ex['name'] == 'market for wood chips, wet, measured as dry mass':
             chips_heat = ex['amount'] * 8.7
-
+            chips_act = True
+    if not forest_act:
+        forest_heat = 0
+    if not chips_act:
+        chips_heat = 0
     new_biomass_act_lhv = forest_heat + chips_heat
     # 2. replace acts
     locations = ['CH', 'Europe without Switzerland']
@@ -195,11 +205,19 @@ def create_custom_database():
     print('Starting coal and lignite substitutions')
     # 1. Caluclate LHV of new lignite market:
     new_lignite_act = [a for a in data if a['name'] == 'market for lignite, for energy uses (new)'][0]
+    lignite_is_present = False
+    charcoal_is_present = False
     for ex in ws.technosphere(new_lignite_act):
         if ex['name'] == 'market for lignite':
             lignite_heat = ex['amount'] * 11
-        elif ex['product'] == 'charcoal':
+            lignite_is_present = True
+        if ex['product'] == 'charcoal':
             charcoal_heat = ex['amount'] * 30
+            charcoal_is_present = True
+    if not lignite_is_present:
+        lignite_heat = 0
+    if not charcoal_is_present:
+        charcoal_heat = 0
     new_lignite_act_lhv = lignite_heat + charcoal_heat
     # 2. replace acts
     coal_act = [a for a in data if a['name'] == 'market for hard coal' and a['reference product'] == 'hard coal'
@@ -256,7 +274,7 @@ def create_custom_database():
     with open(pickle_path, "wb") as f:
         pickle.dump(data, f)
 
-    ndb.write_db_to_brightway('test_2')
+    ndb.write_db_to_brightway(output_database_name)
 
 
 def regionalise_steel_production(data):
@@ -360,14 +378,8 @@ def regionalise_steel_production(data):
 ###################
 # APPLY WINDTRACE #
 ###################
-
-def apply_windtrace_onshore(db_wind_name: str, location: str,
-                       fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]],
-                       biosphere3: bd.Database = bd.Database('biosphere3')):
-    print('Creating onshore wind fleet')
-    bd.projects.set_current(config_parameters.PROJECT_NAME)
-    create_additional_acts_db()
-
+def _test_onshore_wind_turbine_existance(fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]],
+                                         location: str, new_db_name: str):
     expected_keys = {'power', 'manufacturer', 'rotor_diameter', 'hub_height', 'commissioning_year',
                      'generator_type', 'recycled_share_steel', 'lifetime', 'eol_scenario'}
     park_names = []
@@ -383,10 +395,79 @@ def apply_windtrace_onshore(db_wind_name: str, location: str,
         if len(park_names) == len(list(set(park_names))):
             print("No duplicates found in park names")
         else:
-            print("Park name duplicates found. Try other names")
+            print("Park name duplicates found. Change the park names you introduce")
+        for act_name in park_names:
+            act = [a for a in bd.Database(new_db_name) if a["name"] == act_name]
+            if not act:
+                print('Your onshore park turbines have not been created before')
+                return False
+        print('Your onshore park turbines are already present in the database. They will be used by default')
+        return True
+
     except Exception as e:
         print(f"An error occurred: {e}")
         sys.exit()
+
+def _test_offshore_wind_turbine_existence(fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]],
+                                          location: str, new_db_name: str):
+    expected_keys = {'power', 'manufacturer', 'rotor_diameter', 'hub_height', 'commissioning_year',
+                     'generator_type', 'recycled_share_steel', 'lifetime', 'eol_scenario', 'offshore_type',
+                     'floating_platform', 'sea_depth', 'distance_to_shore'}
+    park_names = []
+    for turbine, info in fleet_turbines_definition.items():
+        turbine_parameters = info[0]
+        if turbine_parameters['offshore_type'] == 'floating':
+            park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["floating_platform"]}_{location}'
+        else:
+            park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["offshore_type"]}_{location}'
+        park_names.append(park_name)
+        if turbine_parameters.keys() != expected_keys:
+            raise ValueError(f'The keys introduced {turbine_parameters.keys()} do not match '
+                             f'the expected keys {expected_keys}')
+    try:
+        # Check if lengths match, meaning no duplicates
+        if len(park_names) == len(list(set(park_names))):
+            print("No duplicates found in park names")
+        else:
+            print("Park name duplicates found. Change the park names you introduce")
+        for act_name in park_names:
+            act = [a for a in bd.Database(new_db_name) if a["name"] == f'{act_name}_offshore_turbine']
+            if not act:
+                print('Your offshore park turbines have not been created before')
+                return False
+        print('Your offshore park turbines are already present in the database. They will be used by default')
+        return True
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        sys.exit()
+
+
+def _onshore_turbine_fleet_exists(location_new_wind_act: str):
+    try:
+        bd.Database('additional_acts').get(f'electricity production, onshore wind fleet, {location_new_wind_act}')
+        return True
+    except:
+        return False
+
+
+def _offshore_turbine_fleet_exists(location_new_wind_act: str):
+    try:
+        bd.Database('additional_acts').get(f'electricity production, offshore wind fleet, {location_new_wind_act}')
+        return True
+    except:
+        return False
+
+
+def apply_windtrace_onshore(db_wind_name: str, location: str,
+                       fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]],
+                       biosphere3: bd.Database = bd.Database('biosphere3')):
+    print('Creating onshore wind fleet')
+    create_additional_acts_db()
+
+    turbine_fleet_exists = _onshore_turbine_fleet_exists(location)
+    if turbine_fleet_exists:
+        act = bd.Database('additional_acts').get(f'electricity production, onshore wind fleet, {location}')
+        act.delete()
 
     # create individual turbines
     for turbine, info in fleet_turbines_definition.items():
@@ -433,10 +514,19 @@ def substitute_windtrace_onshore(ecoinvent_database_name: str,
                                  location_new_wind_act: str,
                                  fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]],
                                  biosphere3: bd.Database = bd.Database('biosphere3'),
-                                 european_locations_only: bool = True):
-    new_onshore_act = apply_windtrace_onshore(db_wind_name=ecoinvent_database_name, location=location_new_wind_act,
-                                              fleet_turbines_definition=fleet_turbines_definition, biosphere3=biosphere3
-                                              )
+                                 european_locations_only: bool = True,
+                                 ):
+    bd.projects.set_current(config_parameters.PROJECT_NAME)
+    turbines_exist = _test_onshore_wind_turbine_existance(fleet_turbines_definition=fleet_turbines_definition,
+                                                          location=location_new_wind_act, new_db_name='additional_acts')
+
+    if not turbines_exist:
+        new_onshore_act = apply_windtrace_onshore(db_wind_name=ecoinvent_database_name, location=location_new_wind_act,
+                                                  fleet_turbines_definition=fleet_turbines_definition, biosphere3=biosphere3
+                                                  )
+    else:
+        new_onshore_act = bd.Database('additional_acts').get(f'electricity production, onshore wind fleet, {location_new_wind_act}')
+
     european_locations = ['ES', 'BG', 'SE', 'AT', 'MK', 'MD', 'HR', 'XK', 'LU', 'GR', 'IS', 'BA', 'EE', 'SK',
                           'ME', 'LT', 'SI', 'IE', 'BE', 'RS', 'RO', 'NL', 'UA', 'PL', 'FR', 'GB', 'NO', 'CZ',
                           'MT', 'DK', 'IT', 'LV', 'DE', 'PT', 'FI', 'BY', 'GI', 'AL', 'HU', 'CH']
@@ -459,32 +549,12 @@ def apply_windtrace_offshore(db_wind_name: str, location: str,
                              fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]]
                             ):
     print('Creating offshore wind fleet')
-    bd.projects.set_current(config_parameters.PROJECT_NAME)
     create_additional_acts_db()
 
-    expected_keys = {'power', 'manufacturer', 'rotor_diameter', 'hub_height', 'commissioning_year',
-                     'generator_type', 'recycled_share_steel', 'lifetime', 'eol_scenario', 'offshore_type',
-                     'floating_platform', 'sea_depth', 'distance_to_shore'}
-    park_names = []
-    for turbine, info in fleet_turbines_definition.items():
-        turbine_parameters = info[0]
-        if turbine_parameters['offshore_type'] == 'floating':
-            park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["floating_platform"]}_{location}'
-        else:
-            park_name = f'{turbine}_{turbine_parameters["power"]}_{turbine_parameters["offshore_type"]}_{location}'
-        park_names.append(park_name)
-        if turbine_parameters.keys() != expected_keys:
-            raise ValueError(f'The keys introduced {turbine_parameters.keys()} do not match '
-                             f'the expected keys {expected_keys}')
-    try:
-        # Check if lengths match, meaning no duplicates
-        if len(park_names) == len(list(set(park_names))):
-            print("No duplicates found in park names")
-        else:
-            print("Park name duplicates found. Try other names")
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        sys.exit()
+    turbine_fleet_exists = _offshore_turbine_fleet_exists(location)
+    if turbine_fleet_exists:
+        act = bd.Database('additional_acts').get(f'electricity production, offshore wind fleet, {location}')
+        act.delete()
 
     # create individual turbines
     for turbine, info in fleet_turbines_definition.items():
@@ -541,9 +611,16 @@ def substitute_windtrace_offshore(ecoinvent_database_name: str,
                                  location_new_wind_act: str,
                                  fleet_turbines_definition: Dict[str, List[Union[Dict[str, Any], float]]],
                                  european_locations_only: bool = True):
-    new_offshore_act = apply_windtrace_offshore(db_wind_name=ecoinvent_database_name, location=location_new_wind_act,
+    bd.projects.set_current(config_parameters.PROJECT_NAME)
+    turbines_exist = _test_offshore_wind_turbine_existence(fleet_turbines_definition=fleet_turbines_definition,
+                                                          location=location_new_wind_act, new_db_name='additional_acts')
+    if not turbines_exist:
+        new_offshore_act = apply_windtrace_offshore(db_wind_name=ecoinvent_database_name, location=location_new_wind_act,
                                               fleet_turbines_definition=fleet_turbines_definition,
                                               )
+    else:
+        new_offshore_act = bd.Database('additional_acts').get(
+            f'electricity production, offshore wind fleet, {location_new_wind_act}')
     european_locations = ['ES', 'BG', 'SE', 'AT', 'MK', 'MD', 'HR', 'XK', 'LU', 'GR', 'IS', 'BA', 'EE', 'SK',
                           'ME', 'LT', 'SI', 'IE', 'BE', 'RS', 'RO', 'NL', 'UA', 'PL', 'FR', 'GB', 'NO', 'CZ',
                           'MT', 'DK', 'IT', 'LV', 'DE', 'PT', 'FI', 'BY', 'GI', 'AL', 'HU', 'CH']
@@ -672,19 +749,39 @@ def plot_input_data(
     plt.close(fig)
 
 
-create_custom_database()
-substitute_windtrace_onshore(ecoinvent_database_name='test_2', location_new_wind_act='RER',
-                             fleet_turbines_definition=config_parameters.BALANCED_ON_WIND_FLEET,
-                             biosphere3=bd.Database('biosphere3'), european_locations_only=True)
+#create_custom_database(output_database_name='custom_2020',
+#                       year=2020,
+#                       )
 
-substitute_windtrace_offshore(ecoinvent_database_name='test_2', location_new_wind_act='RER',
-                            fleet_turbines_definition=config_parameters.BALANCED_OFF_WIND_FLEET,
-                              european_locations_only=True)
+substitute_windtrace_onshore(ecoinvent_database_name='custom_2020', location_new_wind_act='RER',
+                                 fleet_turbines_definition=config_parameters.BALANCED_ON_WIND_FLEET,
+                         biosphere3=bd.Database('biosphere3'), european_locations_only=True)
+
+substitute_windtrace_offshore(ecoinvent_database_name='custom_2020', location_new_wind_act='RER',
+                                fleet_turbines_definition=config_parameters.BALANCED_OFF_WIND_FLEET,
+                          european_locations_only=True)
+
+substitute_windtrace_onshore(ecoinvent_database_name='custom_2050', location_new_wind_act='RER',
+                                 fleet_turbines_definition=config_parameters.BALANCED_ON_WIND_FLEET,
+                         biosphere3=bd.Database('biosphere3'), european_locations_only=True)
+
+substitute_windtrace_offshore(ecoinvent_database_name='custom_2050', location_new_wind_act='RER',
+                                fleet_turbines_definition=config_parameters.BALANCED_OFF_WIND_FLEET,
+                          european_locations_only=True)
 
 plot_input_data(
-    path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_eur_template_random.csv",
-    save_path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data.png",
+    path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_eur_custom_2020_2050.csv",
+    year='2020',
+    save_path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data_2020.png",
     region=None,          # aggregate across all regions
     region_agg="mean",    # mean is usually what you want for “average country”
 )
+plot_input_data(
+    path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_eur_custom_2020_2050.csv",
+    year='2050',
+    save_path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data_2050.png",
+    region=None,          # aggregate across all regions
+    region_agg="mean",    # mean is usually what you want for “average country”
+)
+
 pass
