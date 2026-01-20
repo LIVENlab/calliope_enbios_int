@@ -758,10 +758,12 @@ def plot_input_data(
     plt.close(fig)
 
 
-def _compute_and_store_lcia_scores(act, lcia_methods, year: str):
-    lca_obj = act.lca(amount=1)
+def _compute_and_store_lcia_scores(act, lcia_methods, year: str, amount: float = 1, unit: str = None):
+    lca_obj = act.lca(amount=amount)
+    if unit is None:
+        unit = act['unit']
     lcia_results = {'name': act['name'], 'location': act['location'],
-                    'product': act['reference product'], 'scenario': year, 'unit': act['unit']}
+                    'product': act['reference product'], 'scenario': year, 'unit': unit}
     for m in lcia_methods:
         lca_obj.switch_method(m)
         lca_obj.lcia()
@@ -820,8 +822,8 @@ def analysis(custom_db_names: list,
         lcia_results = _compute_and_store_lcia_scores(act, ef_31, year='current')
         electricity_results[f"electricity current - {act['name']}"] = lcia_results
 
+    # new production routes
     for custom_db_name in custom_db_names:
-        # new production routes
         act_hv = [a for a in bd.Database(custom_db_name) if
                   a['name'] == 'market group for electricity, high voltage' and a['location'] == 'RER'][0]
         act_mv = [a for a in bd.Database(custom_db_name) if
@@ -832,8 +834,249 @@ def analysis(custom_db_names: list,
             lcia_results = _compute_and_store_lcia_scores(act, ef_31, year=custom_db_name[-4:])
             electricity_results[f"electricity custom - {act['name']} {custom_db_name[-4:]}"] = lcia_results
 
-    # TODO: add all other ECs
-    all_results = steel_results | electricity_results
+    ### BIOMASS ###
+    # Original biomass
+    biomass_results = {}
+    wood_chips_wet = [a for a in bd.Database(cutoff_db_name) if
+                      a['name'] == 'market for wood chips, wet, measured as dry mass'
+                      and a['location'] == 'Europe without Switzerland'][0]
+    wood_chips_dry = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market for wood chips, dry, measured as dry mass'
+                      and a['location'] == 'RER'][0]
+    wood_pellets = \
+    [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market for wood pellet, measured as dry mass'
+     and a['location'] == 'RER'][0]
+
+    lcia_results = _compute_and_store_lcia_scores(wood_chips_wet, ef_31, year='current', amount=8.7, unit='MJ')
+    biomass_results[f"biomass current - {wood_chips_wet['name']}"] = lcia_results
+    lcia_results = _compute_and_store_lcia_scores(wood_chips_dry, ef_31, year='current', amount=19, unit='MJ')
+    biomass_results[f"biomass current - {wood_chips_wet['name']}"] = lcia_results
+    lcia_results = _compute_and_store_lcia_scores(wood_pellets, ef_31, year='current', amount=17, unit='MJ')
+    biomass_results[f"biomass current - {wood_chips_wet['name']}"] = lcia_results
+
+    # new production route
+    for custom_db_name in custom_db_names:
+        new_act = [a for a in bd.Database(custom_db_name) if
+                          a['name'] == 'market for biomass, used as fuel (new)'
+                          and a['location'] == 'Europe without Switzerland'][0]
+        # 1. Caluclate LHV of new market:
+        forest_act = False
+        chips_act = False
+        for ex in ws.technosphere(new_act):
+            if ex['name'] == 'supply of forest residue':
+                forest_heat = ex['amount'] * 19
+                forest_act = True
+            elif ex['name'] == 'market for wood chips, wet, measured as dry mass':
+                chips_heat = ex['amount'] * 8.7
+                chips_act = True
+        if not forest_act:
+            forest_heat = 0
+        if not chips_act:
+            chips_heat = 0
+        new_biomass_act_lhv = forest_heat + chips_heat
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:],
+                                                      amount=new_biomass_act_lhv, unit='MJ')
+        biomass_results[f"biomass custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
+
+    ### HYDROGEN ###
+    # Original hydrogen
+    hydrogen_results = {}
+    h2_market_glo = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market for hydrogen, gaseous' and
+                     a['location'] == 'GLO'][0]
+    h2_sr = [a for a in bd.Database(cutoff_db_name) if
+                      a['name'] == 'hydrogen production, steam methane reforming'][0]
+    h2_autothermal = [a for a in bd.Database(cutoff_db_name) if
+                      a['name'] == 'hydrogen production, auto-thermal reforming'][0]
+
+    for act in [h2_autothermal, h2_sr, h2_market_glo]:
+        lcia_results = _compute_and_store_lcia_scores(act, ef_31, year='current')
+        hydrogen_results[f"hydrogen current - {act['name']}"] = lcia_results
+
+    # new production route
+    for custom_db_name in custom_db_names:
+        new_act = [a for a in bd.Database(custom_db_name) if
+                          a['name'] == 'market for hydrogen (new)'][0]
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:])
+        hydrogen_results[f"hydrogen custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
+
+    ### METHANOL ###
+    # Original methanol (from natural gas)
+    methanol_results = {}
+    methanol_market_glo = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market for methanol' and
+                     a['location'] == 'GLO'][0]
+    lcia_results = _compute_and_store_lcia_scores(act, ef_31, year='current')
+    methanol_results[f"methanol current - {methanol_market_glo['name']}"] = lcia_results
+
+    # new production route
+    for custom_db_name in custom_db_names:
+        new_act = [a for a in bd.Database(custom_db_name) if
+                          a['name'] == 'market for methanol (new)'][0]
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:])
+        methanol_results[f"methanol custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
+
+    ### KEROSENE ###
+    # Original kerosene
+    kerosene_results = {}
+    kerosene_markets = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market for kerosene'
+                        and a['location'] in ['Europe without Switzerland', 'CH']]
+    for market in kerosene_markets:
+        lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current')
+        kerosene_results[f"kerosene current - {market['name']}"] = lcia_results
+
+    # new production route
+    for custom_db_name in custom_db_names:
+        new_act = [a for a in bd.Database(custom_db_name) if
+                       a['name'] == 'market for kerosene (new)'][0]
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:])
+        kerosene_results[f"kerosene custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
+
+    ### DIESEL ###
+    # Original diesel
+    diesel_results = {}
+    diesel_markets = [a for a in bd.Database(cutoff_db_name) if 'market for diesel' in a['name']
+                      and a['location'] in ['Europe without Switzerland', 'CH'] and a['unit'] == 'kilogram']
+    for market in diesel_markets:
+        lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current')
+        diesel_results[f"diesel current - {market['name']}"] = lcia_results
+
+    # new production route
+    for custom_db_name in custom_db_names:
+        new_act = [a for a in bd.Database(custom_db_name) if
+                   a['name'] == 'market for diesel (new)'][0]
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:])
+        kerosene_results[f"kerosene custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
+
+    ### LIQUEFIED PETROLEUM GAS ###
+    # Original liquefied petroleum gas
+    lpg_results = {}
+    lpg_markets = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market for liquefied petroleum gas'
+                      and a['location'] in ['Europe without Switzerland', 'CH']]
+    for market in lpg_markets:
+        lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current')
+        lpg_results[f"diesel current - {market['name']}"] = lcia_results
+
+    # new production route
+    for custom_db_name in custom_db_names:
+        new_act = [a for a in bd.Database(custom_db_name) if
+                   a['name'] == 'market for liquefied petroleum gas (new)'][0]
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:])
+        lpg_results[f"lpg custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
+
+    ### METHANE ###
+    # Original methane
+    methane_results = {}
+    methane_markets = [a for a in bd.Database(cutoff_db_name) if
+                       a['name'] == 'market group for natural gas, high pressure']
+    for market in methane_markets:
+        lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current')
+        methane_results[f"methane current - {market['name']}"] = lcia_results
+
+    # new production route
+    for custom_db_name in custom_db_names:
+        new_act = [a for a in bd.Database(custom_db_name) if
+                   a['name'] == 'market group for natural gas, high pressure'
+                   and a['location'] == 'Europe without Switzerland'][0]
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:])
+        methane_results[f"methane custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
+
+    ### LUBRICATING OIL ###
+    # Original lubricating oil
+    lubricating_oil_results = {}
+    lubricating_oil_markets = [a for a in bd.Database(cutoff_db_name) if
+                       a['name'] == 'market for lubricating oil']
+    for market in lubricating_oil_markets:
+        lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current')
+        lubricating_oil_results[f"lubricating oil current - {market['name']}"] = lcia_results
+
+    # new production route
+    for custom_db_name in custom_db_names:
+        new_act = [a for a in bd.Database(custom_db_name) if
+                   a['name'] == 'market for natural lubricating oil (new)'][0]
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:])
+        lubricating_oil_results[f"lubricating oil custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
+
+    ### HEAT ###
+    # Original heat
+    heat_results = {}
+    act_cs_nat_gas = [a for a in bd.Database(cutoff_db_name) if
+              a['name'] == 'market for heat, central or small-scale, natural gas'
+                      and a['location'] in ['Europe without Switzerland', 'CH']]
+    act_cs_not_nat_gas = [a for a in bd.Database(cutoff_db_name) if
+                      a['name'] == 'market for heat, central or small-scale, other than natural gas'
+                      and a['location'] in ['Europe without Switzerland', 'CH']]
+    act_district_nat_gas = [a for a in bd.Database(cutoff_db_name) if
+                      a['name'] == 'market for heat, district or industrial, natural gas'
+                      and a['location'] in ['Europe without Switzerland', 'CH']]
+    act_district_not_nat_gas = [a for a in bd.Database(cutoff_db_name) if
+                          a['name'] == 'market for heat, district or industrial, other than natural gas'
+                          and a['location'] in ['Europe without Switzerland', 'CH']]
+
+    for act_gourps in [act_cs_nat_gas, act_cs_not_nat_gas, act_district_nat_gas, act_district_not_nat_gas]:
+        for act in act_gourps:
+            lcia_results = _compute_and_store_lcia_scores(act, ef_31, year='current')
+            heat_results[f"heat current - {act['name']}"] = lcia_results
+
+    # new production routes
+    for custom_db_name in custom_db_names:
+        act_cs = [a for a in bd.Database(custom_db_name) if
+                  a['name'] == 'market for heat, central or small-scale, natural gas'][0]
+        act_district = [a for a in bd.Database(custom_db_name) if
+                  a['name'] == 'market for heat, district or industrial (new)'][0]
+        for act in [act_cs, act_district]:
+            lcia_results = _compute_and_store_lcia_scores(act, ef_31, year=custom_db_name[-4:])
+            heat_results[f"heat custom - {act['name']} {custom_db_name[-4:]}"] = lcia_results
+
+    ### COAL ###
+    # Original coal
+    coal_results = {}
+    coal_market = [a for a in bd.Database(cutoff_db_name) if
+                               a['name'] == 'market for hard coal'
+                   and a['location'] == 'Europe, without Russia and Turkey'][0]
+
+    lcia_results = _compute_and_store_lcia_scores(coal_market, ef_31, year='current')
+    coal_results[f"coal current - {coal_market['name']}"] = lcia_results
+
+    # new production route
+    for custom_db_name in custom_db_names:
+        new_act = [a for a in bd.Database(custom_db_name) if
+                   a['name'] == 'market for coal, for energy uses (new)'][0]
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:])
+        coal_results[f"coal custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
+
+    ### LIGNITE ###
+    # Original lignite
+    lignite_results = {}
+    lignite_market = [a for a in bd.Database(cutoff_db_name) if
+                       a['name'] == 'market for lignite'
+                       and a['location'] == 'RER'][0]
+
+    lcia_results = _compute_and_store_lcia_scores(lignite_market, ef_31, year='current', unit='MJ', amount=11)
+    lignite_results[f"lignite current - {lignite_market['name']}"] = lcia_results
+
+    # new production route
+    for custom_db_name in custom_db_names:
+        new_act = [a for a in bd.Database(custom_db_name) if
+                       a['name'] == 'market for lignite, for energy uses (new)'][0]
+        lignite_is_present = False
+        charcoal_is_present = False
+        for ex in ws.technosphere(new_act):
+            if ex['name'] == 'market for lignite':
+                lignite_heat = ex['amount'] * 11
+                lignite_is_present = True
+            if ex['product'] == 'charcoal':
+                charcoal_heat = ex['amount'] * 30
+                charcoal_is_present = True
+        if not lignite_is_present:
+            lignite_heat = 0
+        if not charcoal_is_present:
+            charcoal_heat = 0
+        new_lignite_act_lhv = lignite_heat + charcoal_heat
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:],
+                                                      unit='MJ', amount=new_lignite_act_lhv)
+        lignite_results[f"lignite custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
+
+    all_results = (steel_results | electricity_results | biomass_results | hydrogen_results | methanol_results |
+                   kerosene_results | diesel_results | lpg_results | lubricating_oil_results | coal_results
+                   | lignite_results | heat_results | methane_results)
     df = pd.DataFrame(all_results)
     return df
 
