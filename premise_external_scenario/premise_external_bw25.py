@@ -13,6 +13,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import math
 import copy
+import matplotlib.colors as mcolors
+import re
 
 def import_ei_12():
     bi.import_ecoinvent_release(
@@ -759,7 +761,7 @@ def plot_input_data(
 def _compute_and_store_lcia_scores(act, lcia_methods, year: str):
     lca_obj = act.lca(amount=1)
     lcia_results = {'name': act['name'], 'location': act['location'],
-                    'product': act['reference product'], 'scenario': year}
+                    'product': act['reference product'], 'scenario': year, 'unit': act['unit']}
     for m in lcia_methods:
         lca_obj.switch_method(m)
         lca_obj.lcia()
@@ -781,11 +783,17 @@ def analysis(custom_db_names: list,
                           and a['reference product'] == 'steel, low-alloyed'
                           and a['location'] == 'GLO'][0]
     lcia_results = _compute_and_store_lcia_scores(steel_original_glo, ef_31, year='current')
-    steel_results['steel current (GLO)'] = lcia_results
+    steel_results['steel current market (GLO)'] = lcia_results
+    steel_original_bof = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'steel production, converter, low-alloyed'
+                          and a['reference product'] == 'steel, low-alloyed'
+                          and a['location'] == 'RER'][0]
+    lcia_results = _compute_and_store_lcia_scores(steel_original_bof, ef_31, year='current')
+    steel_results['steel current BOF (RER)'] = lcia_results
+
     try:
         steel_original_rer = [a for a in bd.Database('additional_acts') if a['name'] == 'market for steel, low-alloyed, 2029'][0]
         lcia_results = _compute_and_store_lcia_scores(steel_original_rer, ef_31, year='current')
-        steel_results['steel current (RER)'] = lcia_results
+        steel_results['steel current market (RER)'] = lcia_results
     except:
         pass
 
@@ -812,15 +820,14 @@ def analysis(custom_db_names: list,
         lcia_results = _compute_and_store_lcia_scores(act, ef_31, year='current')
         electricity_results[f"electricity current - {act['name']}"] = lcia_results
 
-    # new production routes
-    act_hv = [a for a in bd.Database(custom_db_name) if
-              a['name'] == 'market group for electricity, high voltage' and a['location'] == 'RER'][0]
-    act_mv = [a for a in bd.Database(custom_db_name) if
-              a['name'] == 'market group for electricity, medium voltage' and a['location'] == 'RER'][0]
-    act_lv = [a for a in bd.Database(custom_db_name) if
-              a['name'] == 'market group for electricity, low voltage' and a['location'] == 'RER'][0]
-
     for custom_db_name in custom_db_names:
+        # new production routes
+        act_hv = [a for a in bd.Database(custom_db_name) if
+                  a['name'] == 'market group for electricity, high voltage' and a['location'] == 'RER'][0]
+        act_mv = [a for a in bd.Database(custom_db_name) if
+                  a['name'] == 'market group for electricity, medium voltage' and a['location'] == 'RER'][0]
+        act_lv = [a for a in bd.Database(custom_db_name) if
+                  a['name'] == 'market group for electricity, low voltage' and a['location'] == 'RER'][0]
         for act in [act_hv, act_mv, act_lv]:
             lcia_results = _compute_and_store_lcia_scores(act, ef_31, year=custom_db_name[-4:])
             electricity_results[f"electricity custom - {act['name']} {custom_db_name[-4:]}"] = lcia_results
@@ -831,9 +838,287 @@ def analysis(custom_db_names: list,
     return df
 
 
-def plot_analysis(df: pd.DataFrame, ):
-    # TODO
-    pass
+def plot_analysis(
+    df: pd.DataFrame,
+    indicator: str,
+    product_row: str = "product",
+    scenario_row: str = "scenario",
+    name_row: str = "name",
+    location_row: str = "location",
+    sort_by: str = "scenario",          # non-steel sorting: "scenario" | "name" | None
+    rotation: int = 45,
+    ylabel: str | None = None,
+    title_prefix: str = "",
+    cmap_name: str = "tab20",
+    steel_keyword: str = "steel",
+    include_location_for_steel: bool = True,
+    fig_size: tuple[float, float] = (10, 7.5),
+    bottom_margin: float = 0.42,
+):
+    """
+    One figure per product. Within each figure, bars for all columns that share the same product
+    for the given LCIA indicator row (wide dataframe like your CSV).
+
+    Steel-specific behavior:
+      - Map long steel route names to short codes (names_dict), robust to minor string differences.
+      - Map locations to short codes (locations_dict), robust to minor string differences.
+      - Order bars as:
+          (A) scenario == 'current' block first (left), ordered among itself
+          (B) all other scenarios block second (right), ordered among itself
+        In each block: routes ranked by max(value) desc; within each route: value desc
+      - Colors: one base hue per route; within each route, bars get progressively lighter shades.
+    """
+    names_dict = {
+        'steel production, electrowinning-electric arc furnace, low-alloyed': 'EW',
+        'steel production, hydrogen-based direct reduction iron-electric arc furnace, low-alloyed': 'H2-DRI',
+        'steel production, blast furnace-basic oxygen furnace, with top gas recycling, with carbon capture and storage, low-alloyed': 'BF/BOF top-gas CCS',
+        'steel production, electric, low-alloyed': 'EAF',
+        'steel production, blast furnace-basic oxygen furnace, with top gas recycling, low-alloyed': 'BF/BOF top-gas no CCS',
+        'steel production, natural gas-based direct reduction iron-electric arc furnace, with carbon capture and storage, low-alloyed': 'NG-DRI CCS',
+        'steel production, natural gas-based direct reduction iron-electric arc furnace, low-alloyed': 'NG_DRI no CCS',
+        'steel production, blast furnace-basic oxygen furnace, with carbon capture and storage, low-alloyed': 'BF/BOF CCS',
+        'market for steel, low-alloyed': 'market',
+        'steel production, converter, low-alloyed': 'BF/BOF',
+        'market for steel, low-alloyed, 2029': 'market',
+    }
+
+    locations_dict = {'Europe without Switzerland': 'RER wo CH',
+                      'Europe without Switzerland and Austria': 'RER wo CH/AT'}
+    # ---------- helpers ----------
+    def norm(s: str) -> str:
+        s = str(s)
+        s = s.replace("\u00A0", " ")  # NBSP -> space
+        s = s.replace("–", "-").replace("—", "-").replace("−", "-")
+        s = re.sub(r"\s+", " ", s).strip()
+        return s.casefold()
+
+    def strip_trailing_year(s: str) -> str:
+        # removes patterns like ", 2029" or " 2029" at the end
+        return re.sub(r"(?:,?\s+)\d{4}$", "", str(s)).strip()
+
+    def expand_names_mapping(d: dict[str, str]) -> dict[str, str]:
+        """
+        Build a normalized mapping with extra aliases to handle common mismatches:
+          - 'steel custom - ' prefix present/absent
+          - trailing years like ', 2029'
+          - whitespace/dash variants
+        """
+        out = {}
+        for k, v in d.items():
+            candidates = {str(k)}
+
+            if str(k).startswith("steel custom - "):
+                candidates.add(str(k).replace("steel custom - ", "", 1))
+
+            for c in list(candidates):
+                candidates.add(strip_trailing_year(c))
+
+            for c in candidates:
+                out[norm(c)] = v
+
+        return out
+
+    def map_series_norm(s: pd.Series, mapping_norm: dict[str, str]) -> pd.Series:
+        s_clean = (
+            s.astype(str)
+            .map(lambda x: re.sub(r"\s+", " ", x.replace("\u00A0", " ")).strip())
+        )
+        return s_clean.map(lambda x: mapping_norm.get(norm(strip_trailing_year(x)), x))
+
+    def lighten(color, amount=0.35):
+        """Blend a color towards white by 'amount' (0..1)."""
+        r, g, b = mcolors.to_rgb(color)
+        return (r + (1 - r) * amount, g + (1 - g) * amount, b + (1 - b) * amount)
+
+    # ---------- checks ----------
+    for needed in [product_row, scenario_row, indicator]:
+        if needed not in df.index:
+            raise ValueError(
+                f"Row '{needed}' not found in df.index. "
+                f"Index begins with: {list(df.index[:15])}"
+            )
+
+    # metadata per column
+    product_of_col = df.loc[product_row]
+    scenario_of_col = df.loc[scenario_row].astype(str)
+
+    name_of_col = df.loc[name_row].astype(str) if name_row in df.index else None
+    location_of_col = df.loc[location_row].astype(str) if location_row in df.index else None
+
+    # indicator values per column
+    values = pd.to_numeric(df.loc[indicator], errors="coerce")
+
+    # group columns by product
+    products = product_of_col.dropna().unique()
+
+    figs, axes = {}, {}
+    cmap = plt.get_cmap(cmap_name)
+
+    names_dict_norm = expand_names_mapping(names_dict)
+    locations_dict_norm = {norm(k): v for k, v in locations_dict.items()}
+
+    def scen_key(s):
+        s0 = str(s).strip().lower()
+        if s0 == "current":
+            return (-1, -1)
+        try:
+            return (0, int(float(s0)))
+        except Exception:
+            return (1, s0)
+
+    for prod in products:
+        cols = product_of_col[product_of_col == prod].index
+
+        sub = pd.DataFrame(
+            {
+                "value": values[cols],
+                "scenario": scenario_of_col[cols].astype(str),
+            },
+            index=cols,
+        )
+
+        if name_of_col is not None:
+            sub["name"] = name_of_col[cols].astype(str)
+        if location_of_col is not None:
+            sub["location"] = location_of_col[cols].astype(str)
+
+        # ---- detect steel ----
+        if "name" in sub.columns:
+            name_clean = sub["name"].astype(str)
+            is_steel = bool(name_clean.str.contains(steel_keyword, case=False, na=False).any())
+            short_name = map_series_norm(name_clean, names_dict_norm)
+        else:
+            is_steel = False
+            short_name = None
+
+        if "location" in sub.columns:
+            loc_clean = sub["location"].astype(str)
+            # map with normalized keys; fallback to original
+            short_loc = loc_clean.map(lambda x: locations_dict_norm.get(norm(x), x))
+        else:
+            short_loc = None
+
+        # ---- ordering + labels + colors ----
+        if is_steel:
+            sub = sub.copy()
+            sub["route"] = short_name.loc[sub.index].astype(str)
+
+            # current block first
+            is_current = sub["scenario"].astype(str).str.strip().str.casefold().eq("current")
+            sub["block"] = is_current.map({True: 0, False: 1})  # 0 first, 1 after
+
+            # rank routes within each block by max value
+            def rank_routes(sdf: pd.DataFrame) -> list[str]:
+                if sdf.empty:
+                    return []
+                return (
+                    sdf.groupby("route")["value"]
+                    .max()
+                    .sort_values(ascending=False)
+                    .index
+                    .tolist()
+                )
+
+            routes_current = rank_routes(sub[sub["block"] == 0])
+            routes_other = rank_routes(sub[sub["block"] == 1])
+
+            order_current = {r: i for i, r in enumerate(routes_current)}
+            order_other = {r: i for i, r in enumerate(routes_other)}
+
+            def route_order(row):
+                r = row["route"]
+                if row["block"] == 0:
+                    return order_current.get(r, 10_000)
+                else:
+                    return order_other.get(r, 10_000)
+
+            sub["route_order"] = sub.apply(route_order, axis=1)
+
+            # sort: block (current first) -> route rank -> within route value desc
+            sub = sub.sort_values(
+                by=["block", "route_order", "route", "value"],
+                ascending=[True, True, True, False],
+            )
+
+            # labels in the new order
+            name_sorted = short_name.loc[sub.index].astype(str)
+
+            if include_location_for_steel and short_loc is not None:
+                loc_sorted = short_loc.loc[sub.index].astype(str)
+                xlabels = (
+                    sub["scenario"].astype(str)
+                    + " | " + name_sorted
+                    + " | " + loc_sorted
+                ).tolist()
+            else:
+                xlabels = (
+                    sub["scenario"].astype(str)
+                    + " | " + name_sorted
+                ).tolist()
+
+            # colors:
+            # - current = dark neutral shades (clearly distinct)
+            # - others = route-based chromatic ranges
+            all_routes = list(dict.fromkeys(routes_current + routes_other))
+            for r in sub["route"].astype(str).unique():
+                if r not in all_routes:
+                    all_routes.append(r)
+
+            base_colors = {r: cmap(i % cmap.N) for i, r in enumerate(all_routes)}
+
+            colors = []
+            for idx, row in sub.iterrows():
+                r = str(row["route"])
+                is_cur = row["block"] == 0  # 0 = current
+
+                if is_cur:
+                    # dark neutral palette for "current"
+                    # first in pair darker, second slightly lighter
+                    # count how many we've already seen for this route in current block
+                    seen_in_route = sum(
+                        (sub.loc[:idx, "route"] == r) & (sub.loc[:idx, "block"] == 0)
+                    )
+                    amt = min(0.5, 0.2 * seen_in_route)  # 0, 0.2, 0.4...
+                    base = (0.1, 0.1, 0.1)  # near-black
+                    colors.append(lighten(base, amount=amt))
+                else:
+                    # route color (chromatic range)
+                    seen_in_route = sum(
+                        (sub.loc[:idx, "route"] == r) & (sub.loc[:idx, "block"] == 1)
+                    )
+                    amt = min(0.6, 0.35 * seen_in_route)
+                    base = base_colors[r]
+                    colors.append(lighten(base, amount=amt))
+
+        else:
+            # non-steel: keep your previous simple sorting (scenario or name)
+            if sort_by == "scenario":
+                sub = sub.sort_values(by="scenario", key=lambda x: x.map(scen_key))
+            elif sort_by == "name" and "name" in sub.columns:
+                sub = sub.sort_values("name")
+
+            xlabels = sub["scenario"].astype(str).tolist()
+            colors = [cmap(i % cmap.N) for i in range(len(sub))]
+
+        # ---- plot ----
+        n = len(sub)
+        fig, ax = plt.subplots(figsize=fig_size)
+
+        ax.bar(range(n), sub["value"].values, color=colors)
+
+        ax.set_xticks(range(n))
+        ax.set_xticklabels(xlabels, rotation=rotation, ha="right")
+
+        ax.set_ylabel(ylabel if ylabel is not None else indicator)
+        ax.set_title(f"{title_prefix}{prod} — {indicator.split(';')[0]}")
+
+        # rotated labels need bottom space
+        fig.subplots_adjust(bottom=bottom_margin)
+
+        figs[str(prod)] = fig
+        axes[str(prod)] = ax
+
+    return figs, axes
 
 def run():
     # create_custom_database(output_database_name='custom_2020',
@@ -876,4 +1161,10 @@ def run():
 
 
 df_2020 = analysis(custom_db_names=['custom_2020', 'custom_2050'])
+figs, axes = plot_analysis(
+    df=df_2020,
+    indicator="climate change; global warming potential (GWP100)",
+    ylabel="kg CO2-eq",
+)
+plt.show()
 pass
