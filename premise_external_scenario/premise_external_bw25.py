@@ -762,8 +762,14 @@ def _compute_and_store_lcia_scores(act, lcia_methods, year: str, amount: float =
     lca_obj = act.lca(amount=amount)
     if unit is None:
         unit = act['unit']
-    lcia_results = {'name': act['name'], 'location': act['location'],
-                    'product': act['reference product'], 'scenario': year, 'unit': unit}
+    if '(new)' in act['reference product']:
+        name = act['name'][:-6]
+        product = act['reference product'][:-6]
+    else:
+        name = act['name']
+        product = act['reference product']
+    lcia_results = {'name': name, 'location': act['location'],
+                    'product': product, 'scenario': year, 'unit': unit}
     for m in lcia_methods:
         lca_obj.switch_method(m)
         lca_obj.lcia()
@@ -861,11 +867,11 @@ def analysis(custom_db_names: list,
         # 1. Caluclate LHV of new market:
         forest_act = False
         chips_act = False
-        for ex in ws.technosphere(new_act):
-            if ex['name'] == 'supply of forest residue':
+        for ex in new_act.technosphere():
+            if ex.input['name'] == 'supply of forest residue':
                 forest_heat = ex['amount'] * 19
                 forest_act = True
-            elif ex['name'] == 'market for wood chips, wet, measured as dry mass':
+            elif ex.input['name'] == 'market for wood chips, wet, measured as dry mass':
                 chips_heat = ex['amount'] * 8.7
                 chips_act = True
         if not forest_act:
@@ -990,7 +996,7 @@ def analysis(custom_db_names: list,
     # new production route
     for custom_db_name in custom_db_names:
         new_act = [a for a in bd.Database(custom_db_name) if
-                   a['name'] == 'market for natural lubricating oil (new)'][0]
+                   a['name'] == 'market for lubricating oil (new)'][0]
         lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:])
         lubricating_oil_results[f"lubricating oil custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
@@ -1058,11 +1064,11 @@ def analysis(custom_db_names: list,
                        a['name'] == 'market for lignite, for energy uses (new)'][0]
         lignite_is_present = False
         charcoal_is_present = False
-        for ex in ws.technosphere(new_act):
-            if ex['name'] == 'market for lignite':
+        for ex in new_act.technosphere():
+            if ex.input['name'] == 'market for lignite':
                 lignite_heat = ex['amount'] * 11
                 lignite_is_present = True
-            if ex['product'] == 'charcoal':
+            if ex.input['reference product'] == 'charcoal':
                 charcoal_heat = ex['amount'] * 30
                 charcoal_is_present = True
         if not lignite_is_present:
@@ -1403,9 +1409,9 @@ def run():
     )
 
 
-df_2020 = analysis(custom_db_names=['custom_2020', 'custom_2050'])
+df = analysis(custom_db_names=['custom_2020', 'custom_2050'])
 figs, axes = plot_analysis(
-    df=df_2020,
+    df=df,
     indicator="climate change; global warming potential (GWP100)",
     ylabel="kg CO2-eq",
 )
