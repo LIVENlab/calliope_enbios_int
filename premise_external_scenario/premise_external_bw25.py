@@ -1142,6 +1142,7 @@ def analysis(custom_db_names: list,
 
     ### DIESEL ###
     # Original diesel
+    print('starting diesel')
     diesel_carriers_demand = {}
     diesel_results = {}
     diesel_markets = [a for a in bd.Database(cutoff_db_name) if 'market for diesel' in a['name']
@@ -1166,6 +1167,7 @@ def analysis(custom_db_names: list,
 
     ### LIQUEFIED PETROLEUM GAS ###
     # Original liquefied petroleum gas
+    print('starting lpg')
     lpg_carriers_demand = {}
     lpg_results = {}
     lpg_markets = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market for liquefied petroleum gas'
@@ -1190,6 +1192,7 @@ def analysis(custom_db_names: list,
 
     ### METHANE ###
     # Original methane
+    print('starting methane')
     methane_carriers_demand = {}
     methane_results = {}
     methane_markets = [a for a in bd.Database(cutoff_db_name) if
@@ -1215,6 +1218,7 @@ def analysis(custom_db_names: list,
 
     ### LUBRICATING OIL ###
     # Original lubricating oil
+    print('starting lubricating oil')
     lubricating_oil_carriers_demand = {}
     lubricating_oil_results = {}
     lubricating_oil_markets = [a for a in bd.Database(cutoff_db_name) if
@@ -1239,6 +1243,7 @@ def analysis(custom_db_names: list,
 
     ### HEAT ###
     # Original heat
+    print('starting heat')
     heat_carriers_demand = {}
     heat_results = {}
     act_cs_nat_gas = [a for a in bd.Database(cutoff_db_name) if
@@ -1264,7 +1269,7 @@ def analysis(custom_db_names: list,
     # new production routes
     for custom_db_name in custom_db_names:
         act_cs = [a for a in bd.Database(custom_db_name) if
-                  a['name'] == 'market for heat, central or small-scale, natural gas (new)'][0]
+                  a['name'] == 'market for heat, central or small-scale (new)'][0]
         act_district = [a for a in bd.Database(custom_db_name) if
                   a['name'] == 'market for heat, district or industrial (new)'][0]
         for act in [act_cs, act_district]:
@@ -1278,6 +1283,7 @@ def analysis(custom_db_names: list,
 
     ### COAL ###
     # Original coal
+    print('starting coal')
     coal_carriers_demand = {}
     coal_results = {}
     coal_market = [a for a in bd.Database(cutoff_db_name) if
@@ -1303,6 +1309,7 @@ def analysis(custom_db_names: list,
 
     ### LIGNITE ###
     # Original lignite
+    print('starting lignite')
     lignite_carriers_demand = {}
     lignite_results = {}
     lignite_market = [a for a in bd.Database(cutoff_db_name) if
@@ -1349,6 +1356,8 @@ def analysis(custom_db_names: list,
                    kerosene_carriers_demand | diesel_carriers_demand | lpg_carriers_demand |
                             lubricating_oil_carriers_demand | coal_carriers_demand
                    | lignite_carriers_demand | heat_carriers_demand | methane_carriers_demand)
+    # TODO: maybe convert all_lcia_results in a dict of dicts where the key is the name of the carrier. Same with
+    #  all_carriers_results. In this case, I'll need to change plot_analysis (maybe not!)?
     df_lcia = pd.DataFrame(all_lcia_results)
     df_carriers = pd.DataFrame(all_carriers_results)
     return df_lcia, df_carriers
