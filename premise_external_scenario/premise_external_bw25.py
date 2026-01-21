@@ -1,6 +1,7 @@
 from premise import NewDatabase
 from datapackage import Package
 import bw2data as bd
+import bw2calc as bc
 import pickle
 import wurst.searching as ws
 import bw2io as bi
@@ -650,6 +651,24 @@ def substitute_windtrace_offshore(ecoinvent_database_name: str,
 # CREATE SCENARIO VALUES #
 ##########################
 
+def demand_array(new_db_name: str, analysis_act, amount: float,
+                 lcia_method: tuple = ('EF v3.1', 'climate change', 'global warming potential (GWP100)')):
+    new_acts = [a for a in bd.Database(new_db_name) if '(new)' in a['name']]
+    my_functional_unit, data_objs, _ = bd.prepare_lca_inputs(
+        {analysis_act: amount}, method=lcia_method
+    )
+    lca_obj = bc.LCA(demand=my_functional_unit, data_objs=data_objs)
+    lca_obj.lci()
+    supply_array = lca_obj.supply_array
+    products = {}
+    for product_id, row_index in lca_obj.dicts.product.items():
+        product = bd.get_activity(product_id)
+        amounts = supply_array[row_index]
+        if product in new_acts and amounts != 0:
+            name = product['name']
+            products[name] = products.get(name, 0) + amounts
+    return products
+
 def create_scenario_values(new_db_name: str, csv_file):
     # find new acts
     new_acts = [a for a in bd.Database(new_db_name) if ['(new)' in a['name']]]
@@ -817,6 +836,7 @@ def analysis(custom_db_names: list,
 
     ### ELECTRICITY ###
     # Original electricity
+    electricity_carriers_demand = {}
     electricity_results = {}
     #act_hv = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market group for electricity, high voltage' and a['location'] == 'RER'][0]
     #act_mv = [a for a in bd.Database(cutoff_db_name) if
@@ -829,17 +849,26 @@ def analysis(custom_db_names: list,
 
     # new production routes
     for custom_db_name in custom_db_names:
-        #act_hv = [a for a in bd.Database(custom_db_name) if
-        #          a['name'] == 'market group for electricity, high voltage' and a['location'] == 'RER'][0]
-        #act_mv = [a for a in bd.Database(custom_db_name) if
-        #          a['name'] == 'market group for electricity, medium voltage' and a['location'] == 'RER'][0]
+        act_hv = [a for a in bd.Database(custom_db_name) if
+                  a['name'] == 'market group for electricity, high voltage' and a['location'] == 'RER'][0]
+        act_mv = [a for a in bd.Database(custom_db_name) if
+                  a['name'] == 'market group for electricity, medium voltage' and a['location'] == 'RER'][0]
         act_lv = [a for a in bd.Database(custom_db_name) if
                   a['name'] == 'market group for electricity, low voltage' and a['location'] == 'RER'][0]
         lcia_results = _compute_and_store_lcia_scores(act_lv, ef_31, year=custom_db_name[-4:], carrier_name='electricity')
         electricity_results[f"electricity custom - {act_lv['name']} {custom_db_name[-4:]}"] = lcia_results
 
+        hv_products_demand = demand_array(new_db_name=custom_db_name, analysis_act=act_hv, amount=1)
+        electricity_carriers_demand[f"{act_hv['name']} {custom_db_name[-4:]}"] = hv_products_demand
+        mv_products_demand = demand_array(new_db_name=custom_db_name, analysis_act=act_mv, amount=1)
+        electricity_carriers_demand[f"{act_mv['name']} {custom_db_name[-4:]}"] = mv_products_demand
+        lv_products_demand = demand_array(new_db_name=custom_db_name, analysis_act=act_lv, amount=1)
+        electricity_carriers_demand[f"{act_lv['name']} {custom_db_name[-4:]}"] = lv_products_demand
+
+
     ### BIOMASS ###
     # Original biomass
+    biomass_carriers_demand = {}
     biomass_results = {}
     wood_chips_wet = [a for a in bd.Database(cutoff_db_name) if
                       a['name'] == 'market for wood chips, wet, measured as dry mass'
