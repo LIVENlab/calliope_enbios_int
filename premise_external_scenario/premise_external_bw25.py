@@ -654,19 +654,89 @@ def substitute_windtrace_offshore(ecoinvent_database_name: str,
 def demand_array(new_db_name: str, analysis_act, amount: float,
                  lcia_method: tuple = ('EF v3.1', 'climate change', 'global warming potential (GWP100)')):
     new_acts = [a for a in bd.Database(new_db_name) if '(new)' in a['name']]
+    new_acts_set = set(new_acts)
     my_functional_unit, data_objs, _ = bd.prepare_lca_inputs(
         {analysis_act: amount}, method=lcia_method
     )
     lca_obj = bc.LCA(demand=my_functional_unit, data_objs=data_objs)
     lca_obj.lci()
     supply_array = lca_obj.supply_array
-    products = {}
+    products = {'Biomass (MJ)': 0.0,
+                'Hydrogen (kg)': 0.0,
+                'Methanol (kg)': 0.0,
+                'Kerosene (kg)': 0.0,
+                'Diesel (kg)': 0.0,
+                'Liquefied petroleum gas (kg)': 0.0,
+                'Methane (m3)': 0.0,
+                'Carbon dioxide (kg)': 0.0,
+                'Lubricating oil (kg)': 0.0,
+                'Electricity, high voltage (kWh)': 0.0,
+                'Electricity, low voltage (kWh)': 0.0,
+                'Electricity, medium voltage (kWh)': 0.0,
+                'Heat, central (MJ)': 0.0,
+                'Heat, district (MJ)': 0.0,
+                'Coal (kg)': 0.0,
+                'Lignite (kg)': 0.0}
     for product_id, row_index in lca_obj.dicts.product.items():
         product = bd.get_activity(product_id)
-        amounts = supply_array[row_index]
-        if product in new_acts and amounts != 0:
-            name = product['name']
-            products[name] = products.get(name, 0) + amounts
+        amt = supply_array[row_index]
+
+        if amt == 0:
+            continue
+
+        if product not in new_acts_set:
+            continue
+
+        name = product['name']
+
+        if 'market for biomass' in name:
+            products['Biomass (MJ)'] += amt
+
+        elif 'market for hydrogen' in name:
+            products['Hydrogen (kg)'] += amt
+
+        elif 'market for methanol' in name:
+            products['Methanol (kg)'] += amt
+
+        elif 'market for kerosene' in name:
+            products['Kerosene (kg)'] += amt
+
+        elif 'market for diesel' in name:
+            products['Diesel (kg)'] += amt
+
+        elif 'market for liquefied petroleum gas' in name:
+            products['Liquefied petroleum gas (kg)'] += amt
+
+        elif 'market for methane' in name:
+            products['Methane (m3)'] += amt
+
+        elif 'market for carbon dioxide' in name:
+            products['Carbon dioxide (kg)'] += amt
+
+        elif 'market for lubricating oil' in name:
+            products['Lubricating oil (kg)'] += amt
+
+        elif 'market for electricity, high voltage' in name:
+            products['Electricity, high voltage (kWh)'] += amt
+
+        elif 'market for electricity, low voltage' in name:
+            products['Electricity, low voltage (kWh)'] += amt
+
+        elif 'market for electricity, medium voltage' in name:
+            products['Electricity, medium voltage (kWh)'] += amt
+
+        elif 'market for heat, central' in name:
+            products['Heat, central (MJ)'] += amt
+
+        elif 'market for heat, district' in name:
+            products['Heat, district (MJ)'] += amt
+
+        elif 'market for coal' in name:
+            products['Coal (kg)'] += amt
+
+        elif 'market for lignite' in name:
+            products['Lignite (kg)'] += amt
+
     return products
 
 
@@ -677,7 +747,8 @@ def pes_demand(biosphere_db_name: str, analysis_act, amount: float,
     gas = [a for a in bd.Database(biosphere_db_name) if 'Gas,' in a['name'] and a['categories'][0] == 'natural resource']
     water = [a for a in bd.Database(biosphere_db_name) if 'Water,' in a['name'] and a['categories'][0] == 'natural resource']
     oil = [a for a in bd.Database(biosphere_db_name) if 'Oil, crude' in a['name'] and a['categories'][0] == 'natural resource']
-    # Missing Waste and Biomass TODO?
+    # Missing Waste TODO?
+    biomass_energy = [a for a in bd.Database(biosphere_db_name) if 'Energy, gross' in a['name'] and a['categories'][0] == 'natural resource']
     land = [a for a in bd.Database(biosphere_db_name) if 'Transformation, from' in a['name'] and a['categories'][0] == 'natural resource']
 
     coal_set = set(coal)
@@ -686,6 +757,7 @@ def pes_demand(biosphere_db_name: str, analysis_act, amount: float,
     water_set = set(water)
     oil_set = set(oil)
     land_set = set(land)
+    biomass_energy_set = set(biomass_energy)
 
     my_functional_unit, data_objs, _ = bd.prepare_lca_inputs(
         {analysis_act: amount}, method=lcia_method
@@ -694,28 +766,31 @@ def pes_demand(biosphere_db_name: str, analysis_act, amount: float,
     lca_obj.lci()
     inventory_array = lca_obj.inventory.sum(axis=1)
     raw_materials = {
-        "coal": 0.0,
-        "uranium": 0.0,
-        "gas": 0.0,
-        "water": 0.0,
-        "oil": 0.0,
-        "land": 0.0,
+        "Coal (kg)": 0.0,
+        "Uranium (kg)": 0.0,
+        "Gas (m3)": 0.0,
+        "Water (m3)": 0.0,
+        "Oil (kg)": 0.0,
+        "Land (m2)": 0.0,
+        "Biomass (MJ)": 0.0,
     }
     for flow_id, index in lca_obj.dicts.biosphere.items():
         flow = bd.get_node(id=flow_id)
         value = inventory_array[index].item()
         if flow in coal_set:
-            raw_materials["coal"] += value
+            raw_materials["Coal (kg)"] += value
         elif flow in uranium_set:
-            raw_materials["uranium"] += value
+            raw_materials["Uranium (kg)"] += value
         elif flow in gas_set:
-            raw_materials["gas"] += value
+            raw_materials["Gas (m3)"] += value
         elif flow in water_set:
-            raw_materials["water"] += value
+            raw_materials["Water (m3)"] += value
         elif flow in oil_set:
-            raw_materials["oil"] += value
+            raw_materials["Oil (kg)"] += value
         elif flow in land_set:
-            raw_materials["land"] += value
+            raw_materials["Land (m2)"] += value
+        elif flow in biomass_energy_set:
+            raw_materials["Biomass (MJ)"] += value
 
     return raw_materials
 
