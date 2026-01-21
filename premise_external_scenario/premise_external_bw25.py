@@ -758,7 +758,7 @@ def plot_input_data(
     plt.close(fig)
 
 
-def _compute_and_store_lcia_scores(act, lcia_methods, year: str, amount: float = 1, unit: str = None):
+def _compute_and_store_lcia_scores(act, lcia_methods, year: str, carrier_name: str, amount: float = 1, unit: str = None):
     lca_obj = act.lca(amount=amount)
     if unit is None:
         unit = act['unit']
@@ -769,7 +769,7 @@ def _compute_and_store_lcia_scores(act, lcia_methods, year: str, amount: float =
         name = act['name']
         product = act['reference product']
     lcia_results = {'name': name, 'location': act['location'],
-                    'product': product, 'scenario': year, 'unit': unit}
+                    'product': product, 'scenario': year, 'unit': unit, 'carrier': carrier_name}
     for m in lcia_methods:
         lca_obj.switch_method(m)
         lca_obj.lcia()
@@ -790,17 +790,17 @@ def analysis(custom_db_names: list,
     steel_original_glo = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market for steel, low-alloyed'
                           and a['reference product'] == 'steel, low-alloyed'
                           and a['location'] == 'GLO'][0]
-    lcia_results = _compute_and_store_lcia_scores(steel_original_glo, ef_31, year='current')
+    lcia_results = _compute_and_store_lcia_scores(steel_original_glo, ef_31, year='current', carrier_name='steel')
     steel_results['steel current market (GLO)'] = lcia_results
     steel_original_bof = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'steel production, converter, low-alloyed'
                           and a['reference product'] == 'steel, low-alloyed'
                           and a['location'] == 'RER'][0]
-    lcia_results = _compute_and_store_lcia_scores(steel_original_bof, ef_31, year='current')
+    lcia_results = _compute_and_store_lcia_scores(steel_original_bof, ef_31, year='current', carrier_name='steel')
     steel_results['steel current BOF (RER)'] = lcia_results
 
     try:
         steel_original_rer = [a for a in bd.Database('additional_acts') if a['name'] == 'market for steel, low-alloyed, 2029'][0]
-        lcia_results = _compute_and_store_lcia_scores(steel_original_rer, ef_31, year='current')
+        lcia_results = _compute_and_store_lcia_scores(steel_original_rer, ef_31, year='current', carrier_name='steel')
         steel_results['steel current market (RER)'] = lcia_results
     except:
         pass
@@ -812,33 +812,31 @@ def analysis(custom_db_names: list,
                                   a['location'] == 'RER' or ('electric' in a['name'] and a[
                               'location'] == 'Europe without Switzerland and Austria'))]
         for act in steel_new_acts:
-            lcia_results = _compute_and_store_lcia_scores(act, ef_31, year=custom_db_name[-4:])
+            lcia_results = _compute_and_store_lcia_scores(act, ef_31, year=custom_db_name[-4:], carrier_name='steel')
             steel_results[f"steel custom - {act['name']} {custom_db_name[-4:]}"] = lcia_results
 
     ### ELECTRICITY ###
     # Original electricity
     electricity_results = {}
-    act_hv = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market group for electricity, high voltage' and a['location'] == 'RER'][0]
-    act_mv = [a for a in bd.Database(cutoff_db_name) if
-              a['name'] == 'market group for electricity, medium voltage' and a['location'] == 'RER'][0]
+    #act_hv = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market group for electricity, high voltage' and a['location'] == 'RER'][0]
+    #act_mv = [a for a in bd.Database(cutoff_db_name) if
+    #          a['name'] == 'market group for electricity, medium voltage' and a['location'] == 'RER'][0]
     act_lv = [a for a in bd.Database(cutoff_db_name) if
               a['name'] == 'market group for electricity, low voltage' and a['location'] == 'RER'][0]
 
-    for act in [act_hv, act_mv, act_lv]:
-        lcia_results = _compute_and_store_lcia_scores(act, ef_31, year='current')
-        electricity_results[f"electricity current - {act['name']}"] = lcia_results
+    lcia_results = _compute_and_store_lcia_scores(act_lv, ef_31, year='current', carrier_name='electricity')
+    electricity_results[f"electricity current - {act_lv['name']}"] = lcia_results
 
     # new production routes
     for custom_db_name in custom_db_names:
-        act_hv = [a for a in bd.Database(custom_db_name) if
-                  a['name'] == 'market group for electricity, high voltage' and a['location'] == 'RER'][0]
-        act_mv = [a for a in bd.Database(custom_db_name) if
-                  a['name'] == 'market group for electricity, medium voltage' and a['location'] == 'RER'][0]
+        #act_hv = [a for a in bd.Database(custom_db_name) if
+        #          a['name'] == 'market group for electricity, high voltage' and a['location'] == 'RER'][0]
+        #act_mv = [a for a in bd.Database(custom_db_name) if
+        #          a['name'] == 'market group for electricity, medium voltage' and a['location'] == 'RER'][0]
         act_lv = [a for a in bd.Database(custom_db_name) if
                   a['name'] == 'market group for electricity, low voltage' and a['location'] == 'RER'][0]
-        for act in [act_hv, act_mv, act_lv]:
-            lcia_results = _compute_and_store_lcia_scores(act, ef_31, year=custom_db_name[-4:])
-            electricity_results[f"electricity custom - {act['name']} {custom_db_name[-4:]}"] = lcia_results
+        lcia_results = _compute_and_store_lcia_scores(act_lv, ef_31, year=custom_db_name[-4:], carrier_name='electricity')
+        electricity_results[f"electricity custom - {act_lv['name']} {custom_db_name[-4:]}"] = lcia_results
 
     ### BIOMASS ###
     # Original biomass
@@ -852,12 +850,12 @@ def analysis(custom_db_names: list,
     [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market for wood pellet, measured as dry mass'
      and a['location'] == 'RER'][0]
 
-    lcia_results = _compute_and_store_lcia_scores(wood_chips_wet, ef_31, year='current', amount=8.7, unit='MJ')
+    lcia_results = _compute_and_store_lcia_scores(wood_chips_wet, ef_31, year='current', amount=8.7, unit='MJ', carrier_name='biomass')
     biomass_results[f"biomass current - {wood_chips_wet['name']}"] = lcia_results
-    lcia_results = _compute_and_store_lcia_scores(wood_chips_dry, ef_31, year='current', amount=19, unit='MJ')
-    biomass_results[f"biomass current - {wood_chips_wet['name']}"] = lcia_results
-    lcia_results = _compute_and_store_lcia_scores(wood_pellets, ef_31, year='current', amount=17, unit='MJ')
-    biomass_results[f"biomass current - {wood_chips_wet['name']}"] = lcia_results
+    lcia_results = _compute_and_store_lcia_scores(wood_chips_dry, ef_31, year='current', amount=19, unit='MJ', carrier_name='biomass')
+    biomass_results[f"biomass current - {wood_chips_dry['name']}"] = lcia_results
+    lcia_results = _compute_and_store_lcia_scores(wood_pellets, ef_31, year='current', amount=17, unit='MJ', carrier_name='biomass')
+    biomass_results[f"biomass current - {wood_pellets['name']}"] = lcia_results
 
     # new production route
     for custom_db_name in custom_db_names:
@@ -880,7 +878,7 @@ def analysis(custom_db_names: list,
             chips_heat = 0
         new_biomass_act_lhv = forest_heat + chips_heat
         lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:],
-                                                      amount=new_biomass_act_lhv, unit='MJ')
+                                                      amount=new_biomass_act_lhv, unit='MJ', carrier_name='biomass')
         biomass_results[f"biomass custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
     ### HYDROGEN ###
@@ -894,14 +892,14 @@ def analysis(custom_db_names: list,
                       a['name'] == 'hydrogen production, auto-thermal reforming'][0]
 
     for act in [h2_autothermal, h2_sr, h2_market_glo]:
-        lcia_results = _compute_and_store_lcia_scores(act, ef_31, year='current')
+        lcia_results = _compute_and_store_lcia_scores(act, ef_31, year='current', carrier_name='hydrogen')
         hydrogen_results[f"hydrogen current - {act['name']}"] = lcia_results
 
     # new production route
     for custom_db_name in custom_db_names:
         new_act = [a for a in bd.Database(custom_db_name) if
                           a['name'] == 'market for hydrogen (new)'][0]
-        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:])
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:], carrier_name='hydrogen')
         hydrogen_results[f"hydrogen custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
     ### METHANOL ###
@@ -909,14 +907,14 @@ def analysis(custom_db_names: list,
     methanol_results = {}
     methanol_market_glo = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market for methanol' and
                      a['location'] == 'GLO'][0]
-    lcia_results = _compute_and_store_lcia_scores(act, ef_31, year='current')
+    lcia_results = _compute_and_store_lcia_scores(act, ef_31, year='current', carrier_name='methanol')
     methanol_results[f"methanol current - {methanol_market_glo['name']}"] = lcia_results
 
     # new production route
     for custom_db_name in custom_db_names:
         new_act = [a for a in bd.Database(custom_db_name) if
                           a['name'] == 'market for methanol (new)'][0]
-        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:])
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:], carrier_name='methanol')
         methanol_results[f"methanol custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
     ### KEROSENE ###
@@ -925,14 +923,14 @@ def analysis(custom_db_names: list,
     kerosene_markets = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market for kerosene'
                         and a['location'] in ['Europe without Switzerland', 'CH']]
     for market in kerosene_markets:
-        lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current')
+        lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current', carrier_name='kerosene')
         kerosene_results[f"kerosene current - {market['name']}"] = lcia_results
 
     # new production route
     for custom_db_name in custom_db_names:
         new_act = [a for a in bd.Database(custom_db_name) if
                        a['name'] == 'market for kerosene (new)'][0]
-        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:])
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:], carrier_name='kerosene')
         kerosene_results[f"kerosene custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
     ### DIESEL ###
@@ -941,14 +939,14 @@ def analysis(custom_db_names: list,
     diesel_markets = [a for a in bd.Database(cutoff_db_name) if 'market for diesel' in a['name']
                       and a['location'] in ['Europe without Switzerland', 'CH'] and a['unit'] == 'kilogram']
     for market in diesel_markets:
-        lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current')
+        lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current', carrier_name='diesel')
         diesel_results[f"diesel current - {market['name']}"] = lcia_results
 
     # new production route
     for custom_db_name in custom_db_names:
         new_act = [a for a in bd.Database(custom_db_name) if
                    a['name'] == 'market for diesel (new)'][0]
-        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:])
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:], carrier_name='diesel')
         kerosene_results[f"kerosene custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
     ### LIQUEFIED PETROLEUM GAS ###
@@ -957,14 +955,14 @@ def analysis(custom_db_names: list,
     lpg_markets = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market for liquefied petroleum gas'
                       and a['location'] in ['Europe without Switzerland', 'CH']]
     for market in lpg_markets:
-        lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current')
-        lpg_results[f"diesel current - {market['name']}"] = lcia_results
+        lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current', carrier_name='liquefied petroleum gas')
+        lpg_results[f"lpg current - {market['name']}"] = lcia_results
 
     # new production route
     for custom_db_name in custom_db_names:
         new_act = [a for a in bd.Database(custom_db_name) if
                    a['name'] == 'market for liquefied petroleum gas (new)'][0]
-        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:])
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:], carrier_name='liquefied petroleum gas')
         lpg_results[f"lpg custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
     ### METHANE ###
@@ -973,7 +971,7 @@ def analysis(custom_db_names: list,
     methane_markets = [a for a in bd.Database(cutoff_db_name) if
                        a['name'] == 'market group for natural gas, high pressure']
     for market in methane_markets:
-        lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current')
+        lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current', carrier_name='methane')
         methane_results[f"methane current - {market['name']}"] = lcia_results
 
     # new production route
@@ -981,7 +979,7 @@ def analysis(custom_db_names: list,
         new_act = [a for a in bd.Database(custom_db_name) if
                    a['name'] == 'market group for natural gas, high pressure'
                    and a['location'] == 'Europe without Switzerland'][0]
-        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:])
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:], carrier_name='methane')
         methane_results[f"methane custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
     ### LUBRICATING OIL ###
@@ -990,14 +988,14 @@ def analysis(custom_db_names: list,
     lubricating_oil_markets = [a for a in bd.Database(cutoff_db_name) if
                        a['name'] == 'market for lubricating oil']
     for market in lubricating_oil_markets:
-        lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current')
+        lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current', carrier_name='lubricating oil')
         lubricating_oil_results[f"lubricating oil current - {market['name']}"] = lcia_results
 
     # new production route
     for custom_db_name in custom_db_names:
         new_act = [a for a in bd.Database(custom_db_name) if
                    a['name'] == 'market for lubricating oil (new)'][0]
-        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:])
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:], carrier_name='lubricating oil')
         lubricating_oil_results[f"lubricating oil custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
     ### HEAT ###
@@ -1018,17 +1016,17 @@ def analysis(custom_db_names: list,
 
     for act_gourps in [act_cs_nat_gas, act_cs_not_nat_gas, act_district_nat_gas, act_district_not_nat_gas]:
         for act in act_gourps:
-            lcia_results = _compute_and_store_lcia_scores(act, ef_31, year='current')
+            lcia_results = _compute_and_store_lcia_scores(act, ef_31, year='current', carrier_name='heat')
             heat_results[f"heat current - {act['name']}"] = lcia_results
 
     # new production routes
     for custom_db_name in custom_db_names:
         act_cs = [a for a in bd.Database(custom_db_name) if
-                  a['name'] == 'market for heat, central or small-scale, natural gas'][0]
+                  a['name'] == 'market for heat, central or small-scale, natural gas (new)'][0]
         act_district = [a for a in bd.Database(custom_db_name) if
                   a['name'] == 'market for heat, district or industrial (new)'][0]
         for act in [act_cs, act_district]:
-            lcia_results = _compute_and_store_lcia_scores(act, ef_31, year=custom_db_name[-4:])
+            lcia_results = _compute_and_store_lcia_scores(act, ef_31, year=custom_db_name[-4:], carrier_name='heat')
             heat_results[f"heat custom - {act['name']} {custom_db_name[-4:]}"] = lcia_results
 
     ### COAL ###
@@ -1038,14 +1036,14 @@ def analysis(custom_db_names: list,
                                a['name'] == 'market for hard coal'
                    and a['location'] == 'Europe, without Russia and Turkey'][0]
 
-    lcia_results = _compute_and_store_lcia_scores(coal_market, ef_31, year='current')
+    lcia_results = _compute_and_store_lcia_scores(coal_market, ef_31, year='current', carrier_name='coal')
     coal_results[f"coal current - {coal_market['name']}"] = lcia_results
 
     # new production route
     for custom_db_name in custom_db_names:
         new_act = [a for a in bd.Database(custom_db_name) if
                    a['name'] == 'market for coal, for energy uses (new)'][0]
-        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:])
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:], carrier_name='coal')
         coal_results[f"coal custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
     ### LIGNITE ###
@@ -1055,7 +1053,7 @@ def analysis(custom_db_names: list,
                        a['name'] == 'market for lignite'
                        and a['location'] == 'RER'][0]
 
-    lcia_results = _compute_and_store_lcia_scores(lignite_market, ef_31, year='current', unit='MJ', amount=11)
+    lcia_results = _compute_and_store_lcia_scores(lignite_market, ef_31, year='current', unit='MJ', amount=11, carrier_name='lignite')
     lignite_results[f"lignite current - {lignite_market['name']}"] = lcia_results
 
     # new production route
@@ -1077,7 +1075,7 @@ def analysis(custom_db_names: list,
             charcoal_heat = 0
         new_lignite_act_lhv = lignite_heat + charcoal_heat
         lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:],
-                                                      unit='MJ', amount=new_lignite_act_lhv)
+                                                      unit='MJ', amount=new_lignite_act_lhv, carrier_name='lignite')
         lignite_results[f"lignite custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
     all_results = (steel_results | electricity_results | biomass_results | hydrogen_results | methanol_results |
@@ -1090,32 +1088,40 @@ def analysis(custom_db_names: list,
 def plot_analysis(
     df: pd.DataFrame,
     indicator: str,
-    product_row: str = "product",
+    carrier_row: str = "carrier",
     scenario_row: str = "scenario",
     name_row: str = "name",
     location_row: str = "location",
-    sort_by: str = "scenario",          # non-steel sorting: "scenario" | "name" | None
+    sort_by: str = "scenario",          # non-special sorting: "scenario" | "name" | None
+    unit_row: str = "unit",
     rotation: int = 45,
     ylabel: str | None = None,
     title_prefix: str = "",
     cmap_name: str = "tab20",
-    steel_keyword: str = "steel",
-    include_location_for_steel: bool = True,
+    include_location_for_special: bool = True,
     fig_size: tuple[float, float] = (10, 7.5),
     bottom_margin: float = 0.42,
 ):
     """
     One figure per product. Within each figure, bars for all columns that share the same product
-    for the given LCIA indicator row (wide dataframe like your CSV).
+    for the given LCIA indicator row (wide dataframe).
 
-    Steel-specific behavior:
-      - Map long steel route names to short codes (names_dict), robust to minor string differences.
+    Special behavior for routes where `name` contains any keyword in `special_keywords`
+    (default: steel/heat/electricity):
+      - Map long route names to short codes (names_dict), robust to minor string differences.
       - Map locations to short codes (locations_dict), robust to minor string differences.
       - Order bars as:
-          (A) scenario == 'current' block first (left), ordered among itself
-          (B) all other scenarios block second (right), ordered among itself
-        In each block: routes ranked by max(value) desc; within each route: value desc
-      - Colors: one base hue per route; within each route, bars get progressively lighter shades.
+          (A) scenario == 'current' block first (left)
+          (B) all other scenarios block second (right)
+        In each block: routes ranked by max(value) desc; within each route: value desc.
+        (This groups the same production route next to each other across scenarios.)
+      - Colors:
+          - current block: dark neutral shades (black -> lighter blacks)
+          - others: one base hue per route; within each route, progressively lighter shades.
+
+    For non-special plots:
+      - Keep previous sorting (scenario or name)
+      - But force 'current' bars to use the same black as in special.
     """
     names_dict = {
         'steel production, electrowinning-electric arc furnace, low-alloyed': 'EW',
@@ -1129,10 +1135,41 @@ def plot_analysis(
         'market for steel, low-alloyed': 'market',
         'steel production, converter, low-alloyed': 'BF/BOF',
         'market for steel, low-alloyed, 2029': 'market',
+        'market group for electricity, high voltage': 'electricity HV',
+        'market group for electricity, medium voltage': 'electricity MV',
+        'market group for electricity, low voltage': 'electricity LV',
+        'hydrogen production, auto-thermal reforming': 'auto-thermal reforming',
+        'hydrogen production, steam methane reforming': 'steam methane reforming',
+        'market for hydrogen, gaseous': 'market',
+        'market for diesel': 'diesel',
+        'market for diesel, low-sulfur': 'diesel, low-sulfur',
+        'market for heat, central or small-scale, natural gas': 'small-scale (nat gas)',
+        'market for heat, central or small-scale, other than natural gas': 'small scale (other)',
+        'market for heat, district or industrial, natural gas': 'district (nat gas)',
+        'market for heat, district or industrial, other than natural gas': 'district (other)',
+        'market for wood chips, wet, measured as dry mass': 'chips (wet)',
+        'market for wood chips, dry, measured as dry mass': 'chips (dry)',
+        'market for wood pellet, measured as dry mass': 'pellets',
+        'market group for natural gas, high pressure': 'methane',
+        'market for heat, district or industrial': 'district',
+        'market for lignite': 'lignite',
+        'market for lignite, for energy uses': 'lignite',
+        'market for hard coal': 'coal',
+        'market for coal, for energy uses': 'coal - charcoal',
+        'market for lubricating oil': 'lubricating oil',
+        'market for liquefied petroleum gas': 'LPG',
+        'market for kerosene': 'kerosene',
+        'market for methanol': 'methanol',
+        'market for hydrogen': 'hydrogen',
+        'market for biomass, used as a fuel': 'biomass'
     }
 
     locations_dict = {'Europe without Switzerland': 'RER wo CH',
-                      'Europe without Switzerland and Austria': 'RER wo CH/AT'}
+                      'Europe without Switzerland and Austria': 'RER wo CH/AT',
+                      'Europe, without Russia and Turkey': 'RER wo RU/TR'}
+
+    units_dict = {'kilogram': 'kg', 'kilowatt hour': 'kWh', 'cubic meter': 'm3'}
+
     # ---------- helpers ----------
     def norm(s: str) -> str:
         s = str(s)
@@ -1142,29 +1179,18 @@ def plot_analysis(
         return s.casefold()
 
     def strip_trailing_year(s: str) -> str:
-        # removes patterns like ", 2029" or " 2029" at the end
         return re.sub(r"(?:,?\s+)\d{4}$", "", str(s)).strip()
 
     def expand_names_mapping(d: dict[str, str]) -> dict[str, str]:
-        """
-        Build a normalized mapping with extra aliases to handle common mismatches:
-          - 'steel custom - ' prefix present/absent
-          - trailing years like ', 2029'
-          - whitespace/dash variants
-        """
         out = {}
         for k, v in d.items():
             candidates = {str(k)}
-
             if str(k).startswith("steel custom - "):
                 candidates.add(str(k).replace("steel custom - ", "", 1))
-
             for c in list(candidates):
                 candidates.add(strip_trailing_year(c))
-
             for c in candidates:
                 out[norm(c)] = v
-
         return out
 
     def map_series_norm(s: pd.Series, mapping_norm: dict[str, str]) -> pd.Series:
@@ -1175,12 +1201,14 @@ def plot_analysis(
         return s_clean.map(lambda x: mapping_norm.get(norm(strip_trailing_year(x)), x))
 
     def lighten(color, amount=0.35):
-        """Blend a color towards white by 'amount' (0..1)."""
         r, g, b = mcolors.to_rgb(color)
         return (r + (1 - r) * amount, g + (1 - g) * amount, b + (1 - b) * amount)
 
+    def is_current_scenario(x: str) -> bool:
+        return str(x).strip().casefold() == "current"
+
     # ---------- checks ----------
-    for needed in [product_row, scenario_row, indicator]:
+    for needed in [carrier_row, scenario_row, indicator]:
         if needed not in df.index:
             raise ValueError(
                 f"Row '{needed}' not found in df.index. "
@@ -1188,11 +1216,12 @@ def plot_analysis(
             )
 
     # metadata per column
-    product_of_col = df.loc[product_row]
+    product_of_col = df.loc[carrier_row]
     scenario_of_col = df.loc[scenario_row].astype(str)
 
     name_of_col = df.loc[name_row].astype(str) if name_row in df.index else None
     location_of_col = df.loc[location_row].astype(str) if location_row in df.index else None
+    unit_of_col = df.loc[unit_row].astype(str) if unit_row in df.index else None
 
     # indicator values per column
     values = pd.to_numeric(df.loc[indicator], errors="coerce")
@@ -1206,7 +1235,7 @@ def plot_analysis(
     names_dict_norm = expand_names_mapping(names_dict)
     locations_dict_norm = {norm(k): v for k, v in locations_dict.items()}
 
-    def scen_key(s):
+    def scen_key_simple(s):
         s0 = str(s).strip().lower()
         if s0 == "current":
             return (-1, -1)
@@ -1231,32 +1260,35 @@ def plot_analysis(
         if location_of_col is not None:
             sub["location"] = location_of_col[cols].astype(str)
 
-        # ---- detect steel ----
+        # ---- always apply the route routines (when name exists) ----
         if "name" in sub.columns:
             name_clean = sub["name"].astype(str)
-            is_steel = bool(name_clean.str.contains(steel_keyword, case=False, na=False).any())
             short_name = map_series_norm(name_clean, names_dict_norm)
+            is_special = True
         else:
-            is_steel = False
             short_name = None
+            is_special = False  # can't group by route without a name
 
+        # location mapping (same routine)
         if "location" in sub.columns:
             loc_clean = sub["location"].astype(str)
-            # map with normalized keys; fallback to original
             short_loc = loc_clean.map(lambda x: locations_dict_norm.get(norm(x), x))
         else:
             short_loc = None
 
+        if unit_of_col is not None:
+            sub["unit"] = unit_of_col[cols].astype(str)
+
         # ---- ordering + labels + colors ----
-        if is_steel:
+        if is_special:
             sub = sub.copy()
             sub["route"] = short_name.loc[sub.index].astype(str)
 
             # current block first
-            is_current = sub["scenario"].astype(str).str.strip().str.casefold().eq("current")
-            sub["block"] = is_current.map({True: 0, False: 1})  # 0 first, 1 after
+            is_cur = sub["scenario"].map(is_current_scenario)
+            sub["block"] = is_cur.map({True: 0, False: 1})  # 0 first
 
-            # rank routes within each block by max value
+            # rank routes within each block by max value (high -> low)
             def rank_routes(sdf: pd.DataFrame) -> list[str]:
                 if sdf.empty:
                     return []
@@ -1276,78 +1308,74 @@ def plot_analysis(
 
             def route_order(row):
                 r = row["route"]
-                if row["block"] == 0:
-                    return order_current.get(r, 10_000)
-                else:
-                    return order_other.get(r, 10_000)
+                return (order_current if row["block"] == 0 else order_other).get(r, 10_000)
 
             sub["route_order"] = sub.apply(route_order, axis=1)
 
-            # sort: block (current first) -> route rank -> within route value desc
+            # sort: block -> route rank -> route -> value desc
+            # (this keeps same routes adjacent across scenarios, and orders high->low)
             sub = sub.sort_values(
                 by=["block", "route_order", "route", "value"],
                 ascending=[True, True, True, False],
             )
 
-            # labels in the new order
+            # labels
             name_sorted = short_name.loc[sub.index].astype(str)
-
-            if include_location_for_steel and short_loc is not None:
+            if include_location_for_special and short_loc is not None:
                 loc_sorted = short_loc.loc[sub.index].astype(str)
-                xlabels = (
-                    sub["scenario"].astype(str)
-                    + " | " + name_sorted
-                    + " | " + loc_sorted
-                ).tolist()
+                xlabels = (sub["scenario"].astype(str) + " | " + name_sorted + " | " + loc_sorted).tolist()
             else:
-                xlabels = (
-                    sub["scenario"].astype(str)
-                    + " | " + name_sorted
-                ).tolist()
+                xlabels = (sub["scenario"].astype(str) + " | " + name_sorted).tolist()
 
-            # colors:
-            # - current = dark neutral shades (clearly distinct)
-            # - others = route-based chromatic ranges
+            # colors: current = pale gray shades; others = pre-lightened route hues + gradient per route
             all_routes = list(dict.fromkeys(routes_current + routes_other))
             for r in sub["route"].astype(str).unique():
                 if r not in all_routes:
                     all_routes.append(r)
 
-            base_colors = {r: cmap(i % cmap.N) for i, r in enumerate(all_routes)}
+            # 1) Make base route colors paler up-front
+            base_colors_raw = {r: cmap(i % cmap.N) for i, r in enumerate(all_routes)}
+            base_colors = {r: lighten(base_colors_raw[r], amount=0.25) for r in all_routes}
+
+            # 2) "current" base should also be paler (dark gray, not near-black)
+            current_base = (0.65, 0.65, 0.65)
 
             colors = []
-            for idx, row in sub.iterrows():
-                r = str(row["route"])
-                is_cur = row["block"] == 0  # 0 = current
+            seen_current = {}
+            seen_other = {}
 
-                if is_cur:
-                    # dark neutral palette for "current"
-                    # first in pair darker, second slightly lighter
-                    # count how many we've already seen for this route in current block
-                    seen_in_route = sum(
-                        (sub.loc[:idx, "route"] == r) & (sub.loc[:idx, "block"] == 0)
-                    )
-                    amt = min(0.5, 0.2 * seen_in_route)  # 0, 0.2, 0.4...
-                    base = (0.1, 0.1, 0.1)  # near-black
-                    colors.append(lighten(base, amount=amt))
+            for _, row in sub.iterrows():
+                r = str(row["route"])
+                if row["block"] == 0:
+                    # pale gray gradient
+                    seen_current[r] = seen_current.get(r, 0) + 1
+                    amt = min(0.55, 0.18 * (seen_current[r] - 1))  # gentle lightening steps
+                    colors.append(lighten(current_base, amount=amt))
                 else:
-                    # route color (chromatic range)
-                    seen_in_route = sum(
-                        (sub.loc[:idx, "route"] == r) & (sub.loc[:idx, "block"] == 1)
-                    )
-                    amt = min(0.6, 0.35 * seen_in_route)
-                    base = base_colors[r]
-                    colors.append(lighten(base, amount=amt))
+                    # paler route gradient
+                    seen_other[r] = seen_other.get(r, 0) + 1
+                    amt = min(0.70, 0.30 * (seen_other[r] - 1))
+                    colors.append(lighten(base_colors[r], amount=amt))
 
         else:
-            # non-steel: keep your previous simple sorting (scenario or name)
+            # non-special: previous sorting
             if sort_by == "scenario":
-                sub = sub.sort_values(by="scenario", key=lambda x: x.map(scen_key))
+                sub = sub.sort_values(by="scenario", key=lambda x: x.map(scen_key_simple))
             elif sort_by == "name" and "name" in sub.columns:
                 sub = sub.sort_values("name")
 
             xlabels = sub["scenario"].astype(str).tolist()
-            colors = [cmap(i % cmap.N) for i in range(len(sub))]
+
+            # colors, but force "current" to same black as special
+            current_base = (0.1, 0.1, 0.1)
+            colors = []
+            k = 0
+            for _, row in sub.iterrows():
+                if is_current_scenario(row["scenario"]):
+                    colors.append(current_base)
+                else:
+                    colors.append(cmap(k % cmap.N))
+                    k += 1
 
         # ---- plot ----
         n = len(sub)
@@ -1358,10 +1386,17 @@ def plot_analysis(
         ax.set_xticks(range(n))
         ax.set_xticklabels(xlabels, rotation=rotation, ha="right")
 
-        ax.set_ylabel(ylabel if ylabel is not None else indicator)
+        if ylabel is not None and "unit" in sub.columns:
+            # assume unit is constant within a product; if not, just show first
+            u0 = sub["unit"].dropna().astype(str).iloc[0] if sub["unit"].notna().any() else ""
+            u0_short = units_dict.get(u0, u0)
+            ax.set_ylabel(f"{ylabel}/{u0_short}" if u0_short else ylabel)
+        elif ylabel is not None:
+            ax.set_ylabel(ylabel)
+        else:
+            ax.set_ylabel(indicator)
         ax.set_title(f"{title_prefix}{prod} — {indicator.split(';')[0]}")
 
-        # rotated labels need bottom space
         fig.subplots_adjust(bottom=bottom_margin)
 
         figs[str(prod)] = fig
@@ -1369,10 +1404,11 @@ def plot_analysis(
 
     return figs, axes
 
+
 def run():
-    # create_custom_database(output_database_name='custom_2020',
-    #                       year=2020,
-    #                       )
+    create_custom_database(output_database_name='custom_2020',
+                           year=2020,
+                           )
     substitute_windtrace_onshore(database_windtrace_should_substitute='custom_2020',
                                  ecoinvent_database_name='cutoff391', location_new_wind_act='RER',
                                      fleet_turbines_definition=config_parameters.BALANCED_ON_WIND_FLEET,
