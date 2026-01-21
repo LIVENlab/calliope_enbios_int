@@ -677,21 +677,46 @@ def pes_demand(biosphere_db_name: str, analysis_act, amount: float,
     gas = [a for a in bd.Database(biosphere_db_name) if 'Gas,' in a['name'] and a['categories'][0] == 'natural resource']
     water = [a for a in bd.Database(biosphere_db_name) if 'Water,' in a['name'] and a['categories'][0] == 'natural resource']
     oil = [a for a in bd.Database(biosphere_db_name) if 'Oil, crude' in a['name'] and a['categories'][0] == 'natural resource']
-    # Missing Waste and Biomass
+    # Missing Waste and Biomass TODO?
     land = [a for a in bd.Database(biosphere_db_name) if 'Transformation, from' in a['name'] and a['categories'][0] == 'natural resource']
 
-    all = (coal | uranium | gas | water | oil | land)
+    coal_set = set(coal)
+    uranium_set = set(uranium)
+    gas_set = set(gas)
+    water_set = set(water)
+    oil_set = set(oil)
+    land_set = set(land)
+
     my_functional_unit, data_objs, _ = bd.prepare_lca_inputs(
         {analysis_act: amount}, method=lcia_method
     )
     lca_obj = bc.LCA(demand=my_functional_unit, data_objs=data_objs)
     lca_obj.lci()
     inventory_array = lca_obj.inventory.sum(axis=1)
-    raw_materials = {}
+    raw_materials = {
+        "coal": 0.0,
+        "uranium": 0.0,
+        "gas": 0.0,
+        "water": 0.0,
+        "oil": 0.0,
+        "land": 0.0,
+    }
     for flow_id, index in lca_obj.dicts.biosphere.items():
-        flow = bd.get_node(id=flow_id)  # Fetch biosphere flow details
-        if flow in all:
-            raw_materials[flow] = inventory_array[index].item()
+        flow = bd.get_node(id=flow_id)
+        value = inventory_array[index].item()
+        if flow in coal_set:
+            raw_materials["coal"] += value
+        elif flow in uranium_set:
+            raw_materials["uranium"] += value
+        elif flow in gas_set:
+            raw_materials["gas"] += value
+        elif flow in water_set:
+            raw_materials["water"] += value
+        elif flow in oil_set:
+            raw_materials["oil"] += value
+        elif flow in land_set:
+            raw_materials["land"] += value
+
     return raw_materials
 
 def create_scenario_values(new_db_name: str, csv_file):
@@ -830,6 +855,7 @@ def analysis(custom_db_names: list,
 
     ### STEEL ###
     # Original steel
+    print('starting steel')
     steel_results = {}
     steel_original_glo = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market for steel, low-alloyed'
                           and a['reference product'] == 'steel, low-alloyed'
@@ -861,6 +887,7 @@ def analysis(custom_db_names: list,
 
     ### ELECTRICITY ###
     # Original electricity
+    print('starting electricity')
     electricity_carriers_demand = {}
     electricity_results = {}
     #act_hv = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market group for electricity, high voltage' and a['location'] == 'RER'][0]
@@ -871,6 +898,9 @@ def analysis(custom_db_names: list,
 
     lcia_results = _compute_and_store_lcia_scores(act_lv, ef_31, year='current', carrier_name='electricity')
     electricity_results[f"electricity current - {act_lv['name']}"] = lcia_results
+
+    electricity_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=act_lv, amount=1)
+    electricity_carriers_demand[f"{act_lv['name']} pes current"] = electricity_raw
 
     # new production routes
     for custom_db_name in custom_db_names:
@@ -884,15 +914,23 @@ def analysis(custom_db_names: list,
         electricity_results[f"electricity custom - {act_lv['name']} {custom_db_name[-4:]}"] = lcia_results
 
         hv_products_demand = demand_array(new_db_name=custom_db_name, analysis_act=act_hv, amount=1)
-        electricity_carriers_demand[f"{act_hv['name']} {custom_db_name[-4:]}"] = hv_products_demand
+        electricity_carriers_demand[f"{act_hv['name']} carriers {custom_db_name[-4:]}"] = hv_products_demand
         mv_products_demand = demand_array(new_db_name=custom_db_name, analysis_act=act_mv, amount=1)
-        electricity_carriers_demand[f"{act_mv['name']} {custom_db_name[-4:]}"] = mv_products_demand
+        electricity_carriers_demand[f"{act_mv['name']} carriers {custom_db_name[-4:]}"] = mv_products_demand
         lv_products_demand = demand_array(new_db_name=custom_db_name, analysis_act=act_lv, amount=1)
-        electricity_carriers_demand[f"{act_lv['name']} {custom_db_name[-4:]}"] = lv_products_demand
+        electricity_carriers_demand[f"{act_lv['name']} carriers {custom_db_name[-4:]}"] = lv_products_demand
+
+        electricity_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=act_lv, amount=1)
+        electricity_carriers_demand[f"{act_lv['name']} pes {custom_db_name[-4:]}"] = electricity_raw
+        electricity_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=act_mv, amount=1)
+        electricity_carriers_demand[f"{act_mv['name']} pes {custom_db_name[-4:]}"] = electricity_raw
+        electricity_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=act_hv, amount=1)
+        electricity_carriers_demand[f"{act_hv['name']} pes {custom_db_name[-4:]}"] = electricity_raw
 
 
     ### BIOMASS ###
     # Original biomass
+    print('starting biomass')
     biomass_carriers_demand = {}
     biomass_results = {}
     wood_chips_wet = [a for a in bd.Database(cutoff_db_name) if
@@ -912,11 +950,11 @@ def analysis(custom_db_names: list,
     biomass_results[f"biomass current - {wood_pellets['name']}"] = lcia_results
 
     biomass_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=wood_chips_wet, amount=8.7)
-    biomass_carriers_demand[f"{wood_chips_wet['name']} {custom_db_name[-4:]}"] = biomass_results
+    biomass_carriers_demand[f"{wood_chips_wet['name']} current"] = biomass_raw
     biomass_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=wood_chips_dry, amount=19)
-    biomass_carriers_demand[f"{wood_chips_dry['name']} {custom_db_name[-4:]}"] = biomass_results
+    biomass_carriers_demand[f"{wood_chips_dry['name']} current"] = biomass_raw
     biomass_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=wood_pellets, amount=17)
-    biomass_carriers_demand[f"{wood_pellets['name']} {custom_db_name[-4:]}"] = biomass_results
+    biomass_carriers_demand[f"{wood_pellets['name']} current"] = biomass_raw
 
     # new production route
     for custom_db_name in custom_db_names:
@@ -943,12 +981,13 @@ def analysis(custom_db_names: list,
         biomass_results[f"biomass custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
         biomass_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=new_biomass_act_lhv)
-        biomass_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = biomass_ec_demand
+        biomass_carriers_demand[f"{new_act['name']} carriers {custom_db_name[-4:]}"] = biomass_ec_demand
         biomass_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=wood_chips_wet, amount=new_biomass_act_lhv)
-        biomass_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = biomass_raw
+        biomass_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = biomass_raw
 
     ### HYDROGEN ###
     # Original hydrogen
+    print('starting hydrogen')
     hydrogen_carriers_demand = {}
     hydrogen_results = {}
     h2_market_glo = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market for hydrogen, gaseous' and
@@ -962,7 +1001,7 @@ def analysis(custom_db_names: list,
         lcia_results = _compute_and_store_lcia_scores(act, ef_31, year='current', carrier_name='hydrogen')
         hydrogen_results[f"hydrogen current - {act['name']}"] = lcia_results
         hydrogen_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=act, amount=1)
-        hydrogen_carriers_demand[f"{act['name']} {custom_db_name[-4:]}"] = hydrogen_raw
+        hydrogen_carriers_demand[f"{act['name']} current"] = hydrogen_raw
 
     # new production route
     for custom_db_name in custom_db_names:
@@ -972,12 +1011,13 @@ def analysis(custom_db_names: list,
         hydrogen_results[f"hydrogen custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
         hydrogen_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
-        hydrogen_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = hydrogen_ec_demand
+        hydrogen_carriers_demand[f"{new_act['name']} carriers {custom_db_name[-4:]}"] = hydrogen_ec_demand
         hydrogen_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
-        hydrogen_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = hydrogen_raw
+        hydrogen_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = hydrogen_raw
 
     ### METHANOL ###
     # Original methanol (from natural gas)
+    print('starting methanol')
     methanol_carriers_demand = {}
     methanol_results = {}
     methanol_market_glo = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market for methanol' and
@@ -986,7 +1026,7 @@ def analysis(custom_db_names: list,
     methanol_results[f"methanol current - {methanol_market_glo['name']}"] = lcia_results
 
     methanol_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=act, amount=1)
-    methanol_carriers_demand[f"{methanol_market_glo['name']} {custom_db_name[-4:]}"] = methanol_raw
+    methanol_carriers_demand[f"{methanol_market_glo['name']} current"] = methanol_raw
 
     # new production route
     for custom_db_name in custom_db_names:
@@ -996,12 +1036,13 @@ def analysis(custom_db_names: list,
         methanol_results[f"methanol custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
         methanol_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
-        methanol_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = methanol_ec_demand
+        methanol_carriers_demand[f"{new_act['name']} carriers {custom_db_name[-4:]}"] = methanol_ec_demand
         methanol_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
-        methanol_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = methanol_raw
+        methanol_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = methanol_raw
 
     ### KEROSENE ###
     # Original kerosene
+    print('starting kerosene')
     kerosene_carriers_demand = {}
     kerosene_results = {}
     kerosene_markets = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market for kerosene'
@@ -1010,7 +1051,7 @@ def analysis(custom_db_names: list,
         lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current', carrier_name='kerosene')
         kerosene_results[f"kerosene current - {market['name']}"] = lcia_results
         kerosene_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=market, amount=1)
-        kerosene_carriers_demand[f"{market['name']} {custom_db_name[-4:]}"] = kerosene_raw
+        kerosene_carriers_demand[f"{market['name']} current"] = kerosene_raw
 
     # new production route
     for custom_db_name in custom_db_names:
@@ -1020,9 +1061,9 @@ def analysis(custom_db_names: list,
         kerosene_results[f"kerosene custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
         kerosene_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
-        kerosene_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = kerosene_ec_demand
+        kerosene_carriers_demand[f"{new_act['name']} carriers {custom_db_name[-4:]}"] = kerosene_ec_demand
         kerosene_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
-        kerosene_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = kerosene_raw
+        kerosene_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = kerosene_raw
 
     ### DIESEL ###
     # Original diesel
@@ -1034,7 +1075,7 @@ def analysis(custom_db_names: list,
         lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current', carrier_name='diesel')
         diesel_results[f"diesel current - {market['name']}"] = lcia_results
         diesel_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=market, amount=1)
-        diesel_carriers_demand[f"{market['name']} {custom_db_name[-4:]}"] = diesel_raw
+        diesel_carriers_demand[f"{market['name']} current"] = diesel_raw
 
     # new production route
     for custom_db_name in custom_db_names:
@@ -1044,9 +1085,9 @@ def analysis(custom_db_names: list,
         diesel_results[f"diesel custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
         diesel_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
-        diesel_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = diesel_ec_demand
+        diesel_carriers_demand[f"{new_act['name']} carriers {custom_db_name[-4:]}"] = diesel_ec_demand
         diesel_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
-        diesel_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = diesel_raw
+        diesel_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = diesel_raw
 
     ### LIQUEFIED PETROLEUM GAS ###
     # Original liquefied petroleum gas
@@ -1058,7 +1099,7 @@ def analysis(custom_db_names: list,
         lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current', carrier_name='liquefied petroleum gas')
         lpg_results[f"lpg current - {market['name']}"] = lcia_results
         lpg_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=market, amount=1)
-        lpg_carriers_demand[f"{market['name']} {custom_db_name[-4:]}"] = lpg_raw
+        lpg_carriers_demand[f"{market['name']} current"] = lpg_raw
 
     # new production route
     for custom_db_name in custom_db_names:
@@ -1068,9 +1109,9 @@ def analysis(custom_db_names: list,
         lpg_results[f"lpg custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
         lpg_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
-        lpg_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = lpg_ec_demand
+        lpg_carriers_demand[f"{new_act['name']} carriers {custom_db_name[-4:]}"] = lpg_ec_demand
         lpg_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
-        lpg_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = lpg_raw
+        lpg_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = lpg_raw
 
     ### METHANE ###
     # Original methane
@@ -1082,7 +1123,7 @@ def analysis(custom_db_names: list,
         lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current', carrier_name='methane')
         methane_results[f"methane current - {market['name']}"] = lcia_results
         methane_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=market, amount=1)
-        methane_carriers_demand[f"{market['name']} {custom_db_name[-4:]}"] = methane_raw
+        methane_carriers_demand[f"{market['name']} current"] = methane_raw
 
     # new production route
     for custom_db_name in custom_db_names:
@@ -1093,9 +1134,9 @@ def analysis(custom_db_names: list,
         methane_results[f"methane custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
         methane_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
-        methane_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = methane_ec_demand
+        methane_carriers_demand[f"{new_act['name']} carriers {custom_db_name[-4:]}"] = methane_ec_demand
         methane_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
-        methane_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = methane_raw
+        methane_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = methane_raw
 
     ### LUBRICATING OIL ###
     # Original lubricating oil
@@ -1107,7 +1148,7 @@ def analysis(custom_db_names: list,
         lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current', carrier_name='lubricating oil')
         lubricating_oil_results[f"lubricating oil current - {market['name']}"] = lcia_results
         lubricating_oil_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=market, amount=1)
-        lubricating_oil_carriers_demand[f"{market['name']} {custom_db_name[-4:]}"] = lubricating_oil_raw
+        lubricating_oil_carriers_demand[f"{market['name']} current"] = lubricating_oil_raw
 
     # new production route
     for custom_db_name in custom_db_names:
@@ -1117,9 +1158,9 @@ def analysis(custom_db_names: list,
         lubricating_oil_results[f"lubricating oil custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
         lubricating_oil_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
-        lubricating_oil_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = lubricating_oil_ec_demand
+        lubricating_oil_carriers_demand[f"{new_act['name']} carriers {custom_db_name[-4:]}"] = lubricating_oil_ec_demand
         lubricating_oil_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
-        lubricating_oil_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = lubricating_oil_raw
+        lubricating_oil_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = lubricating_oil_raw
 
     ### HEAT ###
     # Original heat
@@ -1143,7 +1184,7 @@ def analysis(custom_db_names: list,
             lcia_results = _compute_and_store_lcia_scores(act, ef_31, year='current', carrier_name='heat')
             heat_results[f"heat current - {act['name']}"] = lcia_results
             heat_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=act, amount=1)
-            heat_carriers_demand[f"{act['name']} {custom_db_name[-4:]}"] = heat_raw
+            heat_carriers_demand[f"{act['name']} current"] = heat_raw
 
     # new production routes
     for custom_db_name in custom_db_names:
@@ -1156,9 +1197,9 @@ def analysis(custom_db_names: list,
             heat_results[f"heat custom - {act['name']} {custom_db_name[-4:]}"] = lcia_results
 
             heat_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=act, amount=1)
-            heat_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = heat_ec_demand
+            heat_carriers_demand[f"{act['name']} carriers {custom_db_name[-4:]}"] = heat_ec_demand
             heat_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=act, amount=1)
-            heat_carriers_demand[f"{act['name']} {custom_db_name[-4:]}"] = heat_raw
+            heat_carriers_demand[f"{act['name']} pes {custom_db_name[-4:]}"] = heat_raw
 
     ### COAL ###
     # Original coal
@@ -1171,7 +1212,7 @@ def analysis(custom_db_names: list,
     lcia_results = _compute_and_store_lcia_scores(coal_market, ef_31, year='current', carrier_name='coal')
     coal_results[f"coal current - {coal_market['name']}"] = lcia_results
     coal_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=coal_market, amount=1)
-    coal_carriers_demand[f"{coal_market['name']} {custom_db_name[-4:]}"] = coal_raw
+    coal_carriers_demand[f"{coal_market['name']} current"] = coal_raw
 
     # new production route
     for custom_db_name in custom_db_names:
@@ -1181,9 +1222,9 @@ def analysis(custom_db_names: list,
         coal_results[f"coal custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
         coal_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
-        coal_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = coal_ec_demand
+        coal_carriers_demand[f"{new_act['name']} carriers {custom_db_name[-4:]}"] = coal_ec_demand
         coal_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
-        coal_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = coal_raw
+        coal_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = coal_raw
 
     ### LIGNITE ###
     # Original lignite
@@ -1196,7 +1237,7 @@ def analysis(custom_db_names: list,
     lcia_results = _compute_and_store_lcia_scores(lignite_market, ef_31, year='current', unit='MJ', amount=11, carrier_name='lignite')
     lignite_results[f"lignite current - {lignite_market['name']}"] = lcia_results
     lignite_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=lignite_market, amount=11)
-    lignite_carriers_demand[f"{lignite_market['name']} {custom_db_name[-4:]}"] = lignite_raw
+    lignite_carriers_demand[f"{lignite_market['name']} current"] = lignite_raw
 
     # new production route
     for custom_db_name in custom_db_names:
@@ -1221,9 +1262,9 @@ def analysis(custom_db_names: list,
         lignite_results[f"lignite custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
         lignite_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=new_lignite_act_lhv)
-        lignite_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = lignite_ec_demand
+        lignite_carriers_demand[f"{new_act['name']} carriers {custom_db_name[-4:]}"] = lignite_ec_demand
         lignite_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=11)
-        lignite_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = lignite_raw
+        lignite_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = lignite_raw
 
     all_lcia_results = (steel_results | electricity_results | biomass_results | hydrogen_results | methanol_results |
                    kerosene_results | diesel_results | lpg_results | lubricating_oil_results | coal_results
