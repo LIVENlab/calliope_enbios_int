@@ -16,6 +16,7 @@ import math
 import copy
 import matplotlib.colors as mcolors
 import re
+import os
 
 def import_ei_12():
     bi.import_ecoinvent_release(
@@ -920,8 +921,9 @@ def _compute_and_store_lcia_scores(act, lcia_methods, year: str, carrier_name: s
         lcia_results[f"{str(m[1])}; {str(m[2])}"] = lca_obj.score
     return lcia_results
 
-def analysis(custom_db_names: list,
-             cutoff_db_name: str = 'premise_original_update', bw25_project_name: str = 'bw25_matrix'):
+def analysis(custom_db_names: list, save_folder: str,
+             cutoff_db_name: str = 'premise_original_update', bw25_project_name: str = 'bw25_matrix',
+             ):
     # Set bw25 project
     bd.projects.set_current(bw25_project_name)
 
@@ -931,6 +933,7 @@ def analysis(custom_db_names: list,
     ### STEEL ###
     # Original steel
     print('starting steel')
+    steel_carriers_demand = {}
     steel_results = {}
     steel_original_glo = [a for a in bd.Database(cutoff_db_name) if a['name'] == 'market for steel, low-alloyed'
                           and a['reference product'] == 'steel, low-alloyed'
@@ -943,10 +946,15 @@ def analysis(custom_db_names: list,
     lcia_results = _compute_and_store_lcia_scores(steel_original_bof, ef_31, year='current', carrier_name='steel')
     steel_results['steel current BOF (RER)'] = lcia_results
 
+    steel_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=steel_original_glo, amount=1)
+    steel_carriers_demand[f"{steel_original_glo['name']} pes current"] = steel_raw
+
     try:
         steel_original_rer = [a for a in bd.Database('additional_acts') if a['name'] == 'market for steel, low-alloyed, 2029'][0]
         lcia_results = _compute_and_store_lcia_scores(steel_original_rer, ef_31, year='current', carrier_name='steel')
         steel_results['steel current market (RER)'] = lcia_results
+        steel_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=steel_original_rer, amount=1)
+        steel_carriers_demand[f"{steel_original_rer['name']} pes current"] = steel_raw
     except:
         pass
 
@@ -959,6 +967,12 @@ def analysis(custom_db_names: list,
         for act in steel_new_acts:
             lcia_results = _compute_and_store_lcia_scores(act, ef_31, year=custom_db_name[-4:], carrier_name='steel')
             steel_results[f"steel custom - {act['name']} {custom_db_name[-4:]}"] = lcia_results
+
+            steel_products_demand = demand_array(new_db_name=custom_db_name, analysis_act=act, amount=1)
+            steel_carriers_demand[f"{act['name']} carriers {custom_db_name[-4:]}"] = steel_products_demand
+            steel_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=act, amount=1)
+            steel_carriers_demand[f"{act['name']} pes current"] = steel_raw
+
 
     ### ELECTRICITY ###
     # Original electricity
@@ -1348,24 +1362,54 @@ def analysis(custom_db_names: list,
         lignite_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=11)
         lignite_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = lignite_raw
 
-    all_lcia_results = (steel_results | electricity_results | biomass_results | hydrogen_results | methanol_results |
-                   kerosene_results | diesel_results | lpg_results | lubricating_oil_results | coal_results
-                   | lignite_results | heat_results | methane_results)
-    all_carriers_results = (electricity_carriers_demand | biomass_carriers_demand | hydrogen_carriers_demand |
-                            methanol_carriers_demand |
-                   kerosene_carriers_demand | diesel_carriers_demand | lpg_carriers_demand |
-                            lubricating_oil_carriers_demand | coal_carriers_demand
-                   | lignite_carriers_demand | heat_carriers_demand | methane_carriers_demand)
-    # TODO: maybe convert all_lcia_results in a dict of dicts where the key is the name of the carrier. Same with
-    #  all_carriers_results. In this case, I'll need to change plot_analysis (maybe not!)?
-    df_lcia = pd.DataFrame(all_lcia_results)
-    df_carriers = pd.DataFrame(all_carriers_results)
-    return df_lcia, df_carriers
+    # results in dicts
+    industry_lcia_results = {'steel': steel_results}
+    industry_carriers_results = {'steel': steel_carriers_demand}
+
+    energy_lcia_results = {'electricity': electricity_results, 'biomass': biomass_results, 'hydrogen': hydrogen_results,
+                        'methanol': methanol_results, 'kerosene': kerosene_results, 'diesel': diesel_results,
+                        'lpg': lpg_results, 'lubricating oil': lubricating_oil_results, 'coal': coal_results,
+                        'lignite': lignite_results, 'heat': heat_results, 'methane': methane_results}
+    energy_carriers_results = {'electricity': electricity_carriers_demand, 'biomass': biomass_carriers_demand,
+                               'hydrogen': hydrogen_carriers_demand, 'methanol': methanol_carriers_demand,
+                               'kerosene': kerosene_carriers_demand, 'diesel': diesel_carriers_demand,
+                               'lpg': lpg_carriers_demand, 'lubricating oil': lubricating_oil_carriers_demand,
+                               'coal': coal_carriers_demand, 'lignite': lignite_carriers_demand,
+                               'heat': heat_carriers_demand, 'methane': methane_carriers_demand}
+
+    # save
+    industry_lcia = {}
+    for key, value in industry_lcia_results.items():
+        df = pd.DataFrame(value)
+        industry_lcia[key] = df
+        save_path = os.path.join(save_folder, f'{key}.csv')
+        df.to_csv(save_path)
+    industry_carriers = {}
+    for key, value in industry_carriers_results.items():
+        df = pd.DataFrame(value)
+        industry_carriers[key] = df
+        save_path = os.path.join(save_folder, f'{key}.csv')
+        df.to_csv(save_path)
+    energy_lcia = {}
+    for key, value in energy_lcia_results.items():
+        df = pd.DataFrame(value)
+        energy_lcia[key] = df
+        save_path = os.path.join(save_folder, f'{key}.csv')
+        df.to_csv(save_path)
+    energy_carriers = {}
+    for key, value in energy_carriers_results.items():
+        df = pd.DataFrame(value)
+        energy_carriers[key] = df
+        save_path = os.path.join(save_folder, f'{key}.csv')
+        df.to_csv(save_path)
+
+    return industry_lcia, industry_carriers, energy_lcia, energy_carriers
 
 
 def plot_analysis(
     df: pd.DataFrame,
     indicator: str,
+    save_folder: str,
     carrier_row: str = "carrier",
     scenario_row: str = "scenario",
     name_row: str = "name",
@@ -1378,7 +1422,7 @@ def plot_analysis(
     cmap_name: str = "tab20",
     include_location_for_special: bool = True,
     fig_size: tuple[float, float] = (10, 7.5),
-    bottom_margin: float = 0.42,
+    bottom_margin: float = 0.42
 ):
     """
     One figure per product. Within each figure, bars for all columns that share the same product
@@ -1439,7 +1483,7 @@ def plot_analysis(
         'market for kerosene': 'kerosene',
         'market for methanol': 'methanol',
         'market for hydrogen': 'hydrogen',
-        'market for biomass, used as a fuel': 'biomass'
+        'market for biomass, used as fuel': 'biomass'
     }
 
     locations_dict = {'Europe without Switzerland': 'RER wo CH',
@@ -1677,10 +1721,8 @@ def plot_analysis(
 
         fig.subplots_adjust(bottom=bottom_margin)
 
-        figs[str(prod)] = fig
-        axes[str(prod)] = ax
-
-    return figs, axes
+        save_path = os.path.join(save_folder, f"{title_prefix}{prod} {indicator.split(';')[0]}.png")
+        fig.savefig(save_path)
 
 
 def run():
@@ -1710,24 +1752,36 @@ def run():
     plot_input_data(
         path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_eur_custom_2020_2050.csv",
         year='2020',
-        save_path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data_2020.png",
+        save_path=r"/premise_external_scenario/plots/input_data/input_data_2020.png",
         region=None,          # aggregate across all regions
         region_agg="mean",    # mean is usually what you want for “average country”
     )
     plot_input_data(
         path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_eur_custom_2020_2050.csv",
         year='2050',
-        save_path=r"C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data_2050.png",
+        save_path=r"/premise_external_scenario/plots/input_data/input_data_2050.png",
         region=None,          # aggregate across all regions
         region_agg="mean",    # mean is usually what you want for “average country”
     )
 
 
-df = analysis(custom_db_names=['custom_2020', 'custom_2050'])
-figs, axes = plot_analysis(
-    df=df,
-    indicator="climate change; global warming potential (GWP100)",
-    ylabel="kg CO2-eq",
-)
-plt.show()
+industry_lcia, industry_carriers, energy_lcia, energy_carriers = analysis(custom_db_names=['custom_2020', 'custom_2050'],
+              save_folder=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\results')
+
+for industry_name, df in industry_lcia.items():
+    plot_analysis(
+        df=df,
+        indicator="climate change; global warming potential (GWP100)",
+        ylabel="kg CO2-eq",
+        save_folder=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\output\industry'
+    )
+
+for energy_name, df in energy_lcia.items():
+        plot_analysis(
+            df=df,
+            indicator="climate change; global warming potential (GWP100)",
+            ylabel="kg CO2-eq",
+            save_folder=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\output\energy'
+        )
+
 pass
