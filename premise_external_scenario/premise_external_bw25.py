@@ -1859,7 +1859,7 @@ def _apply_pv_split_and_rebalance(out: dict, lv_share: float = 0.8, eps: float =
     out[MV_TRANS] = max(0.0, 1.0 - mv_waste - float(out.get(MV_COM_PV, 0.0)))
 
 
-def _build_mapped_dict(mix_by_country: dict, electricity_mapping: dict) -> dict:
+def _build_mapped_dict(mix_by_country: dict, carrier_mapping: dict, carrier_name: str) -> dict:
     """
     Full pipeline per country:
       1) keyword mapping
@@ -1870,20 +1870,21 @@ def _build_mapped_dict(mix_by_country: dict, electricity_mapping: dict) -> dict:
     out_all = {}
 
     for country, country_mix in mix_by_country.items():
-        out = _map_country_mix(country_mix, electricity_mapping)
+        out = _map_country_mix(country_mix, carrier_mapping)
 
+        if carrier_name == 'electricity':
         # Initial normalization (helps if sums are slightly off)
-        _normalize_group_proportional(out, "Share|ElectricityHV|", 1.0)
-        _normalize_group_proportional(out, "Share|ElectricityMV|", 1.0)
-        _normalize_group_proportional(out, "Share|ElectricityLV|", 1.0)
+            _normalize_group_proportional(out, "Share|ElectricityHV|", 1.0)
+            _normalize_group_proportional(out, "Share|ElectricityMV|", 1.0)
+            _normalize_group_proportional(out, "Share|ElectricityLV|", 1.0)
 
-        # Your PV split + “close the balance” with transformation
-        _apply_pv_split_and_rebalance(out, lv_share=0.8)
+            # Your PV split + “close the balance” with transformation
+            _apply_pv_split_and_rebalance(out, lv_share=0.8)
 
-        # Final normalization per voltage (proportional across existing >0 techs)
-        _normalize_group_proportional(out, "Share|ElectricityHV|", 1.0)
-        _normalize_group_proportional(out, "Share|ElectricityMV|", 1.0)
-        _normalize_group_proportional(out, "Share|ElectricityLV|", 1.0)
+            # Final normalization per voltage (proportional across existing >0 techs)
+            _normalize_group_proportional(out, "Share|ElectricityHV|", 1.0)
+            _normalize_group_proportional(out, "Share|ElectricityMV|", 1.0)
+            _normalize_group_proportional(out, "Share|ElectricityLV|", 1.0)
 
         out_all[country] = out
 
@@ -1891,13 +1892,13 @@ def _build_mapped_dict(mix_by_country: dict, electricity_mapping: dict) -> dict:
 
 def _voltage_loop(act):
     technology_shares = {}
-    if act['location'] == 'CH':
+    if 'group' not in act['name']:
         country_data = {}
         for e in act.technosphere():
             name = e.input['name']
             amount = e['amount']
             country_data[name] = amount
-        technology_shares['CH'] = country_data
+        technology_shares[act['location']] = country_data
     else:
         for ex in act.technosphere():
             country_act = ex.input
@@ -1916,7 +1917,7 @@ def electricity_baseline(database: bd.Database = 'cutoff391', bw25_project_name:
     "Share|ElectricityHV|Coal": ["hard coal", 'lignite', 'peat'],
     "Share|ElectricityHV|CombinedCycle": ["electricity production, natural gas, combined cycle power plant"],
     "Share|ElectricityHV|GasTurbine": ["electricity production, natural gas, conventional power plant"],
-    "Share|ElectricityHV|CogenerationGas": ["heat and power co-generation, natural gas, combined cycle power plant"],
+    "Share|ElectricityHV|CogenerationGas": ["heat and power co-generation, natural gas"],
     "Share|ElectricityHV|Nuclear": ["nuclear"],
     "Share|ElectricityHV|Oil": [", oil"],
     "Share|ElectricityHV|Geothermal": ["deep geothermal"],
@@ -1984,13 +1985,13 @@ def electricity_baseline(database: bd.Database = 'cutoff391', bw25_project_name:
     mv_map = {k: v for k, v in electricity_mapping.items() if k.startswith("Share|ElectricityMV|")}
     lv_map = {k: v for k, v in electricity_mapping.items() if k.startswith("Share|ElectricityLV|")}
 
-    hv_europe = _build_mapped_dict(technology_shares_hv_europe, hv_map)
-    mv_europe = _build_mapped_dict(technology_shares_mv_europe, mv_map)
-    lv_europe = _build_mapped_dict(technology_shares_lv_europe, lv_map)
+    hv_europe = _build_mapped_dict(technology_shares_hv_europe, hv_map, 'electricity')
+    mv_europe = _build_mapped_dict(technology_shares_mv_europe, mv_map, 'electricity')
+    lv_europe = _build_mapped_dict(technology_shares_lv_europe, lv_map, 'electricity')
 
-    hv_ch = _build_mapped_dict(technology_shares_hv_ch, hv_map)
-    mv_ch = _build_mapped_dict(technology_shares_mv_ch, mv_map)
-    lv_ch = _build_mapped_dict(technology_shares_lv_ch, lv_map)
+    hv_ch = _build_mapped_dict(technology_shares_hv_ch, hv_map, 'electricity')
+    mv_ch = _build_mapped_dict(technology_shares_mv_ch, mv_map, 'electricity')
+    lv_ch = _build_mapped_dict(technology_shares_lv_ch, lv_map, 'electricity')
 
     hv = (hv_europe | hv_ch)
     mv = (mv_europe | mv_ch)
@@ -2028,56 +2029,37 @@ def electricity_baseline(database: bd.Database = 'cutoff391', bw25_project_name:
 
 
 def heat_baseline(cutoff_db_name: str = 'cutoff391', bw25_project_name: str = 'bw25_matrix'):
-    bd.projects.set_current(bw25_project_name)
-    # Europe without Switzerland
-    act_cs_nat_gas_europe = [a for a in bd.Database(cutoff_db_name) if
-                      a['name'] == 'market for heat, central or small-scale, natural gas'
-                      and a['location'] == 'Europe without Switzerland'][0]
-    act_cs_not_nat_gas_europe = [a for a in bd.Database(cutoff_db_name) if
-                          a['name'] == 'market for heat, central or small-scale, other than natural gas'
-                          and a['location'] == 'Europe without Switzerland'][0]
-    act_district_nat_gas_europe = [a for a in bd.Database(cutoff_db_name) if
-                            a['name'] == 'market for heat, district or industrial, natural gas'
-                            and a['location'] == 'Europe without Switzerland'][0]
-    act_district_not_nat_gas_europe = [a for a in bd.Database(cutoff_db_name) if
-                                a['name'] == 'market for heat, district or industrial, other than natural gas'
-                                and a['location'] == 'Europe without Switzerland'][0]
-    technology_shares_cs_nat_gas_europe = _voltage_loop(act_cs_nat_gas_europe)
-    technology_shares_cs_not_nat_gas_europe = _voltage_loop(act_cs_not_nat_gas_europe)
-    technology_shares_district_nat_gas_europe = _voltage_loop(act_district_nat_gas_europe)
-    technology_shares_district_not_nat_gas_europe = _voltage_loop(act_district_not_nat_gas_europe)
+    """
+    data from Sayeg et al., 2017 (https://linkinghub.elsevier.com/retrieve/pii/S1364032116002318). 2009 EU
+    """
+    all_heats = {
+        "Share|HeatSmall|Biomass": 0.22,
+        "Share|HeatSmall|HeatPump": 0.12,
+        "Share|HeatSmall|Methane": 0.35,
+        "Share|HeatSmall|Coal": 0.03,
+        "Share|HeatSmall|Oil": 0.18,
 
-    # Switzerland (CH)
-    act_cs_nat_gas_ch = [a for a in bd.Database(cutoff_db_name) if
-                      a['name'] == 'market for heat, central or small-scale, natural gas'
-                      and a['location'] == 'CH'][0]
-    act_cs_not_nat_gas_ch = [a for a in bd.Database(cutoff_db_name) if
-                          a['name'] == 'market for heat, central or small-scale, other than natural gas'
-                          and a['location'] == 'CH'][0]
-    act_district_nat_gas_ch = [a for a in bd.Database(cutoff_db_name) if
-                            a['name'] == 'market for heat, district or industrial, natural gas'
-                            and a['location'] == 'CH'][0]
-    act_district_not_nat_gas_ch = [a for a in bd.Database(cutoff_db_name) if
-                                a['name'] == 'market for heat, district or industrial, other than natural gas'
-                                and a['location'] == 'CH'][0]
-    technology_shares_cs_nat_gas_ch = _voltage_loop(act_cs_nat_gas_ch)
-    technology_shares_cs_not_nat_gas_ch = _voltage_loop(act_cs_not_nat_gas_ch)
-    technology_shares_district_nat_gas_ch = _voltage_loop(act_district_nat_gas_ch)
-    technology_shares_district_not_nat_gas_ch = _voltage_loop(act_district_not_nat_gas_ch)
+        "Share|HeatIndustrial|Methane": 0.40,
+        "Share|HeatIndustrial|CoalFurnace": 0.30,
+        "Share|HeatIndustrial|OilFurnace": 0.03,
+        "Share|HeatIndustrial|CoalCogeneration": 0.05,
+        "Share|HeatIndustrial|OilCogeneration": 0.02,
+        "Share|HeatIndustrial|Waste": 0.2,
+        "Share|HeatIndustrial|Biomass": 0.18,
+    }
 
-    return (
-            technology_shares_cs_nat_gas_europe,
-            technology_shares_district_nat_gas_europe,
-            technology_shares_district_not_nat_gas_europe,
-            technology_shares_cs_not_nat_gas_europe,
-            technology_shares_district_nat_gas_ch,
-            technology_shares_district_not_nat_gas_ch,
-        technology_shares_cs_nat_gas_ch,
-        technology_shares_cs_not_nat_gas_ch
+    df = (
+        pd.DataFrame.from_dict(all_heats, orient="index")
+        .fillna(0.0)
+        .rename_axis("country")
+        .sort_index()
+        .sort_index(axis=1)
     )
+    # TODO: maybe no need to do it as a function
+    return df
 
-
-df = electricity_baseline()
+df_heat = heat_baseline()
+df_electricity = electricity_baseline()
 
 industry_lcia, industry_carriers, energy_lcia, energy_carriers = analysis(custom_db_names=['custom_2020', 'custom_2050'],
               save_folder=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\results')
