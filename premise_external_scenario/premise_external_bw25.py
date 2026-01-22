@@ -1765,6 +1765,253 @@ def run():
     )
 
 
+LV_RES_PV = "Share|ElectricityLV|SolarPVRoofResidential"
+LV_TRANS  = "Share|ElectricityLV|TransformationMVLV"
+
+MV_COM_PV = "Share|ElectricityMV|SolarPVRoofCommercial"
+MV_WASTE  = "Share|ElectricityMV|Waste"
+MV_TRANS  = "Share|ElectricityMV|TransformationHVMV"
+
+
+def map_country_mix(country_mix: dict, electricity_mapping: dict) -> dict:
+    """
+    country_mix: {"some activity name": amount, ...}
+    electricity_mapping: {"Share|...": [keywords], ...}
+
+    returns: {"Share|...": summed amount}
+    """
+    items = [(str(k).lower(), float(v)) for k, v in country_mix.items()]
+    out = {}
+
+    for share_key, keywords in electricity_mapping.items():
+        kws = [str(kw).strip().lower() for kw in keywords if kw and str(kw).strip()]
+        if not kws:
+            out[share_key] = 0.0
+            continue
+
+        s = 0.0
+        for k_low, v in items:
+            if any(kw in k_low for kw in kws):
+                s += v
+        out[share_key] = s
+
+    return out
+
+
+def normalize_group_proportional(out: dict, prefix: str, target: float = 1.0, eps: float = 1e-15) -> None:
+    """
+    Make sum of all keys starting with prefix equal target by scaling only keys with value > 0.
+    """
+    keys = [k for k in out if k.startswith(prefix)]
+    if not keys:
+        return
+
+    current_sum = sum(out.get(k, 0.0) for k in keys)
+    if current_sum <= eps:
+        return
+
+    nonzero = [k for k in keys if out.get(k, 0.0) > eps]
+    if not nonzero:
+        return
+
+    factor = target / current_sum
+    for k in nonzero:
+        out[k] *= factor
+
+
+def apply_pv_split_and_rebalance(out: dict, lv_share: float = 0.8, eps: float = 1e-15) -> None:
+    """
+    Implements your math:
+
+    Let lv_pv_old = LV_RES_PV before split.
+
+    LV:
+      LV_RES_PV := lv_pv_old * lv_share
+      LV_TRANS  := 1 - LV_RES_PV     (so LV sums to 1, assuming others 0)
+
+    MV:
+      mv_pv := (lv_pv_old - lv_pv_old*lv_share) / (1 - lv_pv_old*lv_share)
+      MV_COM_PV := mv_pv
+      MV_TRANS  := 1 - MV_WASTE - MV_COM_PV    (so MV sums to 1, assuming others 0 besides waste)
+    """
+    lv_pv_old = float(out.get(LV_RES_PV, 0.0))
+    mv_waste  = float(out.get(MV_WASTE, 0.0))
+
+    # If no LV PV, nothing to shift
+    if lv_pv_old <= eps:
+        return
+
+    lv_pv_new = lv_pv_old * lv_share
+    out[LV_RES_PV] = lv_pv_new
+
+    # Force LV to sum to 1 by adjusting transformation (matches your example logic)
+    out[LV_TRANS] = max(0.0, 1.0 - lv_pv_new)
+
+    # MV PV share after moving 20% of LV PV "up" and renormalizing MV
+    denom = 1.0 - lv_pv_new
+    if denom <= eps:
+        # Degenerate case: lv_pv_new ~ 1, MV would blow up; just skip or clamp
+        out[MV_COM_PV] = 0.0
+    else:
+        moved = lv_pv_old - lv_pv_new  # the 20% moved up, in LV units
+        out[MV_COM_PV] = moved / denom
+
+    # Force MV to sum to 1 by adjusting transformation
+    out[MV_TRANS] = max(0.0, 1.0 - mv_waste - float(out.get(MV_COM_PV, 0.0)))
+
+
+def build_mapped_dict(mix_by_country: dict, electricity_mapping: dict) -> dict:
+    """
+    Full pipeline per country:
+      1) keyword mapping
+      2) normalize HV/MV/LV to 1 (initial cleanup)
+      3) apply PV split + rebalance LV and MV (your formulas)
+      4) normalize HV/MV/LV again to exactly 1 by scaling existing >0 techs
+    """
+    out_all = {}
+
+    for country, country_mix in mix_by_country.items():
+        out = map_country_mix(country_mix, electricity_mapping)
+
+        # Initial normalization (helps if sums are slightly off)
+        normalize_group_proportional(out, "Share|ElectricityHV|", 1.0)
+        normalize_group_proportional(out, "Share|ElectricityMV|", 1.0)
+        normalize_group_proportional(out, "Share|ElectricityLV|", 1.0)
+
+        # Your PV split + “close the balance” with transformation
+        apply_pv_split_and_rebalance(out, lv_share=0.8)
+
+        # Final normalization per voltage (proportional across existing >0 techs)
+        normalize_group_proportional(out, "Share|ElectricityHV|", 1.0)
+        normalize_group_proportional(out, "Share|ElectricityMV|", 1.0)
+        normalize_group_proportional(out, "Share|ElectricityLV|", 1.0)
+
+        out_all[country] = out
+
+    return out_all
+
+
+def electricity_baseline(database: bd.Database = 'cutoff391', bw25_project_name: str = 'bw25_matrix'):
+    electricity_mapping = {# HV generation
+    "Share|ElectricityHV|Coal": ["hard coal", 'lignite', 'peat'],
+    "Share|ElectricityHV|CombinedCycle": ["electricity production, natural gas, combined cycle power plant"],
+    "Share|ElectricityHV|GasTurbine": ["electricity production, natural gas, conventional power plant"],
+    "Share|ElectricityHV|CogenerationGas": ["heat and power co-generation, natural gas, combined cycle power plant"],
+    "Share|ElectricityHV|Nuclear": ["nuclear"],
+    "Share|ElectricityHV|Oil": [", oil"],
+    "Share|ElectricityHV|Geothermal": ["deep geothermal"],
+    "Share|ElectricityHV|HydroRunofRiver": ["hydro, run-of-river"],
+    "Share|ElectricityHV|HydroReservoir": ["hydro, reservoir"],
+    "Share|ElectricityHV|Biomass": ["wood chips"],
+    "Share|ElectricityHV|Biogas": ["biogas"],
+    "Share|ElectricityHV|WindOnshore": ["onshore"],
+    "Share|ElectricityHV|WindOffshore": ["offshore"],
+    "Share|ElectricityHV|SolarThermal": ["solar tower", 'parabolic trough'],
+    "Share|ElectricityHV|SolarPVOpen": ["570kWp"],
+    "Share|ElectricityHV|Hydrogen": [""],
+    "Share|ElectricityHV|BatteryHydro": ["pumped storage"],
+
+    # Imports
+    **{f"Share|ElectricityHV|Imports{cc}": [f"import from {cc}"] for cc in [
+            "ES", "BG", "SE", "AT", "MK", "MD", "HR", "XK", "LU", "GR", "IS", "BA", "EE", "SK", "ME", "LT", "SI", "IE",
+            "BE",
+            "RS", "RO", "NL", "UA", "PL", "FR", "GB", "NO", "CZ", "MT", "DK", "IT", "LV", "DE", "PT", "FI", "BY", "GI",
+            "AL", "HU", "CH"
+        ]},
+
+    # MV
+    "Share|ElectricityMV|TransformationHVMV": ["from high to medium voltage"],
+    "Share|ElectricityMV|SolarPVRoofCommercial": [""],
+    "Share|ElectricityMV|Waste": ["municipal waste incinerator"],
+
+    # LV
+    "Share|ElectricityLV|TransformationMVLV": ["from medium to low voltage"],
+    "Share|ElectricityLV|BatteryChemical": [""],
+    "Share|ElectricityLV|SolarPVRoofResidential": ["3kWp"],}
+
+    bd.projects.set_current(bw25_project_name)
+    act_hv = [a for a in bd.Database(database) if a['name'] == 'market group for electricity, high voltage' and a[
+        'location'] == 'Europe without Switzerland'][0]
+    act_mv = [a for a in bd.Database(database) if
+              a['name'] == 'market group for electricity, medium voltage' and a[
+                  'location'] == 'Europe without Switzerland'][0]
+    act_lv = [a for a in bd.Database(database) if
+              a['name'] == 'market group for electricity, low voltage' and a[
+                  'location'] == 'Europe without Switzerland'][0]
+    acts_in_europe_lv = {}
+    # LV loop
+    for ex in act_lv.technosphere():
+        country_act = ex.input
+        loc = country_act['location']
+        country_data = {}
+        for e in country_act.technosphere():
+            name = e.input['name']
+            amount = e['amount']
+            country_data[name] = amount
+        acts_in_europe_lv[loc] = country_data
+    acts_in_europe_mv = {}
+    # MV loop
+    for ex in act_mv.technosphere():
+        country_act = ex.input
+        loc = country_act['location']
+        country_data = {}
+        for e in country_act.technosphere():
+            name = e.input['name']
+            amount = e['amount']
+            country_data[name] = amount
+        acts_in_europe_mv[loc] = country_data
+    acts_in_europe_hv = {}
+    # HV loop
+    for ex in act_hv.technosphere():
+        country_act = ex.input
+        loc = country_act['location']
+        country_data = {}
+        for e in country_act.technosphere():
+            name = e.input['name']
+            amount = e['amount']
+            country_data[name] = amount
+        acts_in_europe_hv[loc] = country_data
+
+    # final data
+    hv_map = {k: v for k, v in electricity_mapping.items() if k.startswith("Share|ElectricityHV|")}
+    mv_map = {k: v for k, v in electricity_mapping.items() if k.startswith("Share|ElectricityMV|")}
+    lv_map = {k: v for k, v in electricity_mapping.items() if k.startswith("Share|ElectricityLV|")}
+
+    hv = build_mapped_dict(acts_in_europe_hv, hv_map)
+    mv = build_mapped_dict(acts_in_europe_mv, mv_map)
+    lv = build_mapped_dict(acts_in_europe_lv, lv_map)
+
+    all_voltages = {}
+    countries = set(hv) | set(mv) | set(lv)
+    for c in countries:
+        all_voltages[c] = {}
+        all_voltages[c].update(hv.get(c, {}))
+        all_voltages[c].update(mv.get(c, {}))
+        all_voltages[c].update(lv.get(c, {}))
+
+    for c, out in all_voltages.items():
+        apply_pv_split_and_rebalance(out, lv_share=0.8)
+
+        normalize_group_proportional(out, "Share|ElectricityHV|", 1.0)
+        normalize_group_proportional(out, "Share|ElectricityMV|", 1.0)
+        normalize_group_proportional(out, "Share|ElectricityLV|", 1.0)
+
+    df = (
+        pd.DataFrame.from_dict(all_voltages, orient="index")
+        .fillna(0.0)
+        .rename_axis("country")
+        .sort_index()
+        .sort_index(axis=1)
+    )
+
+    # optional sanity checks (should be ~1 each, after your normalization logic)
+    df["HV_sum"] = df.filter(like="Share|ElectricityHV|", axis=1).sum(axis=1)
+    df["MV_sum"] = df.filter(like="Share|ElectricityMV|", axis=1).sum(axis=1)
+    df["LV_sum"] = df.filter(like="Share|ElectricityLV|", axis=1).sum(axis=1)
+
+    return df
+
+
 industry_lcia, industry_carriers, energy_lcia, energy_carriers = analysis(custom_db_names=['custom_2020', 'custom_2050'],
               save_folder=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\results')
 
