@@ -767,19 +767,19 @@ def pes_demand(biosphere_db_name: str, analysis_act, amount: float,
     lca_obj.lci()
     inventory_array = lca_obj.inventory.sum(axis=1)
     raw_materials = {
-        "Coal (kg)": 0.0,
+        "Coal, raw (kg)": 0.0,
         "Uranium (kg)": 0.0,
         "Gas (m3)": 0.0,
         "Water (m3)": 0.0,
         "Oil (kg)": 0.0,
         "Land (m2)": 0.0,
-        "Biomass (MJ)": 0.0,
+        "Biomass, raw (MJ)": 0.0,
     }
     for flow_id, index in lca_obj.dicts.biosphere.items():
         flow = bd.get_node(id=flow_id)
         value = inventory_array[index].item()
         if flow in coal_set:
-            raw_materials["Coal (kg)"] += value
+            raw_materials["Coal, raw (kg)"] += value
         elif flow in uranium_set:
             raw_materials["Uranium (kg)"] += value
         elif flow in gas_set:
@@ -791,7 +791,7 @@ def pes_demand(biosphere_db_name: str, analysis_act, amount: float,
         elif flow in land_set:
             raw_materials["Land (m2)"] += value
         elif flow in biomass_energy_set:
-            raw_materials["Biomass (MJ)"] += value
+            raw_materials["Biomass, raw (MJ)"] += value
 
     return raw_materials
 
@@ -969,9 +969,9 @@ def analysis(custom_db_names: list, save_folder: str,
             steel_results[f"steel custom - {act['name']} {custom_db_name[-4:]}"] = lcia_results
 
             steel_products_demand = demand_array(new_db_name=custom_db_name, analysis_act=act, amount=1)
-            steel_carriers_demand[f"{act['name']} carriers {custom_db_name[-4:]}"] = steel_products_demand
             steel_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=act, amount=1)
-            steel_carriers_demand[f"{act['name']} pes current"] = steel_raw
+            steel_demand = (steel_products_demand | steel_raw)
+            steel_carriers_demand[f"{act['name']} {custom_db_name[-4:]}"] = steel_demand
 
 
     ### ELECTRICITY ###
@@ -1003,18 +1003,18 @@ def analysis(custom_db_names: list, save_folder: str,
         electricity_results[f"electricity custom - {act_lv['name']} {custom_db_name[-4:]}"] = lcia_results
 
         hv_products_demand = demand_array(new_db_name=custom_db_name, analysis_act=act_hv, amount=1)
-        electricity_carriers_demand[f"{act_hv['name']} carriers {custom_db_name[-4:]}"] = hv_products_demand
         mv_products_demand = demand_array(new_db_name=custom_db_name, analysis_act=act_mv, amount=1)
-        electricity_carriers_demand[f"{act_mv['name']} carriers {custom_db_name[-4:]}"] = mv_products_demand
         lv_products_demand = demand_array(new_db_name=custom_db_name, analysis_act=act_lv, amount=1)
-        electricity_carriers_demand[f"{act_lv['name']} carriers {custom_db_name[-4:]}"] = lv_products_demand
 
-        electricity_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=act_lv, amount=1)
-        electricity_carriers_demand[f"{act_lv['name']} pes {custom_db_name[-4:]}"] = electricity_raw
-        electricity_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=act_mv, amount=1)
-        electricity_carriers_demand[f"{act_mv['name']} pes {custom_db_name[-4:]}"] = electricity_raw
-        electricity_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=act_hv, amount=1)
-        electricity_carriers_demand[f"{act_hv['name']} pes {custom_db_name[-4:]}"] = electricity_raw
+        electricity_raw_lv = pes_demand(biosphere_db_name='biosphere3', analysis_act=act_lv, amount=1)
+        electricity_demand_lv = (lv_products_demand | electricity_raw_lv)
+        electricity_carriers_demand[f"{act_lv['name']} {custom_db_name[-4:]}"] = electricity_demand_lv
+        electricity_raw_mv = pes_demand(biosphere_db_name='biosphere3', analysis_act=act_mv, amount=1)
+        electricity_demand_mv = (mv_products_demand | electricity_raw_mv)
+        electricity_carriers_demand[f"{act_mv['name']} {custom_db_name[-4:]}"] = electricity_demand_mv
+        electricity_raw_hv = pes_demand(biosphere_db_name='biosphere3', analysis_act=act_hv, amount=1)
+        electricity_demand_hv = (hv_products_demand | electricity_raw_hv)
+        electricity_carriers_demand[f"{act_hv['name']} {custom_db_name[-4:]}"] = electricity_demand_hv
 
 
     ### BIOMASS ###
@@ -1070,9 +1070,9 @@ def analysis(custom_db_names: list, save_folder: str,
         biomass_results[f"biomass custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
         biomass_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=new_biomass_act_lhv)
-        biomass_carriers_demand[f"{new_act['name']} carriers {custom_db_name[-4:]}"] = biomass_ec_demand
         biomass_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=wood_chips_wet, amount=new_biomass_act_lhv)
-        biomass_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = biomass_raw
+        biomass_demand = (biomass_ec_demand | biomass_raw)
+        biomass_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = biomass_demand
 
     ### HYDROGEN ###
     # Original hydrogen
@@ -1100,9 +1100,9 @@ def analysis(custom_db_names: list, save_folder: str,
         hydrogen_results[f"hydrogen custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
         hydrogen_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
-        hydrogen_carriers_demand[f"{new_act['name']} carriers {custom_db_name[-4:]}"] = hydrogen_ec_demand
         hydrogen_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
-        hydrogen_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = hydrogen_raw
+        hydrogen_demand = (hydrogen_ec_demand | hydrogen_raw)
+        hydrogen_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = hydrogen_demand
 
     ### METHANOL ###
     # Original methanol (from natural gas)
@@ -1125,9 +1125,9 @@ def analysis(custom_db_names: list, save_folder: str,
         methanol_results[f"methanol custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
         methanol_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
-        methanol_carriers_demand[f"{new_act['name']} carriers {custom_db_name[-4:]}"] = methanol_ec_demand
         methanol_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
-        methanol_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = methanol_raw
+        methanol_demand = (methanol_ec_demand | methanol_raw)
+        methanol_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = methanol_demand
 
     ### KEROSENE ###
     # Original kerosene
@@ -1150,9 +1150,9 @@ def analysis(custom_db_names: list, save_folder: str,
         kerosene_results[f"kerosene custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
         kerosene_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
-        kerosene_carriers_demand[f"{new_act['name']} carriers {custom_db_name[-4:]}"] = kerosene_ec_demand
         kerosene_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
-        kerosene_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = kerosene_raw
+        kerosene_demand = (kerosene_ec_demand | kerosene_raw)
+        kerosene_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = kerosene_demand
 
     ### DIESEL ###
     # Original diesel
@@ -1175,9 +1175,9 @@ def analysis(custom_db_names: list, save_folder: str,
         diesel_results[f"diesel custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
         diesel_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
-        diesel_carriers_demand[f"{new_act['name']} carriers {custom_db_name[-4:]}"] = diesel_ec_demand
         diesel_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
-        diesel_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = diesel_raw
+        diesel_demand = (diesel_ec_demand | diesel_raw)
+        diesel_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = diesel_demand
 
     ### LIQUEFIED PETROLEUM GAS ###
     # Original liquefied petroleum gas
@@ -1200,9 +1200,9 @@ def analysis(custom_db_names: list, save_folder: str,
         lpg_results[f"lpg custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
         lpg_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
-        lpg_carriers_demand[f"{new_act['name']} carriers {custom_db_name[-4:]}"] = lpg_ec_demand
         lpg_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
-        lpg_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = lpg_raw
+        lpg_demand = (lpg_ec_demand | lpg_raw)
+        lpg_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = lpg_demand
 
     ### METHANE ###
     # Original methane
@@ -1226,9 +1226,9 @@ def analysis(custom_db_names: list, save_folder: str,
         methane_results[f"methane custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
         methane_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
-        methane_carriers_demand[f"{new_act['name']} carriers {custom_db_name[-4:]}"] = methane_ec_demand
         methane_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
-        methane_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = methane_raw
+        methane_demand = (methane_ec_demand | methane_raw)
+        methane_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = methane_demand
 
     ### LUBRICATING OIL ###
     # Original lubricating oil
@@ -1251,9 +1251,9 @@ def analysis(custom_db_names: list, save_folder: str,
         lubricating_oil_results[f"lubricating oil custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
         lubricating_oil_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
-        lubricating_oil_carriers_demand[f"{new_act['name']} carriers {custom_db_name[-4:]}"] = lubricating_oil_ec_demand
         lubricating_oil_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
-        lubricating_oil_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = lubricating_oil_raw
+        lubricating_oil_demand = (lubricating_oil_ec_demand | lubricating_oil_raw)
+        lubricating_oil_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = lubricating_oil_demand
 
     ### HEAT ###
     # Original heat
@@ -1291,9 +1291,9 @@ def analysis(custom_db_names: list, save_folder: str,
             heat_results[f"heat custom - {act['name']} {custom_db_name[-4:]}"] = lcia_results
 
             heat_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=act, amount=1)
-            heat_carriers_demand[f"{act['name']} carriers {custom_db_name[-4:]}"] = heat_ec_demand
             heat_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=act, amount=1)
-            heat_carriers_demand[f"{act['name']} pes {custom_db_name[-4:]}"] = heat_raw
+            heat_demand = (heat_ec_demand | heat_raw)
+            heat_carriers_demand[f"{act['name']} {custom_db_name[-4:]}"] = heat_demand
 
     ### COAL ###
     # Original coal
@@ -1317,9 +1317,9 @@ def analysis(custom_db_names: list, save_folder: str,
         coal_results[f"coal custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
         coal_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
-        coal_carriers_demand[f"{new_act['name']} carriers {custom_db_name[-4:]}"] = coal_ec_demand
         coal_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
-        coal_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = coal_raw
+        coal_demand = (coal_ec_demand | coal_raw)
+        coal_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = coal_demand
 
     ### LIGNITE ###
     # Original lignite
@@ -1358,9 +1358,9 @@ def analysis(custom_db_names: list, save_folder: str,
         lignite_results[f"lignite custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
 
         lignite_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=new_lignite_act_lhv)
-        lignite_carriers_demand[f"{new_act['name']} carriers {custom_db_name[-4:]}"] = lignite_ec_demand
         lignite_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=11)
-        lignite_carriers_demand[f"{new_act['name']} pes {custom_db_name[-4:]}"] = lignite_raw
+        lignite_demand = (lignite_ec_demand | lignite_raw)
+        lignite_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = lignite_demand
 
     # results in dicts
     industry_lcia_results = {'steel': steel_results}
@@ -1469,11 +1469,12 @@ def plot_analysis(
         'market for heat, central or small-scale, other than natural gas': 'small scale (other)',
         'market for heat, district or industrial, natural gas': 'district (nat gas)',
         'market for heat, district or industrial, other than natural gas': 'district (other)',
+        'market for heat, district or industrial': 'district',
+        'market for heat, central or small-scale': 'small-scale',
         'market for wood chips, wet, measured as dry mass': 'chips (wet)',
         'market for wood chips, dry, measured as dry mass': 'chips (dry)',
         'market for wood pellet, measured as dry mass': 'pellets',
         'market group for natural gas, high pressure': 'methane',
-        'market for heat, district or industrial': 'district',
         'market for lignite': 'lignite',
         'market for lignite, for energy uses': 'lignite',
         'market for hard coal': 'coal',
@@ -1773,7 +1774,7 @@ MV_WASTE  = "Share|ElectricityMV|Waste"
 MV_TRANS  = "Share|ElectricityMV|TransformationHVMV"
 
 
-def map_country_mix(country_mix: dict, electricity_mapping: dict) -> dict:
+def _map_country_mix(country_mix: dict, electricity_mapping: dict) -> dict:
     """
     country_mix: {"some activity name": amount, ...}
     electricity_mapping: {"Share|...": [keywords], ...}
@@ -1798,7 +1799,7 @@ def map_country_mix(country_mix: dict, electricity_mapping: dict) -> dict:
     return out
 
 
-def normalize_group_proportional(out: dict, prefix: str, target: float = 1.0, eps: float = 1e-15) -> None:
+def _normalize_group_proportional(out: dict, prefix: str, target: float = 1.0, eps: float = 1e-15) -> None:
     """
     Make sum of all keys starting with prefix equal target by scaling only keys with value > 0.
     """
@@ -1819,10 +1820,8 @@ def normalize_group_proportional(out: dict, prefix: str, target: float = 1.0, ep
         out[k] *= factor
 
 
-def apply_pv_split_and_rebalance(out: dict, lv_share: float = 0.8, eps: float = 1e-15) -> None:
+def _apply_pv_split_and_rebalance(out: dict, lv_share: float = 0.8, eps: float = 1e-15) -> None:
     """
-    Implements your math:
-
     Let lv_pv_old = LV_RES_PV before split.
 
     LV:
@@ -1860,7 +1859,7 @@ def apply_pv_split_and_rebalance(out: dict, lv_share: float = 0.8, eps: float = 
     out[MV_TRANS] = max(0.0, 1.0 - mv_waste - float(out.get(MV_COM_PV, 0.0)))
 
 
-def build_mapped_dict(mix_by_country: dict, electricity_mapping: dict) -> dict:
+def _build_mapped_dict(mix_by_country: dict, electricity_mapping: dict) -> dict:
     """
     Full pipeline per country:
       1) keyword mapping
@@ -1871,24 +1870,45 @@ def build_mapped_dict(mix_by_country: dict, electricity_mapping: dict) -> dict:
     out_all = {}
 
     for country, country_mix in mix_by_country.items():
-        out = map_country_mix(country_mix, electricity_mapping)
+        out = _map_country_mix(country_mix, electricity_mapping)
 
         # Initial normalization (helps if sums are slightly off)
-        normalize_group_proportional(out, "Share|ElectricityHV|", 1.0)
-        normalize_group_proportional(out, "Share|ElectricityMV|", 1.0)
-        normalize_group_proportional(out, "Share|ElectricityLV|", 1.0)
+        _normalize_group_proportional(out, "Share|ElectricityHV|", 1.0)
+        _normalize_group_proportional(out, "Share|ElectricityMV|", 1.0)
+        _normalize_group_proportional(out, "Share|ElectricityLV|", 1.0)
 
         # Your PV split + “close the balance” with transformation
-        apply_pv_split_and_rebalance(out, lv_share=0.8)
+        _apply_pv_split_and_rebalance(out, lv_share=0.8)
 
         # Final normalization per voltage (proportional across existing >0 techs)
-        normalize_group_proportional(out, "Share|ElectricityHV|", 1.0)
-        normalize_group_proportional(out, "Share|ElectricityMV|", 1.0)
-        normalize_group_proportional(out, "Share|ElectricityLV|", 1.0)
+        _normalize_group_proportional(out, "Share|ElectricityHV|", 1.0)
+        _normalize_group_proportional(out, "Share|ElectricityMV|", 1.0)
+        _normalize_group_proportional(out, "Share|ElectricityLV|", 1.0)
 
         out_all[country] = out
 
     return out_all
+
+def _voltage_loop(act):
+    technology_shares = {}
+    if act['location'] == 'CH':
+        country_data = {}
+        for e in act.technosphere():
+            name = e.input['name']
+            amount = e['amount']
+            country_data[name] = amount
+        technology_shares['CH'] = country_data
+    else:
+        for ex in act.technosphere():
+            country_act = ex.input
+            loc = country_act['location']
+            country_data = {}
+            for e in country_act.technosphere():
+                name = e.input['name']
+                amount = e['amount']
+                country_data[name] = amount
+            technology_shares[loc] = country_data
+    return technology_shares
 
 
 def electricity_baseline(database: bd.Database = 'cutoff391', bw25_project_name: str = 'bw25_matrix'):
@@ -1922,7 +1942,7 @@ def electricity_baseline(database: bd.Database = 'cutoff391', bw25_project_name:
     # MV
     "Share|ElectricityMV|TransformationHVMV": ["from high to medium voltage"],
     "Share|ElectricityMV|SolarPVRoofCommercial": [""],
-    "Share|ElectricityMV|Waste": ["municipal waste incinerator"],
+    "Share|ElectricityMV|Waste": ["municipal waste incineration"],
 
     # LV
     "Share|ElectricityLV|TransformationMVLV": ["from medium to low voltage"],
@@ -1930,56 +1950,51 @@ def electricity_baseline(database: bd.Database = 'cutoff391', bw25_project_name:
     "Share|ElectricityLV|SolarPVRoofResidential": ["3kWp"],}
 
     bd.projects.set_current(bw25_project_name)
-    act_hv = [a for a in bd.Database(database) if a['name'] == 'market group for electricity, high voltage' and a[
+
+    # Europe without Switzerland
+    act_hv_europe = [a for a in bd.Database(database) if a['name'] == 'market group for electricity, high voltage' and a[
         'location'] == 'Europe without Switzerland'][0]
-    act_mv = [a for a in bd.Database(database) if
+    act_mv_europe = [a for a in bd.Database(database) if
               a['name'] == 'market group for electricity, medium voltage' and a[
                   'location'] == 'Europe without Switzerland'][0]
-    act_lv = [a for a in bd.Database(database) if
+    act_lv_europe = [a for a in bd.Database(database) if
               a['name'] == 'market group for electricity, low voltage' and a[
                   'location'] == 'Europe without Switzerland'][0]
-    acts_in_europe_lv = {}
-    # LV loop
-    for ex in act_lv.technosphere():
-        country_act = ex.input
-        loc = country_act['location']
-        country_data = {}
-        for e in country_act.technosphere():
-            name = e.input['name']
-            amount = e['amount']
-            country_data[name] = amount
-        acts_in_europe_lv[loc] = country_data
-    acts_in_europe_mv = {}
-    # MV loop
-    for ex in act_mv.technosphere():
-        country_act = ex.input
-        loc = country_act['location']
-        country_data = {}
-        for e in country_act.technosphere():
-            name = e.input['name']
-            amount = e['amount']
-            country_data[name] = amount
-        acts_in_europe_mv[loc] = country_data
-    acts_in_europe_hv = {}
-    # HV loop
-    for ex in act_hv.technosphere():
-        country_act = ex.input
-        loc = country_act['location']
-        country_data = {}
-        for e in country_act.technosphere():
-            name = e.input['name']
-            amount = e['amount']
-            country_data[name] = amount
-        acts_in_europe_hv[loc] = country_data
+    technology_shares_lv_europe = _voltage_loop(act_lv_europe)
+    technology_shares_mv_europe = _voltage_loop(act_mv_europe)
+    technology_shares_hv_europe = _voltage_loop(act_hv_europe)
+
+    # Switzerland (CH)
+    act_hv_ch = \
+    [a for a in bd.Database(database) if a['name'] == 'market for electricity, high voltage' and a[
+        'location'] == 'CH'][0]
+    act_mv_ch = [a for a in bd.Database(database) if
+                     a['name'] == 'market for electricity, medium voltage' and a[
+                         'location'] == 'CH'][0]
+    act_lv_ch = [a for a in bd.Database(database) if
+                     a['name'] == 'market for electricity, low voltage' and a[
+                         'location'] == 'CH'][0]
+    technology_shares_lv_ch = _voltage_loop(act_lv_ch)
+    technology_shares_mv_ch = _voltage_loop(act_mv_ch)
+    technology_shares_hv_ch = _voltage_loop(act_hv_ch)
+
 
     # final data
     hv_map = {k: v for k, v in electricity_mapping.items() if k.startswith("Share|ElectricityHV|")}
     mv_map = {k: v for k, v in electricity_mapping.items() if k.startswith("Share|ElectricityMV|")}
     lv_map = {k: v for k, v in electricity_mapping.items() if k.startswith("Share|ElectricityLV|")}
 
-    hv = build_mapped_dict(acts_in_europe_hv, hv_map)
-    mv = build_mapped_dict(acts_in_europe_mv, mv_map)
-    lv = build_mapped_dict(acts_in_europe_lv, lv_map)
+    hv_europe = _build_mapped_dict(technology_shares_hv_europe, hv_map)
+    mv_europe = _build_mapped_dict(technology_shares_mv_europe, mv_map)
+    lv_europe = _build_mapped_dict(technology_shares_lv_europe, lv_map)
+
+    hv_ch = _build_mapped_dict(technology_shares_hv_ch, hv_map)
+    mv_ch = _build_mapped_dict(technology_shares_mv_ch, mv_map)
+    lv_ch = _build_mapped_dict(technology_shares_lv_ch, lv_map)
+
+    hv = (hv_europe | hv_ch)
+    mv = (mv_europe | mv_ch)
+    lv = (lv_europe | lv_ch)
 
     all_voltages = {}
     countries = set(hv) | set(mv) | set(lv)
@@ -1990,11 +2005,11 @@ def electricity_baseline(database: bd.Database = 'cutoff391', bw25_project_name:
         all_voltages[c].update(lv.get(c, {}))
 
     for c, out in all_voltages.items():
-        apply_pv_split_and_rebalance(out, lv_share=0.8)
+        _apply_pv_split_and_rebalance(out, lv_share=0.8)
 
-        normalize_group_proportional(out, "Share|ElectricityHV|", 1.0)
-        normalize_group_proportional(out, "Share|ElectricityMV|", 1.0)
-        normalize_group_proportional(out, "Share|ElectricityLV|", 1.0)
+        _normalize_group_proportional(out, "Share|ElectricityHV|", 1.0)
+        _normalize_group_proportional(out, "Share|ElectricityMV|", 1.0)
+        _normalize_group_proportional(out, "Share|ElectricityLV|", 1.0)
 
     df = (
         pd.DataFrame.from_dict(all_voltages, orient="index")
@@ -2011,6 +2026,58 @@ def electricity_baseline(database: bd.Database = 'cutoff391', bw25_project_name:
 
     return df
 
+
+def heat_baseline(cutoff_db_name: str = 'cutoff391', bw25_project_name: str = 'bw25_matrix'):
+    bd.projects.set_current(bw25_project_name)
+    # Europe without Switzerland
+    act_cs_nat_gas_europe = [a for a in bd.Database(cutoff_db_name) if
+                      a['name'] == 'market for heat, central or small-scale, natural gas'
+                      and a['location'] == 'Europe without Switzerland'][0]
+    act_cs_not_nat_gas_europe = [a for a in bd.Database(cutoff_db_name) if
+                          a['name'] == 'market for heat, central or small-scale, other than natural gas'
+                          and a['location'] == 'Europe without Switzerland'][0]
+    act_district_nat_gas_europe = [a for a in bd.Database(cutoff_db_name) if
+                            a['name'] == 'market for heat, district or industrial, natural gas'
+                            and a['location'] == 'Europe without Switzerland'][0]
+    act_district_not_nat_gas_europe = [a for a in bd.Database(cutoff_db_name) if
+                                a['name'] == 'market for heat, district or industrial, other than natural gas'
+                                and a['location'] == 'Europe without Switzerland'][0]
+    technology_shares_cs_nat_gas_europe = _voltage_loop(act_cs_nat_gas_europe)
+    technology_shares_cs_not_nat_gas_europe = _voltage_loop(act_cs_not_nat_gas_europe)
+    technology_shares_district_nat_gas_europe = _voltage_loop(act_district_nat_gas_europe)
+    technology_shares_district_not_nat_gas_europe = _voltage_loop(act_district_not_nat_gas_europe)
+
+    # Switzerland (CH)
+    act_cs_nat_gas_ch = [a for a in bd.Database(cutoff_db_name) if
+                      a['name'] == 'market for heat, central or small-scale, natural gas'
+                      and a['location'] == 'CH'][0]
+    act_cs_not_nat_gas_ch = [a for a in bd.Database(cutoff_db_name) if
+                          a['name'] == 'market for heat, central or small-scale, other than natural gas'
+                          and a['location'] == 'CH'][0]
+    act_district_nat_gas_ch = [a for a in bd.Database(cutoff_db_name) if
+                            a['name'] == 'market for heat, district or industrial, natural gas'
+                            and a['location'] == 'CH'][0]
+    act_district_not_nat_gas_ch = [a for a in bd.Database(cutoff_db_name) if
+                                a['name'] == 'market for heat, district or industrial, other than natural gas'
+                                and a['location'] == 'CH'][0]
+    technology_shares_cs_nat_gas_ch = _voltage_loop(act_cs_nat_gas_ch)
+    technology_shares_cs_not_nat_gas_ch = _voltage_loop(act_cs_not_nat_gas_ch)
+    technology_shares_district_nat_gas_ch = _voltage_loop(act_district_nat_gas_ch)
+    technology_shares_district_not_nat_gas_ch = _voltage_loop(act_district_not_nat_gas_ch)
+
+    return (
+            technology_shares_cs_nat_gas_europe,
+            technology_shares_district_nat_gas_europe,
+            technology_shares_district_not_nat_gas_europe,
+            technology_shares_cs_not_nat_gas_europe,
+            technology_shares_district_nat_gas_ch,
+            technology_shares_district_not_nat_gas_ch,
+        technology_shares_cs_nat_gas_ch,
+        technology_shares_cs_not_nat_gas_ch
+    )
+
+
+df = electricity_baseline()
 
 industry_lcia, industry_carriers, energy_lcia, energy_carriers = analysis(custom_db_names=['custom_2020', 'custom_2050'],
               save_folder=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\results')
