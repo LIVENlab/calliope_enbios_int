@@ -1093,7 +1093,7 @@ production pathways:
       reference product: heat, central or small-scale, other than natural gas
       exists in original database: True
 
-  # HEAT, DISTRICT OR INDUSTRIAL: METHANE, COAL FURNACE, COAL CO-GEN, OIL FURNACE, OIL COGEN, WASTE, BIOMASS
+  # HEAT, DISTRICT OR INDUSTRIAL: METHANE, COAL FURNACE, COAL CO-GEN, OIL FURNACE, OIL COGEN, WASTE, BIOMASS, GEOTHERMAL
   HEAT_INDUSTRIAL_METHANE:
     production volume:
       variable: Share|HeatIndustrial|Methane
@@ -1148,6 +1148,14 @@ production pathways:
     ecoinvent alias:
       name: heat and power co-generation, wood chips, 6667 kW, state-of-the-art 2014
       reference product: heat, district or industrial, other than natural gas
+      exists in original database: True  # NOTE: by default it takes CH
+
+  HEAT_INDUSTRIAL_GEOTHERMAL:
+    production volume:
+      variable: Share|HeatIndustrial|Geothermal
+    ecoinvent alias:
+      name: heat production, deep geothermal
+      reference product: heat, deep geothermal
       exists in original database: True  # NOTE: by default it takes CH
 
   # COAL (ENERGY USES): HARD COAL, HARD COAL IMPORTS, CHARCOAL.
@@ -1696,6 +1704,7 @@ markets:
       - HEAT_INDUSTRIAL_OIL_COGENERATION
       - HEAT_INDUSTRIAL_WASTE
       - HEAT_INDUSTRIAL_BIOMASS
+      - HEAT_INDUSTRIAL_GEOTHERMAL
     replaces:
       - name: market for heat, district or industrial, natural gas
         product: heat, district or industrial, natural gas
