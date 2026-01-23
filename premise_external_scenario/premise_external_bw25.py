@@ -655,7 +655,6 @@ def substitute_windtrace_offshore(ecoinvent_database_name: str,
 
 def demand_array(new_db_name: str, analysis_act, amount: float,
                  lcia_method: tuple = ('EF v3.1', 'climate change', 'global warming potential (GWP100)')):
-    # TODO: add coal imports and methane imports (total and Russia)
     new_acts = [a for a in bd.Database(new_db_name) if '(new)' in a['name']]
     new_acts_set = set(new_acts)
     my_functional_unit, data_objs, _ = bd.prepare_lca_inputs(
@@ -679,7 +678,11 @@ def demand_array(new_db_name: str, analysis_act, amount: float,
                 'Heat, central (MJ)': 0.0,
                 'Heat, district (MJ)': 0.0,
                 'Coal (kg)': 0.0,
-                'Lignite (kg)': 0.0}
+                'Lignite (kg)': 0.0,
+                'Coal imports (kg)': 0.0,
+                'Methane imports (m3)': 0.0, # NOTE: there are GLOBAL imports (except European), which is a proxy of the European, but not exactly
+                'Methane imports RU (m3)': 0.0, # NOTE: there are GLOBAL imports from RU, which is a proxy of the European, but not exactly
+                }
     for product_id, row_index in lca_obj.dicts.product.items():
         product = bd.get_activity(product_id)
         amt = supply_array[row_index]
@@ -739,6 +742,15 @@ def demand_array(new_db_name: str, analysis_act, amount: float,
 
         elif 'market for lignite' in name:
             products['Lignite (kg)'] += amt
+
+        elif 'hard coal, import from' in name:
+            products['Coal imports (kg)'] += amt
+
+        elif 'natural gas, high pressure, import' in name and name not in ['NL', 'DE', 'BE', 'FR', 'IT', 'GB']:
+            products['Methane imports (m3)'] += amt
+
+        elif 'natural gas, high pressure, import from RU' in name:
+            products['Methane imports RU (m3)'] += amt
 
     return products
 
