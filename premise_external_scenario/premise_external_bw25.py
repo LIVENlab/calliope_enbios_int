@@ -1963,9 +1963,8 @@ def electricity_baseline(database: bd.Database = 'cutoff391', bw25_project_name:
     # Imports
     **{f"Share|ElectricityHV|Imports{cc}": [f"import from {cc}"] for cc in [
             "ES", "BG", "SE", "AT", "MK", "MD", "HR", "XK", "LU", "GR", "IS", "BA", "EE", "SK", "ME", "LT", "SI", "IE",
-            "BE",
-            "RS", "RO", "NL", "UA", "PL", "FR", "GB", "NO", "CZ", "MT", "DK", "IT", "LV", "DE", "PT", "FI", "BY", "GI",
-            "AL", "HU", "CH"
+            "BE", "RS", "RO", "NL", "UA", "PL", "FR", "GB", "NO", "CZ", "MT", "DK", "IT", "LV", "DE", "PT", "FI", "BY", "GI",
+            "AL", "HU", "CH", 'TR', "RU", "MA"
         ]},
 
     # MV
@@ -2107,11 +2106,17 @@ def methane_baseline(database_name: str = 'cutoff391', bw25_project_name: str = 
     }
     methane_act = [a for a in bd.Database(database_name) if a['name'] == 'market group for natural gas, high pressure'
                    and a['location'] == 'Europe without Switzerland'][0]
+    methane_act_ch = [a for a in bd.Database(database_name) if a['name'] == 'market for natural gas, high pressure'
+                   and a['location'] == 'CH'][0]
+
     technology_shares = _voltage_loop(methane_act)
+    technology_shares_ch = _voltage_loop(methane_act_ch)
     methane_map = {k: v for k, v in mapping_methane.items() if k.startswith("Share|Methane|")}
     methane = _build_mapped_dict(technology_shares, methane_map, 'methane')
+    methane_ch = _build_mapped_dict(technology_shares_ch, methane_map, 'methane')
+    methane_total = (methane | methane_ch)
     df = (
-        pd.DataFrame.from_dict(methane, orient="index")
+        pd.DataFrame.from_dict(methane_total, orient="index")
         .fillna(0.0)
         .rename_axis("country")
         .sort_index()
@@ -2161,8 +2166,6 @@ def build_baseline(scenario_data_path):
 
     # Save
     out.to_csv(save_path, index=False)
-    # TODO: fix imports RU i TR electricityHV
-    # TODO: add CH to methane data
     return save_path
 
 out = build_baseline(scenario_data_path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_test.csv')
