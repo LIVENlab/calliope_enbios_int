@@ -3171,7 +3171,8 @@ image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|HeatIndustria
 image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|HeatIndustrial|CoalCogeneration,share,0.0,0.0
 image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|HeatIndustrial|OilCogeneration,share,0.0,0.0
 image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|HeatIndustrial|Waste,share,0.09,0.09
-image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|HeatIndustrial|Biomass,share,0.1011111111111111,0.1011111111111111
+image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|HeatIndustrial|Biomass,share,0.0511111111111111,0.0511111111111111
+image,SSP2-Base,Business As Usual,Europe without Switzerland,Share|HeatIndustrial|Geothermal,share,0.05,0.05
 image,SSP2-Base,Business As Usual,"Europe, without Russia and Turkey",Share|Coal|HardCoal,share,1.0,1.0
 image,SSP2-Base,Business As Usual,"Europe, without Russia and Turkey",Share|Coal|HardCoalImportsRU,share,0.0,0.0
 image,SSP2-Base,Business As Usual,"Europe, without Russia and Turkey",Share|Coal|HardCoalImportsRLA,share,0.0,0.0
