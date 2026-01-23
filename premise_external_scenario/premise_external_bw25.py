@@ -17,6 +17,7 @@ import copy
 import matplotlib.colors as mcolors
 import re
 import os
+from pathlib import Path
 
 def import_ei_12():
     bi.import_ecoinvent_release(
@@ -1802,7 +1803,6 @@ def _map_country_mix(country_mix: dict, electricity_mapping: dict, carrier: str)
                 if keywords.lower() in item[0]:
                     amount = item[1]
             if amount == 0:
-                print(f'No keyword {keywords} found. Amount is set to 0')
                 out[share_key] = amount
             else:
                 out[share_key] = amount
@@ -2075,7 +2075,7 @@ def coal_baseline(database_name: str = 'cutoff391', bw25_project_name: str = 'bw
             continue
         out_key = mapping_coal[name]
         out[out_key] = ex['amount']
-    df = pd.DataFrame.from_dict({"'Europe, without Russia and Turkey'": out}, orient="index")
+    df = pd.DataFrame.from_dict({'Europe, without Russia and Turkey': out}, orient="index")
     return df
 
 def methane_baseline(database_name: str = 'cutoff391', bw25_project_name: str = 'bw25_matrix'):
@@ -2119,10 +2119,54 @@ def methane_baseline(database_name: str = 'cutoff391', bw25_project_name: str = 
     )
     return df
 
+def _wide_to_lookup(df: pd.DataFrame, index_name: str, region_name: str = "region") -> pd.DataFrame:
+    """
+    Turns a wide df (shares in columns) into long lookup: (region, variables) -> value.
+    Works whether `index_name` is an index or a column.
+    """
+    # If the key is in the index, bring it back as a column
+    if df.index.name == index_name:
+        df = df.reset_index()
 
-out = methane_baseline()
-out = coal_baseline()
-df_electricity = electricity_baseline()
+    # If it’s not the index but still not a column, also reset (covers unnamed index cases)
+    if index_name not in df.columns:
+        df = df.reset_index().rename(columns={"index": index_name})
+
+    long = df.melt(
+        id_vars=[index_name],
+        var_name="variables",
+        value_name="value"
+    ).rename(columns={index_name: region_name})
+
+    return long
+
+
+def build_baseline(scenario_data_path):
+    # data
+    scenario_data = pd.read_csv(scenario_data_path)
+    df_methane = methane_baseline()
+    df_methane = _wide_to_lookup(df_methane, 'country')
+    df_coal = coal_baseline()
+    df_coal = _wide_to_lookup(df_coal, 'country')
+    df_electricity = electricity_baseline()
+    df_electricity = _wide_to_lookup(df_electricity, 'country')
+    lookup = pd.concat([df_electricity, df_methane, df_coal], ignore_index=True)
+
+    out = scenario_data.merge(lookup, on=["region", "variables"], how="left")
+    out["2020"] = out["2020"].fillna(out["value"])
+    out = out.drop(columns=["value"])
+
+    in_path = Path(scenario_data_path)
+    save_path = in_path.with_name(f"{in_path.stem}_2020{in_path.suffix}")
+
+    # Save
+    out.to_csv(save_path, index=False)
+    # TODO: fix imports RU i TR electricityHV
+    # TODO: add CH to methane data
+    return save_path
+
+out = build_baseline(scenario_data_path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_test.csv')
+pass
 
 industry_lcia, industry_carriers, energy_lcia, energy_carriers = analysis(custom_db_names=['custom_2020', 'custom_2050'],
               save_folder=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\results')
