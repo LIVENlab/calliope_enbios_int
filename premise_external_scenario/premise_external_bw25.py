@@ -653,6 +653,72 @@ def substitute_windtrace_offshore(ecoinvent_database_name: str,
 # CREATE SCENARIO VALUES #
 ##########################
 
+def electricity_scenario_values(technology_updates: dict, keep_nuclears: bool, keep_imports: bool,
+                                baseline_data: pd.DataFrame, regions: list = None):
+    """
+    technology_updates: increase with respect to the current value. An example follows:
+    technology_updates = {"Share|ElectricityHV|Geothermal": 0.2, # this means if geothermal today is 5%, now it will be
+    "Share|ElectricityHV|Biomass": ,
+    "Share|ElectricityHV|Biogas",
+    "Share|ElectricityHV|WindOnshore",
+    "Share|ElectricityHV|WindOffshore",
+    """
+    # TODO: NOTE: what about +20% of 0?
+    # High Voltage
+    ## Classifications ##
+    hv_renewables = [
+        "Share|ElectricityHV|Geothermal",
+        "Share|ElectricityHV|WindOnshore",
+        "Share|ElectricityHV|WindOffshore",
+        "Share|ElectricityHV|Biogas",
+        "Share|ElectricityHV|Biomass",
+        "Share|ElectricityHV|HydroRunofRiver",
+        "Share|ElectricityHV|HydroReservoir",
+        "Share|ElectricityHV|SolarThermal",
+        "Share|ElectricityHV|SolarPVOpen",
+        "Share|ElectricityHV|Hydrogen",
+        "Share|ElectricityHV|BatteryHydro",
+    ]
+    imports_list = [f"Share|ElectricityHV|Imports{cc}" for cc in [
+        "ES", "BG", "SE", "AT", "MK", "MD", "HR", "XK", "LU", "GR", "IS", "BA", "EE", "SK", "ME", "LT", "SI", "IE",
+        "BE", "RS", "RO", "NL", "UA", "PL", "FR", "GB", "NO", "CZ", "MT", "DK", "IT", "LV", "DE", "PT", "FI", "BY",
+        "GI", "AL", "HU", "CH", 'TR', "RU", "MA"
+    ]]
+
+    ## Values ##
+    # TODO: check what the function does. Give the option of doing it for certain regions only.
+    hv_renewables_sum = (
+            baseline_data
+            .loc[baseline_data["variables"].isin(hv_renewables)]
+            .groupby("region")["2020"]
+            .sum()
+        )
+    imports_sum = baseline_data.loc[
+        baseline_data["variables"].isin(imports_list),
+        "2020"
+    ].sum()
+
+
+    if keep_nuclears and keep_imports:
+        # keep_hv = renewables + imports + nuclears
+        # modify = 1 - keep_hv
+        pass
+    elif keep_nuclears and not keep_imports:
+        # keep_hv = renewables + nuclears
+        # modify = 1 - keep_hv
+        pass
+    elif not keep_nuclears and keep_imports:
+        # keep_hv = renewables + imports
+        # modify = 1 - keep_hv
+        pass
+    else:
+        # keep_hv = renewables
+        # modify = 1 - keep_hv
+        pass
+
+    pass
+
+
 def demand_array(new_db_name: str, analysis_act, amount: float,
                  lcia_method: tuple = ('EF v3.1', 'climate change', 'global warming potential (GWP100)')):
     new_acts = [a for a in bd.Database(new_db_name) if '(new)' in a['name']]
@@ -808,12 +874,6 @@ def pes_demand(biosphere_db_name: str, analysis_act, amount: float,
             raw_materials["Biomass, raw (MJ)"] += value
 
     return raw_materials
-
-def create_scenario_values(new_db_name: str, csv_file):
-    # find new acts
-    new_acts = [a for a in bd.Database(new_db_name) if ['(new)' in a['name']]]
-
-    pass
 
 
 def plot_input_data(
@@ -1780,14 +1840,6 @@ def run():
     )
 
 
-LV_RES_PV = "Share|ElectricityLV|SolarPVRoofResidential"
-LV_TRANS  = "Share|ElectricityLV|TransformationMVLV"
-
-MV_COM_PV = "Share|ElectricityMV|SolarPVRoofCommercial"
-MV_WASTE  = "Share|ElectricityMV|Waste"
-MV_TRANS  = "Share|ElectricityMV|TransformationHVMV"
-
-
 def _map_country_mix(country_mix: dict, electricity_mapping: dict, carrier: str) -> dict:
     """
     country_mix: {"some activity name": amount, ...}
@@ -1855,6 +1907,13 @@ def _apply_pv_split_and_rebalance(out: dict, lv_share: float = 0.8, eps: float =
       MV_COM_PV := mv_pv
       MV_TRANS  := 1 - MV_WASTE - MV_COM_PV    (so MV sums to 1, assuming others 0 besides waste)
     """
+    LV_RES_PV = "Share|ElectricityLV|SolarPVRoofResidential"
+    LV_TRANS = "Share|ElectricityLV|TransformationMVLV"
+
+    MV_COM_PV = "Share|ElectricityMV|SolarPVRoofCommercial"
+    MV_WASTE = "Share|ElectricityMV|Waste"
+    MV_TRANS = "Share|ElectricityMV|TransformationHVMV"
+
     lv_pv_old = float(out.get(LV_RES_PV, 0.0))
     mv_waste  = float(out.get(MV_WASTE, 0.0))
 
@@ -1952,7 +2011,7 @@ def _voltage_loop(act):
     return technology_shares
 
 
-def electricity_baseline(database: bd.Database = 'cutoff391', bw25_project_name: str = 'bw25_matrix'):
+def electricity_baseline(database: str = 'cutoff391', bw25_project_name: str = 'bw25_matrix'):
     electricity_mapping = {# HV generation
     "Share|ElectricityHV|Coal": ["hard coal", 'lignite', 'peat'],
     "Share|ElectricityHV|CombinedCycle": ["electricity production, natural gas, combined cycle power plant"],
