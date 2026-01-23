@@ -14,7 +14,7 @@
 #                                *[fetch_loc(loc) for loc in list(self.geo.geo.keys())],
 #                            ]
 ---
-
+# TODO: add some sort of transport to all markets?
 production pathways:
   # BIOMASS: RESIDUES OR WOOD CHIPS
   BIOMASS_RESIDUES:  # NOTE: LHV 19 MJ/kg, as stated in the inventory. This assumed it is only used once dried!
