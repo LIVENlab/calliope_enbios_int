@@ -654,6 +654,7 @@ def substitute_windtrace_offshore(ecoinvent_database_name: str,
 
 def demand_array(new_db_name: str, analysis_act, amount: float,
                  lcia_method: tuple = ('EF v3.1', 'climate change', 'global warming potential (GWP100)')):
+    # TODO: add coal imports and methane imports (total and Russia)
     new_acts = [a for a in bd.Database(new_db_name) if '(new)' in a['name']]
     new_acts_set = set(new_acts)
     my_functional_unit, data_objs, _ = bd.prepare_lca_inputs(
@@ -1774,7 +1775,7 @@ MV_WASTE  = "Share|ElectricityMV|Waste"
 MV_TRANS  = "Share|ElectricityMV|TransformationHVMV"
 
 
-def _map_country_mix(country_mix: dict, electricity_mapping: dict) -> dict:
+def _map_country_mix(country_mix: dict, electricity_mapping: dict, carrier: str) -> dict:
     """
     country_mix: {"some activity name": amount, ...}
     electricity_mapping: {"Share|...": [keywords], ...}
@@ -1789,13 +1790,22 @@ def _map_country_mix(country_mix: dict, electricity_mapping: dict) -> dict:
         if not kws:
             out[share_key] = 0.0
             continue
-
-        s = 0.0
-        for k_low, v in items:
-            if any(kw in k_low for kw in kws):
-                s += v
-        out[share_key] = s
-
+        if carrier == 'electricity':
+            s = 0.0
+            for k_low, v in items:
+                if any(kw in k_low for kw in kws):
+                    s += v
+            out[share_key] = s
+        else:
+            amount = 0.0
+            for item in items:
+                if keywords.lower() in item[0]:
+                    amount = item[1]
+            if amount == 0:
+                print(f'No keyword {keywords} found. Amount is set to 0')
+                out[share_key] = amount
+            else:
+                out[share_key] = amount
     return out
 
 
@@ -1870,7 +1880,7 @@ def _build_mapped_dict(mix_by_country: dict, carrier_mapping: dict, carrier_name
     out_all = {}
 
     for country, country_mix in mix_by_country.items():
-        out = _map_country_mix(country_mix, carrier_mapping)
+        out = _map_country_mix(country_mix, carrier_mapping, carrier_name)
 
         if carrier_name == 'electricity':
         # Initial normalization (helps if sums are slightly off)
@@ -1890,6 +1900,20 @@ def _build_mapped_dict(mix_by_country: dict, carrier_mapping: dict, carrier_name
 
     return out_all
 
+
+def _treat_domestic_supply(name: str, amount: float, ex):
+    if name == 'natural gas, high pressure, domestic supply with seasonal storage':
+        act = ex.input
+        out = {}
+        for e in act.technosphere():
+            name_ = e.input['name']
+            amount_ = e['amount'] * amount
+            if name_ in ['petroleum and gas production, onshore', 'petroleum and gas production, offshore']:
+                out[name_] = amount_
+        return out
+    return None
+
+
 def _voltage_loop(act):
     technology_shares = {}
     if 'group' not in act['name']:
@@ -1907,7 +1931,11 @@ def _voltage_loop(act):
             for e in country_act.technosphere():
                 name = e.input['name']
                 amount = e['amount']
-                country_data[name] = amount
+                out = _treat_domestic_supply(name, amount, e)
+                if out is not None:
+                    country_data = (country_data | out)
+                else:
+                    country_data[name] = amount
             technology_shares[loc] = country_data
     return technology_shares
 
@@ -1979,7 +2007,6 @@ def electricity_baseline(database: bd.Database = 'cutoff391', bw25_project_name:
     technology_shares_mv_ch = _voltage_loop(act_mv_ch)
     technology_shares_hv_ch = _voltage_loop(act_hv_ch)
 
-
     # final data
     hv_map = {k: v for k, v in electricity_mapping.items() if k.startswith("Share|ElectricityHV|")}
     mv_map = {k: v for k, v in electricity_mapping.items() if k.startswith("Share|ElectricityMV|")}
@@ -2028,37 +2055,73 @@ def electricity_baseline(database: bd.Database = 'cutoff391', bw25_project_name:
     return df
 
 
-def heat_baseline(cutoff_db_name: str = 'cutoff391', bw25_project_name: str = 'bw25_matrix'):
-    """
-    data from Sayeg et al., 2017 (https://linkinghub.elsevier.com/retrieve/pii/S1364032116002318). 2009 EU
-    """
-    all_heats = {
-        "Share|HeatSmall|Biomass": 0.22,
-        "Share|HeatSmall|HeatPump": 0.12,
-        "Share|HeatSmall|Methane": 0.35,
-        "Share|HeatSmall|Coal": 0.03,
-        "Share|HeatSmall|Oil": 0.18,
-
-        "Share|HeatIndustrial|Methane": 0.40,
-        "Share|HeatIndustrial|CoalFurnace": 0.30,
-        "Share|HeatIndustrial|OilFurnace": 0.03,
-        "Share|HeatIndustrial|CoalCogeneration": 0.05,
-        "Share|HeatIndustrial|OilCogeneration": 0.02,
-        "Share|HeatIndustrial|Waste": 0.2,
-        "Share|HeatIndustrial|Biomass": 0.18,
+def coal_baseline(database_name: str = 'cutoff391', bw25_project_name: str = 'bw25_matrix'):
+    bd.projects.set_current(bw25_project_name)
+    mapping_coal = {
+        "hard coal mine operation and hard coal preparation": "Share|Coal|HardCoal",
+        "hard coal, import from RU": "Share|Coal|HardCoalImportsRU",
+        "hard coal, import from RLA": "Share|Coal|HardCoalImportsRLA",
+        "hard coal, import from RNA": "Share|Coal|HardCoalImportsRNA",
+        "hard coal, import from AU": "Share|Coal|HardCoalImportsAU",
+        "hard coal, import from ZA": "Share|Coal|HardCoalImportsZA",
+        "hard coal, import from ID": "Share|Coal|HardCoalImportsID",
     }
+    coal_act = [a for a in bd.Database(database_name) if a['name'] == 'market for hard coal'
+                and a['location'] == 'Europe, without Russia and Turkey'][0]
+    out = {}
+    for ex in coal_act.technosphere():
+        name = ex.input['name']
+        if name not in mapping_coal.keys():
+            continue
+        out_key = mapping_coal[name]
+        out[out_key] = ex['amount']
+    df = pd.DataFrame.from_dict({"'Europe, without Russia and Turkey'": out}, orient="index")
+    return df
 
+def methane_baseline(database_name: str = 'cutoff391', bw25_project_name: str = 'bw25_matrix'):
+    bd.projects.set_current(bw25_project_name)
+    mapping_methane = {
+        "Share|Methane|Membrane": "",
+        "Share|Methane|AminoWashing": "",
+        "Share|Methane|AmineScrubbing": "",
+        "Share|Methane|Swing": "",
+        "Share|Methane|SabatierBiological": "",
+        "Share|Methane|SabatierElectrochemical": "",
+        "Share|Methane|FossilOnshore": "petroleum and gas production, onshore",
+        "Share|Methane|FossilOffshore": "petroleum and gas production, offshore",
+        "Share|Methane|ImportGB": "from GB",
+        "Share|Methane|ImportDE": "from DE",
+        "Share|Methane|ImportIT": "from IT",
+        "Share|Methane|ImportFR": "from FR",
+        "Share|Methane|ImportFI": "from FI",
+        "Share|Methane|ImportQA": "from QA",
+        "Share|Methane|ImportNO": "from NO",
+        "Share|Methane|ImportBE": "from BE",
+        "Share|Methane|ImportLY": "from LY",
+        "Share|Methane|ImportRU": "from RU",
+        "Share|Methane|ImportDZ": "from DZ",
+        "Share|Methane|ImportNL": "from NL",
+        "Share|Methane|ImportTR": "from TR",
+        "Share|Methane|ImportUS": "from US",
+        "Share|Methane|ImportNG": "from NG",
+    }
+    methane_act = [a for a in bd.Database(database_name) if a['name'] == 'market group for natural gas, high pressure'
+                   and a['location'] == 'Europe without Switzerland'][0]
+    technology_shares = _voltage_loop(methane_act)
+    methane_map = {k: v for k, v in mapping_methane.items() if k.startswith("Share|Methane|")}
+    methane = _build_mapped_dict(technology_shares, methane_map, 'methane')
     df = (
-        pd.DataFrame.from_dict(all_heats, orient="index")
+        pd.DataFrame.from_dict(methane, orient="index")
         .fillna(0.0)
         .rename_axis("country")
         .sort_index()
         .sort_index(axis=1)
     )
-    # TODO: maybe no need to do it as a function
     return df
 
-df_heat = heat_baseline()
+
+out = methane_baseline()
+out = coal_baseline()
 df_electricity = electricity_baseline()
 
 industry_lcia, industry_carriers, energy_lcia, energy_carriers = analysis(custom_db_names=['custom_2020', 'custom_2050'],
