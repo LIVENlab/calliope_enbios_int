@@ -955,6 +955,204 @@ def electricity_scenario(
 
     return df_out, lambda_series
 
+def methane_scenario(
+    df: pd.DataFrame,
+    self_production: float,
+    self_production_technologies_shares: Dict[str, float],
+    *,
+    in_year_col: str = "2020",
+    out_year_col: str = "2050",
+    group_cols: Sequence[str] = ("model", "pathway", "scenario", "region"),
+    region_col: str = "region",
+    var_col: str = "variables",
+    tech_prefix: str = "Share|Methane|",
+    import_prefix: str = "Share|Methane|Import",
+    only_eu_imports: bool = False,
+    eu_import_countries: Sequence[str] = ("DE", "FI", "FR", "GB", "BE", "IT", "NL", "NO"),
+    apply_regions: Optional[Sequence[str]] = None,
+    tol: float = 1e-12,
+    sum_tol: float = 1e-6,
+    verbose: bool = False,
+) -> Tuple[pd.DataFrame, pd.Series]:
+    """
+    Best-effort, non-negative methane share reallocation:
+      - Production routes get self_production * provided route shares
+      - Imports get (1 - self_production) split proportionally to baseline import shares
+      - If only_eu_imports=True, all import share is distributed only across EU import variables
+        keeping baseline EU proportions (fallback to equal if EU baseline = 0)
+    Returns: (df_out, diagnostics_series)
+    """
+
+    # ---- validation ----
+    if not (0.0 <= float(self_production) <= 1.0):
+        raise ValueError("self_production must be between 0 and 1 (inclusive).")
+
+    prod_routes = [
+        "AmineScrubbing", "AminoWashing", "FossilOffshore", "FossilOnshore",
+        "Membrane", "SabatierBiological", "SabatierElectrochemical", "Swing",
+    ]
+    missing_keys = [k for k in prod_routes if k not in self_production_technologies_shares]
+    extra_keys = [k for k in self_production_technologies_shares.keys() if k not in prod_routes]
+    if missing_keys:
+        raise KeyError(f"self_production_technologies_shares missing keys: {missing_keys}")
+    if extra_keys:
+        raise KeyError(f"self_production_technologies_shares has unexpected keys: {extra_keys}")
+
+    shares_sum = float(sum(self_production_technologies_shares[k] for k in prod_routes))
+    if abs(shares_sum - 1.0) > 1e-8:
+        raise ValueError(
+            f"self_production_technologies_shares must sum to 1. Got {shares_sum:.12f}."
+        )
+
+    # ---- copy & column robustness ----
+    df_out = df.copy()
+    df_out.columns = [str(c) for c in df_out.columns]
+    in_year_col = str(in_year_col)
+    out_year_col = str(out_year_col)
+
+    needed = set(group_cols) | {var_col, in_year_col}
+    missing = needed - set(df_out.columns)
+    if missing:
+        raise KeyError(f"Missing columns: {missing}")
+
+    # initialize output year with baseline
+    df_out[out_year_col] = df_out[in_year_col]
+
+    # region filter
+    if apply_regions is not None:
+        region_mask = df_out[region_col].isin(set(apply_regions))
+    else:
+        region_mask = pd.Series(True, index=df_out.index)
+
+    # methane universe
+    methane_mask = df_out[var_col].astype(str).str.startswith(tech_prefix)
+    work_mask = region_mask & methane_mask
+    work_df = df_out.loc[work_mask].copy()
+
+    # build full variable names for production routes
+    prod_vars = [f"{tech_prefix}{k}" for k in prod_routes]
+    eu_import_vars = [f"{import_prefix}{cc}" for cc in eu_import_countries]
+
+    diagnostics = {}
+
+    for key, g in work_df.groupby(list(group_cols), sort=False):
+        idx = g.index
+        s0 = g.set_index(var_col)[in_year_col].astype(float)
+
+        # Identify import vars present in this group
+        all_vars = list(s0.index)
+        import_vars_present = [v for v in all_vars if str(v).startswith(import_prefix)]
+        # production vars present (we will set them; if missing, we can still add? Here: require present.)
+        missing_prod_rows = [v for v in prod_vars if v not in s0.index]
+        if missing_prod_rows:
+            raise KeyError(f"[{key}] Missing production route rows in data: {missing_prod_rows}")
+
+        # baseline import proportions (depending on only_eu_imports)
+        if only_eu_imports:
+            import_target_vars = [v for v in eu_import_vars if v in s0.index]
+            if not import_target_vars:
+                # If dataset has no EU import rows at all, fall back to whatever imports exist.
+                import_target_vars = import_vars_present
+
+            base = s0.reindex(import_target_vars).fillna(0.0)
+            base_sum = float(base.sum())
+            if base_sum > tol:
+                prop = base / base_sum
+            else:
+                # fallback: equal proportions among target import vars
+                if len(import_target_vars) > 0:
+                    prop = pd.Series(1.0 / len(import_target_vars), index=import_target_vars)
+                else:
+                    prop = pd.Series(dtype=float)  # no imports at all
+        else:
+            import_target_vars = import_vars_present
+            base = s0.reindex(import_target_vars).fillna(0.0)
+            base_sum = float(base.sum())
+            if base_sum > tol:
+                prop = base / base_sum
+            else:
+                if len(import_target_vars) > 0:
+                    prop = pd.Series(1.0 / len(import_target_vars), index=import_target_vars)
+                else:
+                    prop = pd.Series(dtype=float)
+
+        # compute new shares
+        out_vals = {}
+
+        # 1) production routes
+        for route in prod_routes:
+            v = f"{tech_prefix}{route}"
+            out_vals[v] = float(self_production) * float(self_production_technologies_shares[route])
+
+        # 2) imports (remaining)
+        import_total = 1.0 - float(self_production)
+        if len(prop) > 0:
+            for v, p in prop.items():
+                out_vals[v] = import_total * float(p)
+
+        # 3) any other methane vars (not production routes nor imports): keep baseline
+        for v in all_vars:
+            if v not in out_vals:
+                out_vals[v] = float(s0[v])
+
+        # sanity: enforce non-negativity softly (numerical)
+        for v in out_vals:
+            if out_vals[v] < -1e-10:
+                if verbose:
+                    print(f"[{key}] Warning: negative share for {v}: {out_vals[v]:.6g} -> clipped to 0.")
+                out_vals[v] = 0.0
+
+        # renormalize to sum to 1 in case "other methane vars" exist
+        total_sum = float(sum(out_vals[v] for v in all_vars))
+        if abs(total_sum - 1.0) > sum_tol:
+            # best-effort: scale only the "other" vars (not production, not selected import vars) down/up
+            fixed_set = set(prod_vars) | set(import_target_vars)
+            other_vars = [v for v in all_vars if v not in fixed_set]
+            fixed_sum = float(sum(out_vals[v] for v in fixed_set if v in out_vals))
+            target_other = 1.0 - fixed_sum
+            other_sum = float(sum(out_vals[v] for v in other_vars)) if other_vars else 0.0
+
+            if other_vars and other_sum > tol:
+                lam = target_other / other_sum
+                for v in other_vars:
+                    out_vals[v] = max(0.0, out_vals[v] * lam)
+            elif other_vars and abs(target_other) <= 1e-8:
+                for v in other_vars:
+                    out_vals[v] = 0.0
+            else:
+                # no "other" mass to adjust -> final renorm across all vars (rare)
+                if total_sum > tol:
+                    for v in all_vars:
+                        out_vals[v] = max(0.0, out_vals[v] / total_sum)
+
+            # recompute
+            total_sum = float(sum(out_vals[v] for v in all_vars))
+
+        if abs(total_sum - 1.0) > 1e-5 and verbose:
+            print(f"[{key}] Warning: methane shares sum to {total_sum:.8f} after adjustments.")
+
+        # write back
+        mapped = g[var_col].map(out_vals).to_numpy()
+        df_out.loc[idx, out_year_col] = mapped
+
+        diagnostics[key] = {
+            "self_production": float(self_production),
+            "import_total": float(1.0 - self_production),
+            "only_eu_imports": bool(only_eu_imports),
+            "n_import_vars_used": int(len(prop)),
+            "sum_out": float(total_sum),
+        }
+
+    diag_series = pd.Series(
+        {k: v["sum_out"] for k, v in diagnostics.items()},
+        name="sum_out",
+        dtype=float,
+    )
+    if len(diag_series) > 0:
+        diag_series.index = pd.MultiIndex.from_tuples(diag_series.index, names=list(group_cols))
+
+    return df_out, diag_series
+
 
 def demand_array(new_db_name: str, analysis_act, amount: float,
                  lcia_method: tuple = ('EF v3.1', 'climate change', 'global warming potential (GWP100)')):
@@ -2479,6 +2677,27 @@ def build_baseline(scenario_data_path):
 #out = build_baseline(scenario_data_path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_no_2050.csv')
 
 df = pd.read_csv(r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_no_2050_2020.csv')
+self_production_technology_shares = {
+    "AmineScrubbing": 0.1,
+    "AminoWashing": 0.1,
+    "FossilOffshore": 0.0,
+    "FossilOnshore": 0.0,
+    "Membrane": 0.2,
+    "SabatierBiological": 0.2,
+    "SabatierElectrochemical": 0.2,
+    "Swing": 0.2
+}
+df_out, diag_series = methane_scenario(df,
+                 self_production=0.5,
+                 in_year_col='2020',
+                 out_year_col='2050',
+                self_production_technologies_shares= self_production_technology_shares,
+                 only_eu_imports=False,
+                 apply_regions=['LT', 'MD', 'IE', 'XK', 'MK', 'GR', 'IS',  'RS', 'SK', 'BA', 'CH', 'LU', 'ME', 'DK',
+                                'RO', 'AL', 'PL', 'GI', 'RER', 'AT', 'ES', 'BY', 'CZ', 'LV', 'BG', 'HR', 'SE', 'PT',
+                                'RoE', 'UA', 'MT', 'HU', 'EE', 'SI'],  # all without producing countries
+                 verbose=True
+                 )
 total_renewables = [
         "Share|ElectricityHV|Geothermal",
         "Share|ElectricityHV|WindOnshore",
