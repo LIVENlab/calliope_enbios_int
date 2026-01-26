@@ -653,7 +653,7 @@ def substitute_windtrace_offshore(ecoinvent_database_name: str,
 # CREATE SCENARIO VALUES #
 ##########################
 
-def electricity_values(
+def electricity_scenario(
     df: pd.DataFrame,
     in_year_col: str = "2020",
     out_year_col: str = "2050",
@@ -661,8 +661,9 @@ def electricity_values(
     region_col: str = "region",
     var_col: str = "variables",
     tech_list: Optional[Sequence[str]] = None,
-    increase_key: str = "Share|ElectricityHV|WindOnshore",
-    increase_factor: float = 1.15,
+    technology_updates: Optional[Dict[str, float]] = None,  # <-- multiple updates at once (optional)
+    increase_key: Optional[str] = None,                     # <-- or single update (legacy-style)
+    increase_factor: float = 1.0,
     min_increase_share: float = 0.02,
     renewable_keys: Optional[Sequence[str]] = None,
     keep_all_renewables: bool = True,
@@ -671,293 +672,288 @@ def electricity_values(
     nuclear_key: str = "Share|ElectricityHV|Nuclear",
     imports_prefix: str = "Share|ElectricityHV|Imports",
     apply_regions: Optional[Sequence[str]] = None,
-    extra_fixed_keys: Optional[Sequence[str]] = None,   # <-- NEW
-    cap_infeasible: bool = True,                        # <-- NEW: if False -> raise instead of cap
+    extra_fixed_keys: Optional[Sequence[str]] = None,
     tol: float = 1e-9,
     sum_tol: float = 1e-6,
+    verbose: bool = True
 ) -> Tuple[pd.DataFrame, pd.Series]:
+
     if renewable_keys is None:
         renewable_keys = []
     if extra_fixed_keys is None:
         extra_fixed_keys = []
+    if technology_updates is None:
+        technology_updates = {}
+
+    def _allocate_updates_sequential(
+            desired: pd.Series,  # desired updated shares in total-mix space (after factor + floor)
+            cap: float,  # available_for_updated = 1 - fixed_sum
+            floor: float,
+            tol: float = 1e-12,
+            verbose: bool = False,
+            key=None,
+    ) -> pd.Series:
+        """
+        Never raises for infeasible floors. Allocates in order:
+        - Try to give each tech max(desired, floor)
+        - If cap runs out, give remaining to the current tech (possibly 0) and set the rest to 0.
+        """
+        out = pd.Series(0.0, index=desired.index, dtype=float)
+        remaining = max(0.0, float(cap))
+
+        for tech in desired.index:
+            if remaining <= tol:
+                if verbose:
+                    print(f"[{key}] tech '{tech}' skipped: mix already at 100% (no remaining share).")
+                out[tech] = 0.0
+                continue
+
+            want = float(desired[tech])
+            want = max(want, float(floor))  # try the floor, but we won't crash if it doesn't fit
+
+            give = min(want, remaining)
+            out[tech] = give
+            remaining -= give
+
+            if verbose and give + tol < want:
+                print(
+                    f"[{key}] best-effort cap reached with tech '{tech}': "
+                    f"requested={want:.6f}, applied={give:.6f}, remaining={remaining:.6f}"
+                )
+
+        return out
+
+    # allow legacy single update input
+    if increase_key is not None:
+        technology_updates = {**technology_updates, increase_key: float(increase_factor)}
 
     df_out = df.copy()
+
+    # ---- column robustness: Excel often reads 2020 as int ----
+    df_out.columns = [str(c) for c in df_out.columns]
+    in_year_col = str(in_year_col)
+    out_year_col = str(out_year_col)
 
     needed = set(group_cols) | {var_col, in_year_col}
     missing = needed - set(df_out.columns)
     if missing:
         raise KeyError(f"Missing columns: {missing}")
 
+    # Initialize out_year_col for all rows to baseline (so non-target regions keep same value)
+    df_out[out_year_col] = df_out[in_year_col]
+
     # Region filter
     if apply_regions is not None:
         region_mask = df_out[region_col].isin(set(apply_regions))
     else:
         region_mask = pd.Series(True, index=df_out.index)
 
-    # HV universe filter
+    # Universe: HV/MV/LV electricity shares
     if tech_list is not None:
-        hv_mask = df_out[var_col].isin(set(tech_list))
+        elec_mask = df_out[var_col].isin(set(tech_list))
     else:
-        hv_mask = df_out[var_col].astype(str).str.startswith("Share|ElectricityHV|")
+        elec_mask = df_out[var_col].astype(str).str.startswith("Share|Electricity")
 
-    work_mask = region_mask & hv_mask
-    hv_df = df_out.loc[work_mask].copy()
+    work_mask = region_mask & elec_mask
+    work_df = df_out.loc[work_mask].copy()
+
+    # Transformation variable names (from your file)
+    T_HVMV_var = "Share|ElectricityMV|TransformationHVMV"
+    T_MVLV_var = "Share|ElectricityLV|TransformationMVLV"
 
     lambdas = {}
 
-    for key, g in hv_df.groupby(list(group_cols), sort=False):
+    for key, g in work_df.groupby(list(group_cols), sort=False):
         idx = g.index
+
         s = g.set_index(var_col)[in_year_col].astype(float)
 
-        if increase_key not in s.index:
-            raise KeyError(f"[{key}] Missing increase_key '{increase_key}'")
+        # sanity
+        if T_HVMV_var not in s.index or T_MVLV_var not in s.index:
+            raise KeyError(f"[{key}] Missing transformation rows: {T_HVMV_var} and/or {T_MVLV_var}")
 
-        total = float(s.sum())
-        if abs(total - 1.0) > sum_tol:
-            raise ValueError(f"[{key}] HV shares must sum to 1. Got {total:.12f}")
+        # split vars
+        all_vars = list(s.index)
+        is_transf = {T_HVMV_var, T_MVLV_var}
+        tech_vars = [v for v in all_vars if v not in is_transf]  # technologies only
 
-        # Build fixed set
+        # reject updates on transformations
+        bad = [k for k in technology_updates.keys() if k in is_transf]
+        if bad:
+            raise ValueError(f"[{key}] technology_updates cannot include transformations: {bad}")
+
+        # Build fixed set (in TOTAL MIX space)
         fixed = set(extra_fixed_keys)
-
         if keep_all_renewables:
             fixed |= set(renewable_keys)
         if keep_nuclear:
             fixed.add(nuclear_key)
         if keep_imports:
-            fixed |= {v for v in s.index if str(v).startswith(imports_prefix)}
-        # IMPORTANT: never fix the technology we are trying to increase
-        fixed.discard(increase_key)
-
-        if increase_key in fixed:
-            raise ValueError(f"[{key}] increase_key '{increase_key}' is fixed; cannot increase it.")
+            fixed |= {v for v in tech_vars if str(v).startswith(imports_prefix)}
+        # never fix updated techs
+        for k_upd in technology_updates.keys():
+            fixed.discard(k_upd)
 
         missing_fixed = [k for k in fixed if k not in s.index]
         if missing_fixed:
             raise KeyError(f"[{key}] Missing fixed techs in data: {missing_fixed[:10]}")
 
-        # Proposed increased value with floor
-        proposed = float(s[increase_key]) * float(increase_factor)
-        increased_value = max(proposed, float(min_increase_share))
+        # ---- Convert baseline to TOTAL MIX shares ----
+        T_MVLV = float(s[T_MVLV_var])
+        T_HVMV = float(s[T_HVMV_var])
 
-        # Scalable bucket = everything not fixed and not the increased tech
-        rest_keys = [k for k in s.index if (k != increase_key and k not in fixed)]
-        scalable_sum = float(s.loc[rest_keys].sum())
+        total = pd.Series(0.0, index=tech_vars)
 
-        fixed_sum = float(s.loc[list(fixed)].sum()) if fixed else 0.0
-        if increased_value + fixed_sum > 1.0 + tol:
-            if not cap_infeasible:
-                raise ValueError(
-                    f"[{key}] Infeasible without capping: "
-                    f"{increase_key} would be {increased_value:.6f} and fixed sum {fixed_sum:.6f} > 1."
-                )
-
-            capped_value = max(1.0 - fixed_sum, 0.0)
-
-            # Optional: classify reason (heuristics)
-            W_old = float(s[increase_key])
-            low_scalable_threshold = 0.05
-            high_wind_threshold = 0.60
-
-            if scalable_sum <= low_scalable_threshold and W_old < high_wind_threshold:
-                reason = "LOW_SCALABLE_SHARE"
-            elif W_old >= high_wind_threshold:
-                reason = "HIGH_WIND_SATURATION"
+        for v in tech_vars:
+            sv = float(s[v])
+            if "|ElectricityLV|" in str(v):
+                total[v] = sv
+            elif "|ElectricityMV|" in str(v):
+                # MV tech contributes via MV->LV
+                total[v] = sv * T_MVLV
+            elif "|ElectricityHV|" in str(v):
+                # HV contributes via HV->MV and MV->LV
+                total[v] = sv * T_HVMV * T_MVLV
             else:
-                reason = "LIMITED_HEADROOM"
+                # not expected, but keep as direct
+                total[v] = sv
 
-            print(
-                f"[CAP APPLIED | {reason}] {key}: "
-                f"{increase_key} capped from {increased_value:.6f} to {capped_value:.6f}; "
-                f"fixed_sum={fixed_sum:.6f}, scalable_sum={scalable_sum:.6f}"
-            )
+        if abs(float(total.sum()) - 1.0) > sum_tol:
+            raise ValueError(f"[{key}] Total-mix shares must sum to 1. Got {float(total.sum()):.12f}")
 
-            increased_value = capped_value
+        # ---- Apply updates in TOTAL MIX space ----
+        total_new = total.copy()
 
-        # Apply increase + keep fixed
-        s_new = s.copy()
-        s_new[increase_key] = increased_value
+        for tech, factor in technology_updates.items():
+            if tech not in total_new.index:
+                raise KeyError(f"[{key}] Update tech not found in data: {tech}")
+            proposed = float(total[tech]) * float(factor)
+            total_new[tech] = max(proposed, float(min_increase_share))
+
+        # Keep fixed constant (in total-mix)
         for kfix in fixed:
-            s_new[kfix] = s[kfix]
+            total_new[kfix] = total[kfix]
 
         # Scale the rest
-        rest_sum_old = float(s.loc[rest_keys].sum())
-        target_rest_sum = 1.0 - increased_value - fixed_sum
+        updated = list(technology_updates.keys())
+        rest_keys = [v for v in total_new.index if (v not in fixed and v not in set(updated))]
 
-        if target_rest_sum < -tol:
-            raise ValueError(f"[{key}] Increase + fixed exceed 1 (target_rest_sum={target_rest_sum:.12f}).")
+        fixed_sum = float(total_new.loc[list(fixed)].sum()) if fixed else 0.0
+        upd_sum = float(total_new.loc[updated].sum()) if updated else 0.0
+        target_rest = 1.0 - fixed_sum - upd_sum
 
-        mapped = g[var_col].map(s_new)
+        rest_old_sum = float(total.loc[rest_keys].sum())
 
-        if out_year_col not in df_out.columns:
-            df_out[out_year_col] = pd.NA
+        if target_rest >= -tol:
+            # Normal feasible case: scale rest non-negatively
+            if rest_old_sum <= tol:
+                if abs(target_rest) <= 1e-8:
+                    lam = 1.0
+                    # nothing to do
+                else:
+                    raise ValueError(
+                        f"[{key}] No remaining mass to scale but target_rest={target_rest:.12f} > 0."
+                    )
+            else:
+                lam = target_rest / rest_old_sum
+                total_new.loc[rest_keys] = total.loc[rest_keys] * lam
 
-        df_out.loc[idx, out_year_col] = mapped.to_numpy()
+        else:
+            # Infeasible because fixed + updated > 1:
+            # Best-effort: allocate to updated techs sequentially until we hit 1, set rest to 0.
 
-        if rest_sum_old <= tol:
-            # If no scalable mass remains, only OK if target_rest_sum is ~0
-            if abs(target_rest_sum) <= 1e-8:
-                lambdas[key] = 1.0
-                df_out.loc[idx, out_year_col] = g[var_col].map(s_new).values
-                continue
-            raise ValueError(f"[{key}] No remaining mass to scale but target_rest_sum > 0.")
+            available_for_updated = 1.0 - fixed_sum
+            available_for_updated = max(0.0, float(available_for_updated))
 
-        lam = target_rest_sum / rest_sum_old
+            # Desired updated shares (after applying factor + floor rule)
+            upd_desired = total_new.loc[updated].astype(float)
+
+            # Sequential allocation in the SAME ORDER as technology_updates (dict order)
+            # Ensure 'updated' preserves that order:
+            updated_ordered = list(technology_updates.keys())
+            upd_desired = upd_desired.loc[updated_ordered]
+
+            upd_applied = _allocate_updates_sequential(
+                desired=upd_desired,
+                cap=available_for_updated,
+                floor=float(min_increase_share),
+                tol=tol,
+                verbose=verbose,
+                key=key,
+            )
+
+            # Optional reporting for techs that ended up at 0 due to saturation
+            if verbose:
+                for tech in updated_ordered:
+                    if float(upd_applied[tech]) <= tol:
+                        print(f"[{key}] tech '{tech}' cannot be applied: mix already at 100%.")
+
+            total_new.loc[updated_ordered] = upd_applied
+            total_new.loc[rest_keys] = 0.0
+            lam = 0.0
+
         lambdas[key] = lam
-        s_new.loc[rest_keys] = s.loc[rest_keys] * lam
 
-        total_new = float(s_new.sum())
-        if abs(total_new - 1.0) > 1e-8:
-            raise RuntimeError(f"[{key}] Numerical issue: new sum {total_new:.12f}")
+        if abs(float(total_new.sum()) - 1.0) > 1e-8:
+            raise RuntimeError(f"[{key}] Numerical issue: new total sum {float(total_new.sum()):.12f}")
 
-        df_out.loc[idx, out_year_col] = g[var_col].map(s_new).values
+        # ---- Reconstruct LV/MV/HV shares + transformations ----
+        # LV non-transf totals are direct LV shares
+        lv_vars = [v for v in tech_vars if "|ElectricityLV|" in str(v)]
+        mv_vars = [v for v in tech_vars if "|ElectricityMV|" in str(v)]
+        hv_vars = [v for v in tech_vars if "|ElectricityHV|" in str(v)]
+
+        LV_nontransf_sum = float(total_new.loc[lv_vars].sum()) if lv_vars else 0.0
+        new_T_MVLV = 1.0 - LV_nontransf_sum
+        if new_T_MVLV < -1e-8:
+            raise ValueError(f"[{key}] LV techs exceed 1 (sum={LV_nontransf_sum:.12f}).")
+
+        # HV total is whatever you assigned to HV techs
+        HV_total_sum = float(total_new.loc[hv_vars].sum()) if hv_vars else 0.0
+
+        # MV total is the residual that must equal new_T_MVLV
+        MV_total_sum = float(total_new.loc[mv_vars].sum()) if mv_vars else 0.0
+
+        # consistency: HV+MV should equal new_T_MVLV (everything that comes from MV)
+        if abs((HV_total_sum + MV_total_sum) - new_T_MVLV) > 1e-6:
+            # This can happen if the dataset structure differs; fail loudly
+            raise ValueError(
+                f"[{key}] Inconsistent totals: HV_total_sum + MV_total_sum = "
+                f"{HV_total_sum + MV_total_sum:.12f} but TransformationMVLV would be {new_T_MVLV:.12f}."
+            )
+
+        # compute new T_HVMV inside MV mix
+        if new_T_MVLV <= tol:
+            new_T_HVMV = 0.0
+        else:
+            new_T_HVMV = HV_total_sum / new_T_MVLV
+
+        # write out_year_col values row-by-row
+        out_vals = {}
+
+        # LV
+        out_vals[T_MVLV_var] = new_T_MVLV
+        for v in lv_vars:
+            out_vals[v] = float(total_new[v])
+
+        # MV
+        out_vals[T_HVMV_var] = new_T_HVMV
+        for v in mv_vars:
+            out_vals[v] = 0.0 if new_T_MVLV <= tol else float(total_new[v] / new_T_MVLV)
+
+        # HV
+        for v in hv_vars:
+            out_vals[v] = 0.0 if HV_total_sum <= tol else float(total_new[v] / HV_total_sum)
+
+        # assign back to df_out
+        mapped = g[var_col].map(out_vals).to_numpy()
+        df_out.loc[idx, out_year_col] = mapped
 
     lambda_series = pd.Series(lambdas, name="lambda_scale")
     if len(lambda_series) > 0:
         lambda_series.index = pd.MultiIndex.from_tuples(lambda_series.index, names=list(group_cols))
 
     return df_out, lambda_series
-
-
-def apply_multiple_tech_updates_per_group(
-    df: pd.DataFrame,
-    technology_updates: Dict[str, float],
-    *,
-    in_year_col: str = "2020",
-    out_year_col: str = "2050",
-    group_cols: Sequence[str] = ("model", "pathway", "scenario", "region"),
-    region_col: str = "region",
-    var_col: str = "variables",
-    tech_list: Optional[Sequence[str]] = None,
-    renewable_keys: Optional[Sequence[str]] = None,
-    keep_all_renewables: bool = True,
-    keep_nuclear: bool = True,
-    keep_imports: bool = True,
-    nuclear_key: str = "Share|ElectricityHV|Nuclear",
-    imports_prefix: str = "Share|ElectricityHV|Imports",
-    apply_regions: Optional[Sequence[str]] = None,
-    min_increase_share: float = 0.02,
-    cap_infeasible: bool = True,   # capping during the REAL run (dry-run never caps)
-) -> Tuple[pd.DataFrame, pd.Series]:
-    """
-    For each (model, pathway, scenario, region) group (restricted to apply_regions):
-      - Try updates in technology_updates order.
-      - Dry-run each next update with cap_infeasible=False; if infeasible, stop for that group only.
-      - Apply feasible updates for real (optionally with capping).
-
-    Returns:
-      df_out: updated dataframe
-      applied_per_group: Series indexed by MultiIndex(group_cols) with list of applied tech keys
-    """
-    if renewable_keys is None:
-        renewable_keys = []
-
-    df_out = df.copy()
-    if out_year_col not in df_out.columns:
-        df_out[out_year_col] = pd.NA
-
-    # Region filter
-    if apply_regions is not None:
-        region_mask = df_out[region_col].isin(set(apply_regions))
-    else:
-        region_mask = pd.Series(True, index=df_out.index)
-
-    # HV universe filter (used only to identify which groups to process)
-    if tech_list is not None:
-        hv_mask = df_out[var_col].isin(set(tech_list))
-    else:
-        hv_mask = df_out[var_col].astype(str).str.startswith("Share|ElectricityHV|")
-
-    work_mask = region_mask & hv_mask
-
-    # Groups to process (only those that have HV rows and are in target regions)
-    groups_df = df_out.loc[work_mask, list(group_cols)].drop_duplicates()
-
-    applied_dict = {}
-
-    for _, grp_row in groups_df.iterrows():
-        key_tuple = tuple(grp_row[c] for c in group_cols)
-
-        # Slice df to this exact group
-        mask_group = pd.Series(True, index=df_out.index)
-        for c, v in zip(group_cols, key_tuple):
-            mask_group &= (df_out[c] == v)
-
-        df_group = df_out.loc[mask_group].copy()
-
-        already_applied: List[str] = []
-        applied_here: List[str] = []
-
-        for tech, factor in technology_updates.items():
-            # 1) DRY RUN (no capping): if this fails, stop for this group
-            try:
-                _df_test, _ = electricity_values(
-                    df_group,
-                    in_year_col=in_year_col,
-                    out_year_col=out_year_col,
-                    group_cols=group_cols,
-                    region_col=region_col,
-                    var_col=var_col,
-                    tech_list=tech_list,
-                    increase_key=tech,
-                    increase_factor=float(factor),
-                    min_increase_share=min_increase_share,
-                    renewable_keys=renewable_keys,
-                    keep_all_renewables=keep_all_renewables,
-                    keep_nuclear=keep_nuclear,
-                    keep_imports=keep_imports,
-                    nuclear_key=nuclear_key,
-                    imports_prefix=imports_prefix,
-                    apply_regions=None,                # group slice already isolates region
-                    extra_fixed_keys=already_applied,  # freeze earlier updated techs
-                    cap_infeasible=False,              # <-- feasibility test must NOT cap
-                )
-            except ValueError as e:
-                print(
-                    f"[STOP per-group] {key_tuple}: cannot apply '{tech}' (factor={factor}). "
-                    f"Reason: {e}"
-                )
-                break
-
-            # 2) REAL APPLY (may cap if enabled)
-            df_group, _ = electricity_values(
-                df_group,
-                in_year_col=in_year_col,
-                out_year_col=out_year_col,
-                group_cols=group_cols,
-                region_col=region_col,
-                var_col=var_col,
-                tech_list=tech_list,
-                increase_key=tech,
-                increase_factor=float(factor),
-                min_increase_share=min_increase_share,
-                renewable_keys=renewable_keys,
-                keep_all_renewables=keep_all_renewables,
-                keep_nuclear=keep_nuclear,
-                keep_imports=keep_imports,
-                nuclear_key=nuclear_key,
-                imports_prefix=imports_prefix,
-                apply_regions=None,
-                extra_fixed_keys=already_applied,
-                cap_infeasible=cap_infeasible,
-            )
-
-            already_applied.append(tech)
-            applied_here.append(tech)
-
-        # write back existing columns
-        df_out.loc[mask_group, df_out.columns] = df_group.reindex(columns=df_out.columns).to_numpy()
-
-        # write back the new output column (the important part)
-        df_out.loc[mask_group, out_year_col] = df_group[out_year_col].to_numpy()
-        applied_dict[key_tuple] = applied_here
-
-    applied_per_group = pd.Series(applied_dict, name="applied_updates")
-    if len(applied_per_group) > 0:
-        applied_per_group.index = pd.MultiIndex.from_tuples(
-            applied_per_group.index, names=list(group_cols)
-        )
-
-    return df_out, applied_per_group
 
 
 def demand_array(new_db_name: str, analysis_act, amount: float,
@@ -2480,14 +2476,10 @@ def build_baseline(scenario_data_path):
     out.to_csv(save_path, index=False)
     return save_path
 
-out = build_baseline(scenario_data_path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_no_2050.csv')
-technology_updates = {
-    "Share|ElectricityHV|Geothermal": 1.01,
-    "Share|ElectricityHV|WindOnshore": 1.05,
-    "Share|ElectricityHV|WindOffshore": 1.09,
-}
+#out = build_baseline(scenario_data_path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_no_2050.csv')
+
 df = pd.read_csv(r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_no_2050_2020.csv')
-hv_renewables = [
+total_renewables = [
         "Share|ElectricityHV|Geothermal",
         "Share|ElectricityHV|WindOnshore",
         "Share|ElectricityHV|WindOffshore",
@@ -2499,25 +2491,31 @@ hv_renewables = [
         "Share|ElectricityHV|SolarPVOpen",
         "Share|ElectricityHV|Hydrogen",
         "Share|ElectricityHV|BatteryHydro",
+    "Share|ElectricityLV|BatteryChemical",
+    "Share|ElectricityLV|SolarPVRoofResidential",
+    "Share|ElectricityMV|SolarPVRoofCommercial"
     ]
-df_new, applied_per_group = apply_multiple_tech_updates_per_group(
+technology_updates_ = { "Share|ElectricityHV|Geothermal": 1.01,
+                        "Share|ElectricityHV|WindOnshore": 1.05,
+                        "Share|ElectricityHV|WindOffshore": 1.09,
+                        "Share|ElectricityLV|SolarPVRoofResidential":1.15,
+                        "Share|ElectricityMV|SolarPVRoofCommercial":1.07, }
+df_new, lambdas = electricity_scenario(
     df,
-    technology_updates,
     in_year_col="2020",
     out_year_col="2050",
     group_cols=("model", "pathway", "scenario", "region"),
     region_col="region",
     var_col="variables",
-    renewable_keys=hv_renewables,
+    technology_updates=technology_updates_,
+    renewable_keys=total_renewables,
     keep_all_renewables=True,
     keep_nuclear=True,
     keep_imports=True,
-    apply_regions=["ES", "FR", "DE"],
+    apply_regions=None,
     min_increase_share=0.02,
-    cap_infeasible=True,
 )
 
-print(applied_per_group.head())
 
 pass
 
