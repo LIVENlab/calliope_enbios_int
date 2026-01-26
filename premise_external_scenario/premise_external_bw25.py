@@ -739,8 +739,13 @@ def electricity_scenario(
     if missing:
         raise KeyError(f"Missing columns: {missing}")
 
-    # Initialize out_year_col for all rows to baseline (so non-target regions keep same value)
-    df_out[out_year_col] = df_out[in_year_col]
+    # Ensure column exists and only fill missing values from baseline
+    if out_year_col not in df_out.columns:
+        df_out[out_year_col] = df_out[in_year_col]
+    else:
+        # Fill only empty / NaN values, keep existing values
+        mask = df_out[out_year_col].isna()
+        df_out.loc[mask, out_year_col] = df_out.loc[mask, in_year_col]
 
     # Region filter
     if apply_regions is not None:
@@ -2672,11 +2677,62 @@ def build_baseline(scenario_data_path):
 
     # Save
     out.to_csv(save_path, index=False)
+    return save_path, out
+
+
+def create_scenario(scenario_data_path, # should be always the same, with the shares of all technologies but electricity, methane and coal already given
+                    biomethane_production_share: float,
+                    biomethane_production_technology_shares: dict,
+                    methane_eu_imports_only: bool,
+                    electricity_technology_shares: Optional[Dict[str, float]],
+                    renewable_electricity_techs_list: Optional[Sequence[str]],
+                    keep_nuclear: bool,
+                    keep_imports: bool,
+                    methane_apply_regions: Optional[Sequence[str]] = [
+                        'LT', 'MD', 'IE', 'XK', 'MK', 'GR', 'IS', 'RS', 'SK', 'BA', 'CH', 'LU', 'ME', 'DK',
+                        'RO', 'AL', 'PL', 'GI', 'RER', 'AT', 'ES', 'BY', 'CZ', 'LV', 'BG', 'HR', 'SE', 'PT',
+                        'RoE', 'UA', 'MT', 'HU', 'EE', 'SI'], # all but current european producers (could choose another scenario)
+                    in_year_col: str = '2020',
+                    out_year_col: str = '2050',
+
+                    ):
+    # create baseline
+    path, out = build_baseline(scenario_data_path=scenario_data_path)
+
+    # create methane scenario
+    df_out, diag_series = methane_scenario(df=out,
+                                           self_production=biomethane_production_share,
+                                           in_year_col=in_year_col,
+                                           out_year_col=out_year_col,
+                                           self_production_technologies_shares=biomethane_production_technology_shares,
+                                           only_eu_imports=methane_eu_imports_only,
+                                           apply_regions=methane_apply_regions,
+                                           verbose=True
+                                           )
+    # add electricity scenario
+    df_final, lambda_series = electricity_scenario(df=df_out,
+                                    in_year_col=in_year_col,
+                                    out_year_col=out_year_col,
+                                    group_cols=("model", "pathway", "scenario", "region"),
+                                    region_col="region",
+                                    var_col="variables",
+                                    technology_updates=electricity_technology_shares,
+                                    renewable_keys=renewable_electricity_techs_list,
+                                    keep_all_renewables=True,
+                                    keep_nuclear=keep_nuclear,
+                                    keep_imports=keep_imports,
+                                    apply_regions=None, # apply to whatever regions I want
+                                    min_increase_share=0.02, # if the technology has a 0, with how much it should start
+                                    )
+
+    in_path = Path(scenario_data_path)
+    save_path = in_path.with_name(f"{in_path.stem}_2020_final_{in_path.suffix}")
+
+    # Save
+    df_final.to_csv(save_path, index=False)
     return save_path
 
-#out = build_baseline(scenario_data_path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_no_2050.csv')
 
-df = pd.read_csv(r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_no_2050_2020.csv')
 self_production_technology_shares = {
     "AmineScrubbing": 0.1,
     "AminoWashing": 0.1,
@@ -2687,17 +2743,12 @@ self_production_technology_shares = {
     "SabatierElectrochemical": 0.2,
     "Swing": 0.2
 }
-df_out, diag_series = methane_scenario(df,
-                 self_production=0.5,
-                 in_year_col='2020',
-                 out_year_col='2050',
-                self_production_technologies_shares= self_production_technology_shares,
-                 only_eu_imports=False,
-                 apply_regions=['LT', 'MD', 'IE', 'XK', 'MK', 'GR', 'IS',  'RS', 'SK', 'BA', 'CH', 'LU', 'ME', 'DK',
-                                'RO', 'AL', 'PL', 'GI', 'RER', 'AT', 'ES', 'BY', 'CZ', 'LV', 'BG', 'HR', 'SE', 'PT',
-                                'RoE', 'UA', 'MT', 'HU', 'EE', 'SI'],  # all without producing countries
-                 verbose=True
-                 )
+technology_updates_ = {
+                        "Share|ElectricityHV|WindOnshore": 1.50,
+                        "Share|ElectricityHV|WindOffshore": 1.20,
+                        "Share|ElectricityLV|SolarPVRoofResidential":2.0,
+                        "Share|ElectricityMV|SolarPVRoofCommercial":2.0, }
+
 total_renewables = [
         "Share|ElectricityHV|Geothermal",
         "Share|ElectricityHV|WindOnshore",
@@ -2714,27 +2765,18 @@ total_renewables = [
     "Share|ElectricityLV|SolarPVRoofResidential",
     "Share|ElectricityMV|SolarPVRoofCommercial"
     ]
-technology_updates_ = { "Share|ElectricityHV|Geothermal": 1.01,
-                        "Share|ElectricityHV|WindOnshore": 1.05,
-                        "Share|ElectricityHV|WindOffshore": 1.09,
-                        "Share|ElectricityLV|SolarPVRoofResidential":1.15,
-                        "Share|ElectricityMV|SolarPVRoofCommercial":1.07, }
-df_new, lambdas = electricity_scenario(
-    df,
-    in_year_col="2020",
-    out_year_col="2050",
-    group_cols=("model", "pathway", "scenario", "region"),
-    region_col="region",
-    var_col="variables",
-    technology_updates=technology_updates_,
-    renewable_keys=total_renewables,
-    keep_all_renewables=True,
-    keep_nuclear=True,
-    keep_imports=True,
-    apply_regions=None,
-    min_increase_share=0.02,
-)
 
+create_scenario(scenario_data_path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_no_2050.csv',
+                biomethane_production_share=0.5,
+                biomethane_production_technology_shares=self_production_technology_shares,
+                methane_eu_imports_only=False,
+                electricity_technology_shares=technology_updates_,
+                renewable_electricity_techs_list=total_renewables,
+                keep_imports=True,
+                keep_nuclear=True
+                )
+
+create_custom_database(output_database_name="custom_2050_test", year=2050)
 
 pass
 
