@@ -117,36 +117,6 @@ def create_custom_database(output_database_name: str,
                     if not exchange['name'] == act['name']:
                         exchange['product'] = 'methane, high pressure (new)'
                         exchange['name'] = 'market for methane, high pressure (new)'
-    locations = [
-        "DE", "GB", "NL", "NO", "RO"
-    ]
-    acts_to_be_replaced = [a for a in data if a['name'] == 'petroleum and gas production, offshore' and a['reference product'] == 'natural gas, high pressure' and a['location'] in locations]
-    for replaceable_act in acts_to_be_replaced:
-        for act in data:
-            for exchange in ws.technosphere(act):
-                if (exchange['product'] == replaceable_act['reference product'] and
-                        exchange['name'] == replaceable_act['name'] and
-                        exchange['unit'] == replaceable_act['unit'] and
-                        exchange['location'] == replaceable_act['location']):
-                    if not exchange['name'] == act['name']:
-                        exchange['product'] = 'methane, high pressure (new)'
-                        exchange['name'] = 'market for methane, high pressure (new)'
-
-    locations = [
-        "NL", "RO", "GB", "DE"
-    ]
-    acts_to_be_replaced = [a for a in data if a['name'] == 'petroleum and gas production, onshore' and a['reference product'] == 'natural gas, high pressure' and a['location'] in locations]
-
-    for replaceable_act in acts_to_be_replaced:
-        for act in data:
-            for exchange in ws.technosphere(act):
-                if (exchange['product'] == replaceable_act['reference product'] and
-                        exchange['name'] == replaceable_act['name'] and
-                        exchange['unit'] == replaceable_act['unit'] and
-                        exchange['location'] == replaceable_act['location']):
-                    if not exchange['name'] == act['name']:
-                        exchange['product'] = 'methane, high pressure (new)'
-                        exchange['name'] = 'market for methane, high pressure (new)'
 
 
     # biomass substitution
@@ -1178,11 +1148,11 @@ def demand_array(new_db_name: str, analysis_act, amount: float,
                 'Methane (m3)': 0.0,
                 'Carbon dioxide (kg)': 0.0,
                 'Lubricating oil (kg)': 0.0,
-                'Electricity, high voltage (kWh)': 0.0,
-                'Electricity, low voltage (kWh)': 0.0,
-                'Electricity, medium voltage (kWh)': 0.0,
-                'Heat, central (MJ)': 0.0,
-                'Heat, district (MJ)': 0.0,
+                'Electricity high voltage (kWh)': 0.0,
+                'Electricity low voltage (kWh)': 0.0,
+                'Electricity medium voltage (kWh)': 0.0,
+                'Heat central (MJ)': 0.0,
+                'Heat district (MJ)': 0.0,
                 'Coal (kg)': 0.0,
                 'Lignite (kg)': 0.0,
                 'Coal imports (kg)': 0.0,
@@ -1229,19 +1199,19 @@ def demand_array(new_db_name: str, analysis_act, amount: float,
             products['Lubricating oil (kg)'] += amt
 
         elif 'market for electricity, high voltage' in name:
-            products['Electricity, high voltage (kWh)'] += amt
+            products['Electricity high voltage (kWh)'] += amt
 
         elif 'market for electricity, low voltage' in name:
-            products['Electricity, low voltage (kWh)'] += amt
+            products['Electricity low voltage (kWh)'] += amt
 
         elif 'market for electricity, medium voltage' in name:
-            products['Electricity, medium voltage (kWh)'] += amt
+            products['Electricity medium voltage (kWh)'] += amt
 
         elif 'market for heat, central' in name:
-            products['Heat, central (MJ)'] += amt
+            products['Heat central (MJ)'] += amt
 
         elif 'market for heat, district' in name:
-            products['Heat, district (MJ)'] += amt
+            products['Heat district (MJ)'] += amt
 
         elif 'market for coal' in name:
             products['Coal (kg)'] += amt
@@ -1249,6 +1219,7 @@ def demand_array(new_db_name: str, analysis_act, amount: float,
         elif 'market for lignite' in name:
             products['Lignite (kg)'] += amt
 
+        # TODO: imports are not working
         elif 'hard coal, import from' in name:
             products['Coal imports (kg)'] += amt
 
@@ -1287,19 +1258,19 @@ def pes_demand(biosphere_db_name: str, analysis_act, amount: float,
     lca_obj.lci()
     inventory_array = lca_obj.inventory.sum(axis=1)
     raw_materials = {
-        "Coal, raw (kg)": 0.0,
+        "Coal raw (kg)": 0.0,
         "Uranium (kg)": 0.0,
         "Gas (m3)": 0.0,
         "Water (m3)": 0.0,
         "Oil (kg)": 0.0,
         "Land (m2)": 0.0,
-        "Biomass, raw (MJ)": 0.0,
+        "Biomass raw (MJ)": 0.0,
     }
     for flow_id, index in lca_obj.dicts.biosphere.items():
         flow = bd.get_node(id=flow_id)
         value = inventory_array[index].item()
         if flow in coal_set:
-            raw_materials["Coal, raw (kg)"] += value
+            raw_materials["Coal raw (kg)"] += value
         elif flow in uranium_set:
             raw_materials["Uranium (kg)"] += value
         elif flow in gas_set:
@@ -1311,7 +1282,7 @@ def pes_demand(biosphere_db_name: str, analysis_act, amount: float,
         elif flow in land_set:
             raw_materials["Land (m2)"] += value
         elif flow in biomass_energy_set:
-            raw_materials["Biomass, raw (MJ)"] += value
+            raw_materials["Biomass raw (MJ)"] += value
 
     return raw_materials
 
@@ -1435,9 +1406,11 @@ def _compute_and_store_lcia_scores(act, lcia_methods, year: str, carrier_name: s
         lcia_results[f"{str(m[1])}; {str(m[2])}"] = lca_obj.score
     return lcia_results
 
-def analysis(custom_db_names: list, save_folder: str,
+def analysis(custom_db_names_and_acronyms: dict, save_folder: str,
              cutoff_db_name: str = 'premise_original_update', bw25_project_name: str = 'bw25_matrix',
+             baseline_db_name: str = 'custom_baseline'
              ):
+    # TODO: add comparison with new baseline
     # Set bw25 project
     bd.projects.set_current(bw25_project_name)
 
@@ -1473,19 +1446,19 @@ def analysis(custom_db_names: list, save_folder: str,
         pass
 
     # steel new pathways
-    for custom_db_name in custom_db_names:
+    for custom_db_name, acronym in custom_db_names_and_acronyms.items():
         steel_new_acts = [a for a in bd.Database(custom_db_name) if
                       'steel production' in a['name'] and a['reference product'] == 'steel, low-alloyed' and (
                                   a['location'] == 'RER' or ('electric' in a['name'] and a[
                               'location'] == 'Europe without Switzerland and Austria'))]
         for act in steel_new_acts:
-            lcia_results = _compute_and_store_lcia_scores(act, ef_31, year=custom_db_name[-4:], carrier_name='steel')
-            steel_results[f"steel custom - {act['name']} {custom_db_name[-4:]}"] = lcia_results
+            lcia_results = _compute_and_store_lcia_scores(act, ef_31, year=acronym, carrier_name='steel')
+            steel_results[f"steel custom - {act['name']} {acronym}"] = lcia_results
 
             steel_products_demand = demand_array(new_db_name=custom_db_name, analysis_act=act, amount=1)
             steel_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=act, amount=1)
             steel_demand = (steel_products_demand | steel_raw)
-            steel_carriers_demand[f"{act['name']} {custom_db_name[-4:]}"] = steel_demand
+            steel_carriers_demand[f"{act['name']} {acronym}"] = steel_demand
 
 
     ### ELECTRICITY ###
@@ -1506,15 +1479,15 @@ def analysis(custom_db_names: list, save_folder: str,
     electricity_carriers_demand[f"{act_lv['name']} pes current"] = electricity_raw
 
     # new production routes
-    for custom_db_name in custom_db_names:
+    for custom_db_name, acronym in custom_db_names_and_acronyms.items():
         act_hv = [a for a in bd.Database(custom_db_name) if
                   a['name'] == 'market group for electricity, high voltage' and a['location'] == 'RER'][0]
         act_mv = [a for a in bd.Database(custom_db_name) if
                   a['name'] == 'market group for electricity, medium voltage' and a['location'] == 'RER'][0]
         act_lv = [a for a in bd.Database(custom_db_name) if
                   a['name'] == 'market group for electricity, low voltage' and a['location'] == 'RER'][0]
-        lcia_results = _compute_and_store_lcia_scores(act_lv, ef_31, year=custom_db_name[-4:], carrier_name='electricity')
-        electricity_results[f"electricity custom - {act_lv['name']} {custom_db_name[-4:]}"] = lcia_results
+        lcia_results = _compute_and_store_lcia_scores(act_lv, ef_31, year=acronym, carrier_name='electricity')
+        electricity_results[f"electricity custom - {act_lv['name']} {acronym}"] = lcia_results
 
         hv_products_demand = demand_array(new_db_name=custom_db_name, analysis_act=act_hv, amount=1)
         mv_products_demand = demand_array(new_db_name=custom_db_name, analysis_act=act_mv, amount=1)
@@ -1522,13 +1495,13 @@ def analysis(custom_db_names: list, save_folder: str,
 
         electricity_raw_lv = pes_demand(biosphere_db_name='biosphere3', analysis_act=act_lv, amount=1)
         electricity_demand_lv = (lv_products_demand | electricity_raw_lv)
-        electricity_carriers_demand[f"{act_lv['name']} {custom_db_name[-4:]}"] = electricity_demand_lv
+        electricity_carriers_demand[f"{act_lv['name']} {acronym}"] = electricity_demand_lv
         electricity_raw_mv = pes_demand(biosphere_db_name='biosphere3', analysis_act=act_mv, amount=1)
         electricity_demand_mv = (mv_products_demand | electricity_raw_mv)
-        electricity_carriers_demand[f"{act_mv['name']} {custom_db_name[-4:]}"] = electricity_demand_mv
+        electricity_carriers_demand[f"{act_mv['name']} {acronym}"] = electricity_demand_mv
         electricity_raw_hv = pes_demand(biosphere_db_name='biosphere3', analysis_act=act_hv, amount=1)
         electricity_demand_hv = (hv_products_demand | electricity_raw_hv)
-        electricity_carriers_demand[f"{act_hv['name']} {custom_db_name[-4:]}"] = electricity_demand_hv
+        electricity_carriers_demand[f"{act_hv['name']} {acronym}"] = electricity_demand_hv
 
 
     ### BIOMASS ###
@@ -1560,7 +1533,7 @@ def analysis(custom_db_names: list, save_folder: str,
     biomass_carriers_demand[f"{wood_pellets['name']} current"] = biomass_raw
 
     # new production route
-    for custom_db_name in custom_db_names:
+    for custom_db_name, acronym in custom_db_names_and_acronyms.items():
         new_act = [a for a in bd.Database(custom_db_name) if
                           a['name'] == 'market for biomass, used as fuel (new)'
                           and a['location'] == 'Europe without Switzerland'][0]
@@ -1579,14 +1552,14 @@ def analysis(custom_db_names: list, save_folder: str,
         if not chips_act:
             chips_heat = 0
         new_biomass_act_lhv = forest_heat + chips_heat
-        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:],
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=acronym,
                                                       amount=new_biomass_act_lhv, unit='MJ', carrier_name='biomass')
-        biomass_results[f"biomass custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
+        biomass_results[f"biomass custom - {new_act['name']} {acronym}"] = lcia_results
 
         biomass_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=new_biomass_act_lhv)
         biomass_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=wood_chips_wet, amount=new_biomass_act_lhv)
         biomass_demand = (biomass_ec_demand | biomass_raw)
-        biomass_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = biomass_demand
+        biomass_carriers_demand[f"{new_act['name']} {acronym}"] = biomass_demand
 
     ### HYDROGEN ###
     # Original hydrogen
@@ -1607,16 +1580,16 @@ def analysis(custom_db_names: list, save_folder: str,
         hydrogen_carriers_demand[f"{act['name']} current"] = hydrogen_raw
 
     # new production route
-    for custom_db_name in custom_db_names:
+    for custom_db_name, acronym in custom_db_names_and_acronyms.items():
         new_act = [a for a in bd.Database(custom_db_name) if
                           a['name'] == 'market for hydrogen (new)'][0]
-        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:], carrier_name='hydrogen')
-        hydrogen_results[f"hydrogen custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=acronym, carrier_name='hydrogen')
+        hydrogen_results[f"hydrogen custom - {new_act['name']} {acronym}"] = lcia_results
 
         hydrogen_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
         hydrogen_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
         hydrogen_demand = (hydrogen_ec_demand | hydrogen_raw)
-        hydrogen_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = hydrogen_demand
+        hydrogen_carriers_demand[f"{new_act['name']} {acronym}"] = hydrogen_demand
 
     ### METHANOL ###
     # Original methanol (from natural gas)
@@ -1632,16 +1605,16 @@ def analysis(custom_db_names: list, save_folder: str,
     methanol_carriers_demand[f"{methanol_market_glo['name']} current"] = methanol_raw
 
     # new production route
-    for custom_db_name in custom_db_names:
+    for custom_db_name, acronym in custom_db_names_and_acronyms.items():
         new_act = [a for a in bd.Database(custom_db_name) if
                           a['name'] == 'market for methanol (new)'][0]
-        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:], carrier_name='methanol')
-        methanol_results[f"methanol custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=acronym, carrier_name='methanol')
+        methanol_results[f"methanol custom - {new_act['name']} {acronym}"] = lcia_results
 
         methanol_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
         methanol_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
         methanol_demand = (methanol_ec_demand | methanol_raw)
-        methanol_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = methanol_demand
+        methanol_carriers_demand[f"{new_act['name']} {acronym}"] = methanol_demand
 
     ### KEROSENE ###
     # Original kerosene
@@ -1652,21 +1625,21 @@ def analysis(custom_db_names: list, save_folder: str,
                         and a['location'] in ['Europe without Switzerland', 'CH']]
     for market in kerosene_markets:
         lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current', carrier_name='kerosene')
-        kerosene_results[f"kerosene current - {market['name']}"] = lcia_results
+        kerosene_results[f"kerosene current - {market['name']} {market['location']}"] = lcia_results
         kerosene_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=market, amount=1)
         kerosene_carriers_demand[f"{market['name']} current"] = kerosene_raw
 
     # new production route
-    for custom_db_name in custom_db_names:
+    for custom_db_name, acronym in custom_db_names_and_acronyms.items():
         new_act = [a for a in bd.Database(custom_db_name) if
                        a['name'] == 'market for kerosene (new)'][0]
-        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:], carrier_name='kerosene')
-        kerosene_results[f"kerosene custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=acronym, carrier_name='kerosene')
+        kerosene_results[f"kerosene custom - {new_act['name']} {acronym}"] = lcia_results
 
         kerosene_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
         kerosene_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
         kerosene_demand = (kerosene_ec_demand | kerosene_raw)
-        kerosene_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = kerosene_demand
+        kerosene_carriers_demand[f"{new_act['name']} {acronym}"] = kerosene_demand
 
     ### DIESEL ###
     # Original diesel
@@ -1677,21 +1650,21 @@ def analysis(custom_db_names: list, save_folder: str,
                       and a['location'] in ['Europe without Switzerland', 'CH'] and a['unit'] == 'kilogram']
     for market in diesel_markets:
         lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current', carrier_name='diesel')
-        diesel_results[f"diesel current - {market['name']}"] = lcia_results
+        diesel_results[f"diesel current - {market['name']} {market['location']}"] = lcia_results
         diesel_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=market, amount=1)
         diesel_carriers_demand[f"{market['name']} current"] = diesel_raw
 
     # new production route
-    for custom_db_name in custom_db_names:
+    for custom_db_name, acronym in custom_db_names_and_acronyms.items():
         new_act = [a for a in bd.Database(custom_db_name) if
                    a['name'] == 'market for diesel (new)'][0]
-        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:], carrier_name='diesel')
-        diesel_results[f"diesel custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=acronym, carrier_name='diesel')
+        diesel_results[f"diesel custom - {new_act['name']} {acronym}"] = lcia_results
 
         diesel_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
         diesel_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
         diesel_demand = (diesel_ec_demand | diesel_raw)
-        diesel_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = diesel_demand
+        diesel_carriers_demand[f"{new_act['name']} {acronym}"] = diesel_demand
 
     ### LIQUEFIED PETROLEUM GAS ###
     # Original liquefied petroleum gas
@@ -1702,21 +1675,21 @@ def analysis(custom_db_names: list, save_folder: str,
                       and a['location'] in ['Europe without Switzerland', 'CH']]
     for market in lpg_markets:
         lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current', carrier_name='liquefied petroleum gas')
-        lpg_results[f"lpg current - {market['name']}"] = lcia_results
+        lpg_results[f"lpg current - {market['name']} {market['location']}"] = lcia_results
         lpg_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=market, amount=1)
         lpg_carriers_demand[f"{market['name']} current"] = lpg_raw
 
     # new production route
-    for custom_db_name in custom_db_names:
+    for custom_db_name, acronym in custom_db_names_and_acronyms.items():
         new_act = [a for a in bd.Database(custom_db_name) if
                    a['name'] == 'market for liquefied petroleum gas (new)'][0]
-        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:], carrier_name='liquefied petroleum gas')
-        lpg_results[f"lpg custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=acronym, carrier_name='liquefied petroleum gas')
+        lpg_results[f"lpg custom - {new_act['name']} {acronym}"] = lcia_results
 
         lpg_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
         lpg_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
         lpg_demand = (lpg_ec_demand | lpg_raw)
-        lpg_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = lpg_demand
+        lpg_carriers_demand[f"{new_act['name']} {acronym}"] = lpg_demand
 
     ### METHANE ###
     # Original methane
@@ -1727,22 +1700,22 @@ def analysis(custom_db_names: list, save_folder: str,
                        a['name'] == 'market group for natural gas, high pressure']
     for market in methane_markets:
         lcia_results = _compute_and_store_lcia_scores(market, ef_31, year='current', carrier_name='methane')
-        methane_results[f"methane current - {market['name']}"] = lcia_results
+        methane_results[f"methane current - {market['name']} {market['location']}"] = lcia_results
         methane_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=market, amount=1)
         methane_carriers_demand[f"{market['name']} current"] = methane_raw
 
     # new production route
-    for custom_db_name in custom_db_names:
+    for custom_db_name, acronym in custom_db_names_and_acronyms.items():
         new_act = [a for a in bd.Database(custom_db_name) if
                    a['name'] == 'market group for natural gas, high pressure'
                    and a['location'] == 'Europe without Switzerland'][0]
-        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:], carrier_name='methane')
-        methane_results[f"methane custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=acronym, carrier_name='methane')
+        methane_results[f"methane custom - {new_act['name']} {acronym}"] = lcia_results
 
         methane_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
         methane_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
         methane_demand = (methane_ec_demand | methane_raw)
-        methane_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = methane_demand
+        methane_carriers_demand[f"{new_act['name']} {acronym}"] = methane_demand
 
     ### LUBRICATING OIL ###
     # Original lubricating oil
@@ -1758,16 +1731,16 @@ def analysis(custom_db_names: list, save_folder: str,
         lubricating_oil_carriers_demand[f"{market['name']} current"] = lubricating_oil_raw
 
     # new production route
-    for custom_db_name in custom_db_names:
+    for custom_db_name, acronym in custom_db_names_and_acronyms.items():
         new_act = [a for a in bd.Database(custom_db_name) if
                    a['name'] == 'market for lubricating oil (new)'][0]
-        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:], carrier_name='lubricating oil')
-        lubricating_oil_results[f"lubricating oil custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=acronym, carrier_name='lubricating oil')
+        lubricating_oil_results[f"lubricating oil custom - {new_act['name']} {acronym}"] = lcia_results
 
         lubricating_oil_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
         lubricating_oil_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
         lubricating_oil_demand = (lubricating_oil_ec_demand | lubricating_oil_raw)
-        lubricating_oil_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = lubricating_oil_demand
+        lubricating_oil_carriers_demand[f"{new_act['name']} {acronym}"] = lubricating_oil_demand
 
     ### HEAT ###
     # Original heat
@@ -1795,19 +1768,19 @@ def analysis(custom_db_names: list, save_folder: str,
             heat_carriers_demand[f"{act['name']} current"] = heat_raw
 
     # new production routes
-    for custom_db_name in custom_db_names:
+    for custom_db_name, acronym in custom_db_names_and_acronyms.items():
         act_cs = [a for a in bd.Database(custom_db_name) if
                   a['name'] == 'market for heat, central or small-scale (new)'][0]
         act_district = [a for a in bd.Database(custom_db_name) if
                   a['name'] == 'market for heat, district or industrial (new)'][0]
         for act in [act_cs, act_district]:
-            lcia_results = _compute_and_store_lcia_scores(act, ef_31, year=custom_db_name[-4:], carrier_name='heat')
-            heat_results[f"heat custom - {act['name']} {custom_db_name[-4:]}"] = lcia_results
+            lcia_results = _compute_and_store_lcia_scores(act, ef_31, year=acronym, carrier_name='heat')
+            heat_results[f"heat custom - {act['name']} {acronym}"] = lcia_results
 
             heat_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=act, amount=1)
             heat_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=act, amount=1)
             heat_demand = (heat_ec_demand | heat_raw)
-            heat_carriers_demand[f"{act['name']} {custom_db_name[-4:]}"] = heat_demand
+            heat_carriers_demand[f"{act['name']} {acronym}"] = heat_demand
 
     ### COAL ###
     # Original coal
@@ -1824,16 +1797,16 @@ def analysis(custom_db_names: list, save_folder: str,
     coal_carriers_demand[f"{coal_market['name']} current"] = coal_raw
 
     # new production route
-    for custom_db_name in custom_db_names:
+    for custom_db_name, acronym in custom_db_names_and_acronyms.items():
         new_act = [a for a in bd.Database(custom_db_name) if
                    a['name'] == 'market for coal, for energy uses (new)'][0]
-        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:], carrier_name='coal')
-        coal_results[f"coal custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=acronym, carrier_name='coal')
+        coal_results[f"coal custom - {new_act['name']} {acronym}"] = lcia_results
 
         coal_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=1)
         coal_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=1)
         coal_demand = (coal_ec_demand | coal_raw)
-        coal_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = coal_demand
+        coal_carriers_demand[f"{new_act['name']} {acronym}"] = coal_demand
 
     ### LIGNITE ###
     # Original lignite
@@ -1850,7 +1823,7 @@ def analysis(custom_db_names: list, save_folder: str,
     lignite_carriers_demand[f"{lignite_market['name']} current"] = lignite_raw
 
     # new production route
-    for custom_db_name in custom_db_names:
+    for custom_db_name, acronym in custom_db_names_and_acronyms.items():
         new_act = [a for a in bd.Database(custom_db_name) if
                        a['name'] == 'market for lignite, for energy uses (new)'][0]
         lignite_is_present = False
@@ -1867,14 +1840,14 @@ def analysis(custom_db_names: list, save_folder: str,
         if not charcoal_is_present:
             charcoal_heat = 0
         new_lignite_act_lhv = lignite_heat + charcoal_heat
-        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=custom_db_name[-4:],
+        lcia_results = _compute_and_store_lcia_scores(new_act, ef_31, year=acronym,
                                                       unit='MJ', amount=new_lignite_act_lhv, carrier_name='lignite')
-        lignite_results[f"lignite custom - {new_act['name']} {custom_db_name[-4:]}"] = lcia_results
+        lignite_results[f"lignite custom - {new_act['name']} {acronym}"] = lcia_results
 
         lignite_ec_demand = demand_array(new_db_name=custom_db_name, analysis_act=new_act, amount=new_lignite_act_lhv)
         lignite_raw = pes_demand(biosphere_db_name='biosphere3', analysis_act=new_act, amount=11)
         lignite_demand = (lignite_ec_demand | lignite_raw)
-        lignite_carriers_demand[f"{new_act['name']} {custom_db_name[-4:]}"] = lignite_demand
+        lignite_carriers_demand[f"{new_act['name']} {acronym}"] = lignite_demand
 
     # results in dicts
     industry_lcia_results = {'steel': steel_results}
@@ -2005,7 +1978,7 @@ def plot_analysis(
                       'Europe without Switzerland and Austria': 'RER wo CH/AT',
                       'Europe, without Russia and Turkey': 'RER wo RU/TR'}
 
-    units_dict = {'kilogram': 'kg', 'kilowatt hour': 'kWh', 'cubic meter': 'm3'}
+    units_dict = {'kilogram': 'kg', 'kilowatt hour': 'kWh', 'cubic meter': 'm3', "megajoule": "MJ"}
 
     # ---------- helpers ----------
     def norm(s: str) -> str:
@@ -2744,11 +2717,11 @@ self_production_technology_shares = {
     "Swing": 0.2
 }
 technology_updates_ = {
-                        "Share|ElectricityHV|WindOnshore": 1.50,
-                        "Share|ElectricityHV|WindOffshore": 1.20,
-                        "Share|ElectricityLV|SolarPVRoofResidential":2.0,
-                        "Share|ElectricityMV|SolarPVRoofCommercial":2.0, }
-
+                        "Share|ElectricityHV|WindOnshore": 2.0,
+                        #"Share|ElectricityHV|WindOffshore": 1.20,
+                        "Share|ElectricityLV|SolarPVRoofResidential":5.0,
+                        "Share|ElectricityMV|SolarPVRoofCommercial":5.0, }
+# TODO: restricció al offshore wind només a països amb costa!
 total_renewables = [
         "Share|ElectricityHV|Geothermal",
         "Share|ElectricityHV|WindOnshore",
@@ -2766,29 +2739,50 @@ total_renewables = [
     "Share|ElectricityMV|SolarPVRoofCommercial"
     ]
 
-create_scenario(scenario_data_path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_no_2050.csv',
-                biomethane_production_share=0.5,
-                biomethane_production_technology_shares=self_production_technology_shares,
-                methane_eu_imports_only=False,
-                electricity_technology_shares=technology_updates_,
-                renewable_electricity_techs_list=total_renewables,
-                keep_imports=True,
-                keep_nuclear=True
-                )
+#create_scenario(scenario_data_path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_no_2050.csv',
+#                 biomethane_production_share=0.5,
+#                 biomethane_production_technology_shares=self_production_technology_shares,
+#                methane_eu_imports_only=False,
+#                 electricity_technology_shares=technology_updates_,
+#                 renewable_electricity_techs_list=total_renewables,
+#                 keep_imports=True,
+#                 keep_nuclear=True
+#                 )
 
-create_custom_database(output_database_name="custom_2050_test", year=2050)
+#create_custom_database(output_database_name="custom_scenario_1", year=2050)
+"""for scenario in ['custom_scenario_1', 'custom_scenario_2']:
+    substitute_windtrace_onshore(database_windtrace_should_substitute=scenario,
+                                     ecoinvent_database_name='cutoff391', location_new_wind_act='RER',
+                                         fleet_turbines_definition=config_parameters.BALANCED_ON_WIND_FLEET,
+                                 biosphere3=bd.Database('biosphere3'), european_locations_only=True)
 
-pass
+    substitute_windtrace_offshore(database_windtrace_should_substitute=scenario,
+            ecoinvent_database_name='cutoff391', location_new_wind_act='RER',
+                                        fleet_turbines_definition=config_parameters.BALANCED_OFF_WIND_FLEET,
+                                  european_locations_only=True)"""
 
-industry_lcia, industry_carriers, energy_lcia, energy_carriers = analysis(custom_db_names=['custom_2020', 'custom_2050'],
-              save_folder=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\results')
+
+plot_input_data(path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_no_2050_2020_final_.csv',
+                save_path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data\input_data_scenario_1.png')
+plot_input_data(path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_no_2050_2020_final_.csv',
+                save_path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data\input_data_to_baseline.png',
+                year="2020")
+plot_input_data(path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_no_2050_2020_plus_hydrogen.csv',
+                save_path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data\input_data_scenario_2.png')
+
+
+
+industry_lcia, industry_carriers, energy_lcia, energy_carriers = analysis(
+    custom_db_names_and_acronyms={'custom_scenario_1': 'SC1',
+                                  'custom_scenario_2': 'SC2'},
+    save_folder=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\results\test')
 
 for industry_name, df in industry_lcia.items():
     plot_analysis(
         df=df,
         indicator="climate change; global warming potential (GWP100)",
         ylabel="kg CO2-eq",
-        save_folder=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\output\industry'
+        save_folder=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\output\test\industry'
     )
 
 for energy_name, df in energy_lcia.items():
@@ -2796,7 +2790,7 @@ for energy_name, df in energy_lcia.items():
             df=df,
             indicator="climate change; global warming potential (GWP100)",
             ylabel="kg CO2-eq",
-            save_folder=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\output\energy'
+            save_folder=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\output\test\energy'
         )
 
 pass

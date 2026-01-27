@@ -1033,7 +1033,7 @@ production pathways:
       name: electricity voltage transformation from medium to low voltage
       reference product: electricity, low voltage
       exists in original database: True
-      ratio: 1.05  # transmission and distribution losses
+      #ratio: 1.05  # transmission and distribution losses
 
   ELECTRICITY_BATTERY_CHEMICAL: # low voltage
     production volume:
