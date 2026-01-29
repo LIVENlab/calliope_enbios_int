@@ -18,6 +18,7 @@ import matplotlib.colors as mcolors
 import re
 import os
 from pathlib import Path
+import hashlib
 
 def import_ei_12():
     bi.import_ecoinvent_release(
@@ -1139,7 +1140,8 @@ def demand_array(new_db_name: str, analysis_act, amount: float,
     lca_obj = bc.LCA(demand=my_functional_unit, data_objs=data_objs)
     lca_obj.lci()
     supply_array = lca_obj.supply_array
-    products = {'Biomass (MJ)': 0.0,
+    # TODO: test function with the changes!
+    products = {'Biomass for energy (MJ)': 0.0,
                 'Hydrogen (kg)': 0.0,
                 'Methanol (kg)': 0.0,
                 'Kerosene (kg)': 0.0,
@@ -1153,8 +1155,10 @@ def demand_array(new_db_name: str, analysis_act, amount: float,
                 'Electricity medium voltage (kWh)': 0.0,
                 'Heat central (MJ)': 0.0,
                 'Heat district (MJ)': 0.0,
-                'Coal (kg)': 0.0,
-                'Lignite (kg)': 0.0,
+                'Coal for energy (kg)': 0.0,
+                'Coal as feedstock (kg)': 0.0,
+                'Lignite for energy (kg)': 0.0,
+                'Lignite as feedstock (kg)': 0.0,
                 'Coal imports (kg)': 0.0,
                 'Methane imports (m3)': 0.0, # NOTE: there are GLOBAL imports (except European), which is a proxy of the European, but not exactly
                 'Methane imports RU (m3)': 0.0, # NOTE: there are GLOBAL imports from RU, which is a proxy of the European, but not exactly
@@ -1166,13 +1170,16 @@ def demand_array(new_db_name: str, analysis_act, amount: float,
         if amt == 0:
             continue
 
-        if product not in new_acts_set:
-            continue
-
         name = product['name']
 
+        if (product not in new_acts_set or any(
+                n for n in ['market for hard coal', 'market for lignite',
+                            'hard coal, import from', 'natural gas, high pressure, import'] if n in name)
+                ):
+            continue
+
         if 'market for biomass' in name:
-            products['Biomass (MJ)'] += amt
+            products['Biomass for energy (MJ)'] += amt
 
         elif 'market for hydrogen' in name:
             products['Hydrogen (kg)'] += amt
@@ -1213,13 +1220,18 @@ def demand_array(new_db_name: str, analysis_act, amount: float,
         elif 'market for heat, district' in name:
             products['Heat district (MJ)'] += amt
 
-        elif 'market for coal' in name:
-            products['Coal (kg)'] += amt
+        elif name == 'market for coal, for energy uses (new)':
+            products['Coal for energy (kg)'] += amt
 
-        elif 'market for lignite' in name:
-            products['Lignite (kg)'] += amt
+        elif name == 'market for hard coal':
+            products['Coal as feedstock (kg)'] += amt
 
-        # TODO: imports are not working
+        elif name == 'market for lignite, for energy uses (new)':
+            products['Lignite for energy (kg)'] += amt
+
+        elif name == 'market for lignite':
+            products['Lignite as feedstock (kg)'] += amt
+
         elif 'hard coal, import from' in name:
             products['Coal imports (kg)'] += amt
 
@@ -1287,31 +1299,286 @@ def pes_demand(biosphere_db_name: str, analysis_act, amount: float,
     return raw_materials
 
 
+def _extract_location_shares(activity):
+    shares = {}
+    for ex in activity.technosphere():
+        loc = ex.input.get("location")
+        if not loc:
+            continue
+        shares[loc] = shares.get(loc, 0) + ex["amount"]
+    return shares
+
+def _find_one(db, name, location):
+    matches = [a for a in db if a["name"] == name and a["location"] == location]
+    if not matches:
+        raise LookupError(f"Not found: {name} @ {location}")
+    if len(matches) > 1:
+        raise LookupError(f"Ambiguous: {name} @ {location} (n={len(matches)})")
+    return matches[0]
+
+def _european_mix(
+    project="bw25_matrix",
+    db_name="cutoff391",
+    region="Europe without Switzerland",
+    normalize=True
+):
+    bd.projects.set_current(project)
+    db = bd.Database(db_name)
+
+    names = {
+        "lv": "market group for electricity, low voltage",
+        "mv": "market group for electricity, medium voltage",
+        "hv": "market group for electricity, high voltage",
+    }
+
+    out = {}
+    for k, act_name in names.items():
+        act = _find_one(db, act_name, region)
+        shares = _extract_location_shares(act)
+        if normalize and shares:
+            s = sum(shares.values())
+            if s:
+                shares = {loc: v / s for loc, v in shares.items()}
+        out[k] = shares
+
+    return out
+
+
+def _weighted_mean_over_regions(per_region, weights, year_col):
+    """
+    per_region: DataFrame with columns ['region','carriers','routes', year_col]
+    weights: dict {region: weight}
+    Returns DataFrame aggregated to ['carriers','routes'] with weighted mean.
+    """
+    df = per_region.copy()
+    df["w"] = df["region"].map(weights).fillna(0.0)
+
+    # Weighted sum per carrier/route
+    ws = df.assign(wx=df[year_col] * df["w"]).groupby(["carriers", "routes"], as_index=False)[["wx", "w"]].sum()
+
+    # Avoid divide-by-zero: if total weight is zero, result becomes NaN -> fill with 0
+    ws[year_col] = (ws["wx"] / ws["w"]).fillna(0.0)
+    return ws[["carriers", "routes", year_col]]
+
+
+def _build_total_electricity_mix(df_plot, year, imports=True, other_threshold=0.02):
+    """
+    Build one total electricity mix from ElectricityHV/MV/LV.
+
+    Groups electricity technologies with share < other_threshold into 'Other'.
+    Only intended to be called when electricity_all_in_one=True.
+    """
+    df = df_plot.copy()
+
+    if not imports:
+        hv_mask = df["carriers"].eq("ElectricityHV")
+        df = df[~(hv_mask & df["routes"].eq("Imports"))].copy()
+        hv_total = df.loc[hv_mask, year].sum()
+        if hv_total > 0:
+            df.loc[hv_mask, year] = df.loc[hv_mask, year] / hv_total
+
+    # Transformation factors
+    mv_to_lv = df.loc[
+        (df["carriers"].eq("ElectricityLV")) & (df["routes"].eq("TransformationMVLV")),
+        year
+    ].sum()
+    hv_to_mv = df.loc[
+        (df["carriers"].eq("ElectricityMV")) & (df["routes"].eq("TransformationHVMV")),
+        year
+    ].sum()
+
+    mv_to_lv = float(mv_to_lv) if mv_to_lv else 1.0
+    hv_to_mv = float(hv_to_mv) if hv_to_mv else 1.0
+
+    drop_routes = {"TransformationHVMV", "TransformationMVLV"}
+
+    hv = df[(df["carriers"] == "ElectricityHV") & (~df["routes"].isin(drop_routes))].copy()
+    mv = df[(df["carriers"] == "ElectricityMV") & (~df["routes"].isin(drop_routes))].copy()
+    lv = df[(df["carriers"] == "ElectricityLV") & (~df["routes"].isin(drop_routes))].copy()
+
+    if not hv.empty:
+        hv[year] = hv[year].astype(float) * hv_to_mv * mv_to_lv
+    if not mv.empty:
+        mv[year] = mv[year].astype(float) * mv_to_lv
+    if not lv.empty:
+        lv[year] = lv[year].astype(float)
+
+    combined = pd.concat([hv, mv, lv], ignore_index=True)
+    combined = combined.groupby("routes", as_index=False)[year].sum()
+
+    # Normalize first (so threshold is on final shares)
+    total = combined[year].sum()
+    if total > 0:
+        combined[year] = combined[year] / total
+
+    # ---- Group small techs into 'Other' ----
+    if other_threshold is not None and other_threshold > 0 and not combined.empty:
+        small = combined[combined[year] < other_threshold]
+        if not small.empty:
+            other_share = small[year].sum()
+            combined = combined[combined[year] >= other_threshold].copy()
+            combined = pd.concat(
+                [combined, pd.DataFrame({"routes": ["Other"], year: [other_share]})],
+                ignore_index=True
+            )
+
+            # Re-normalize to exactly 1 (numerical safety)
+            total2 = combined[year].sum()
+            if total2 > 0:
+                combined[year] = combined[year] / total2
+    # ----------------------------------------
+
+    combined.insert(0, "carriers", "Electricity")
+    return combined[["carriers", "routes", year]]
+
+def _build_master_tab20_color_map(master_routes, repeat_ok = {"Geothermal", "SolarThermal", "Hydrogen"}):
+    cmap = plt.get_cmap("tab20")
+    master_routes = list(master_routes)
+
+    priority = [r for r in master_routes if r not in repeat_ok]
+    overflow = [r for r in master_routes if r in repeat_ok]
+
+    color_map = {}
+    idx = 0
+
+    # Assign unique colors to priority techs
+    for r in priority:
+        color_map[r] = cmap(idx % cmap.N)
+        idx += 1
+
+    # Assign remaining (repeating) colors to allowed techs
+    for r in overflow:
+        color_map[r] = cmap(idx % cmap.N)
+        idx += 1
+
+    return color_map
+
+def _build_master_electricity_routes_from_input(df_raw, year, electricity_imports):
+    """
+    Build a deterministic, file-based master list of electricity technologies
+    from the input dataframe *before* any grouping into 'Other'.
+
+    Excludes transformation routes and (optionally) Imports.
+    """
+    drop_routes = {"TransformationHVMV", "TransformationMVLV"}
+
+    elec = df_raw[df_raw["carriers"].isin(["ElectricityHV", "ElectricityMV", "ElectricityLV"])].copy()
+
+    # Exclude transformation routes
+    elec = elec[~elec["routes"].isin(drop_routes)]
+
+    # Exclude imports if requested (imports=False means do NOT show imports)
+    if not electricity_imports:
+        elec = elec[elec["routes"] != "Imports"]
+
+    # Deterministic ordering:
+    # - First: all non-repeat_ok, sorted alphabetically
+    # - Then: repeat_ok (so repeats fall here), in fixed order
+    repeat_ok = ["Geothermal", "SolarThermal", "Hydrogen"]
+
+    routes = sorted(set(elec["routes"].dropna().astype(str).unique()))
+    priority = [r for r in routes if r not in repeat_ok]
+    overflow = [r for r in repeat_ok if r in routes]
+
+    master_routes = priority + overflow
+
+    # Make sure 'Other' is last if present
+    if "Other" in master_routes:
+        master_routes = [r for r in master_routes if r != "Other"] + ["Other"]
+
+    return master_routes
+
+def _stable_color(route: str, cmap_name="tab20", n=256):
+    cmap = plt.get_cmap(cmap_name, n)  # discretize to n colors
+    h = hashlib.md5(route.encode("utf-8")).hexdigest()
+    idx = int(h[:8], 16) % n
+    return cmap(idx)
+
+def _master_routes_from_input(df_raw, electricity_imports=True):
+    drop_routes = {"TransformationHVMV", "TransformationMVLV"}
+    routes = df_raw["routes"].dropna().astype(str)
+
+    if not electricity_imports:
+        routes = routes[routes != "Imports"]
+
+    routes = routes[~routes.isin(drop_routes)]
+    return sorted(routes.unique())
+
+def _tab20_color_map_from_master(master_routes):
+    cmap = plt.get_cmap("tab20")
+    # Assign sequentially; repeats only happen if master list > 20
+    return {r: cmap(i % cmap.N) for i, r in enumerate(master_routes)}
+def _dedupe_colors_if_snippet_small(routes_in_snippet, base_color_map, max_unique=20):
+    """
+    Ensure no repeated colors within a snippet if len(routes_in_snippet) <= max_unique.
+    Uses tab20 to pick alternative colors for duplicates, but does NOT change the global base map.
+    Returns a snippet-specific color map.
+    """
+    cmap = plt.get_cmap("tab20")
+    N = cmap.N  # 20
+
+    routes = list(routes_in_snippet)
+    if len(routes) > max_unique:
+        return {r: base_color_map.get(r, cmap(0)) for r in routes}
+
+    assigned = {r: base_color_map.get(r, cmap(0)) for r in routes}
+
+    # detect duplicates (by RGBA tuple)
+    used = {}
+    duplicates = []
+    for r in routes:
+        c = assigned[r]
+        if c in used:
+            duplicates.append(r)
+        else:
+            used[c] = r
+
+    if not duplicates:
+        return assigned
+
+    # available colors not used yet
+    used_colors = set(used.keys())
+    available = [cmap(i) for i in range(N) if cmap(i) not in used_colors]
+
+    # reassign duplicates to available colors
+    for r, newc in zip(duplicates, available):
+        assigned[r] = newc
+
+    return assigned
+
+
+
 def plot_input_data(
     path,
     save_path,
     year="2050",
     region=None,
+    electricity_imports=False,
+    electricity_all_in_one=True,
     region_agg="mean",   # "mean" or "sum" when region is None
-    cols=4,
-    figsize_per_row=5,
+    cols=3,
+    master_electricity_routes=None,   # <-- NEW: list of routes to lock colors across scenarios
 ):
     df = pd.read_csv(path)
     if "variables" not in df.columns:
         raise ValueError("Expected a 'variables' column in the CSV.")
     if year not in df.columns:
         raise ValueError(f"Expected a '{year}' column in the CSV.")
+
     split_cols = df["variables"].astype(str).str.split("|", expand=True)
     if split_cols.shape[1] < 3:
         raise ValueError("Expected variables formatted like 'Share|Carrier|Route'.")
+
     df["carriers"] = split_cols[1]
     df["routes"] = split_cols[2]
     df["routes"] = df["routes"].apply(lambda x: "Imports" if "Import" in str(x) else x)
+
     keep_cols = ["region", "carriers", "routes", year]
     missing = [c for c in keep_cols if c not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
     df = df[keep_cols].copy()
+
     if region is not None:
         df_plot = df[df["region"] == region].copy()
         if df_plot.empty:
@@ -1322,55 +1589,140 @@ def plot_input_data(
         df_plot = df_plot.groupby(["carriers", "routes"], as_index=False)[year].sum()
     else:
         per_region = df.groupby(["region", "carriers", "routes"], as_index=False)[year].sum()
+
         if region_agg == "mean":
-            df_plot = per_region.groupby(["carriers", "routes"], as_index=False)[year].mean()
+            mixes = _european_mix()
+            electricity_weight_map = {
+                "ElectricityHV": mixes["hv"],
+                "ElectricityMV": mixes["mv"],
+                "ElectricityLV": mixes["lv"],
+            }
+
+            parts = []
+            for carrier, sub in per_region.groupby("carriers"):
+                if carrier in electricity_weight_map:
+                    weights = electricity_weight_map[carrier]
+                    parts.append(_weighted_mean_over_regions(sub, weights, year))
+                else:
+                    parts.append(sub.groupby(["carriers", "routes"], as_index=False)[year].mean())
+
+            df_plot = pd.concat(parts, ignore_index=True)
+
         elif region_agg == "sum":
             df_plot = per_region.groupby(["carriers", "routes"], as_index=False)[year].sum()
         else:
             raise ValueError("region_agg must be 'mean' or 'sum'.")
+
+    # ---------------------------------------------------------
+    # Combine ElectricityHV/MV/LV into a single Electricity plot
+    # ---------------------------------------------------------
+    if electricity_all_in_one:
+        elec_total = _build_total_electricity_mix(df_plot, year, imports=electricity_imports)
+
+        df_plot = df_plot[~df_plot["carriers"].isin(["ElectricityHV", "ElectricityMV", "ElectricityLV"])].copy()
+        df_plot = pd.concat([df_plot, elec_total], ignore_index=True)
+
+    # ---------------------------------------------------------
+    # Remove ElectricityHV imports and renormalize if requested
+    # ---------------------------------------------------------
+    if (not electricity_imports) and (not electricity_all_in_one):
+        mask_hv = df_plot["carriers"] == "ElectricityHV"
+        df_plot = df_plot[~(mask_hv & (df_plot["routes"] == "Imports"))].copy()
+
+        hv_sum = df_plot[mask_hv].groupby("carriers")[year].transform("sum")
+        df_plot.loc[mask_hv & (hv_sum > 0), year] = (
+            df_plot.loc[mask_hv & (hv_sum > 0), year] / hv_sum[mask_hv & (hv_sum > 0)]
+        )
+
+    # -----------------------
+    # Color mapping (UPDATED)
+    # -----------------------
     unique_carriers = sorted(df_plot["carriers"].unique())
     all_routes = sorted(df_plot["routes"].unique())
-    cmap = plt.get_cmap("tab20")
-    route_color_map = {route: cmap(i % 20) for i, route in enumerate(all_routes)}
+
+    # Base: stable colors for everything (cross-snippet stable)
+    route_color_map = {route: _stable_color(route) for route in all_routes}
+    if "Other" in route_color_map:
+        route_color_map["Other"] = _stable_color("Other")
+
+    # ---- Electricity exception (as before) ----
+    if electricity_all_in_one:
+        # Build master electricity route list from the INPUT FILE (raw df),
+        # so it doesn't change when 'Other' grouping changes later.
+        master_elec_routes = _build_master_electricity_routes_from_input(
+            df, year, electricity_imports
+        )
+        elec_tab20 = _build_master_tab20_color_map(
+            master_elec_routes,
+            repeat_ok={"Geothermal", "SolarThermal", "Hydrogen"}
+        )
+
+        elec_routes_present = set(df_plot.loc[df_plot["carriers"].eq("Electricity"), "routes"].unique())
+        for r in elec_routes_present:
+            if r in elec_tab20:
+                route_color_map[r] = elec_tab20[r]
+    # ------------------------------------------
+
+    # -----------------------
+    # Plot layout
+    # -----------------------
     rows = math.ceil(len(unique_carriers) / cols)
-    fig, axes = plt.subplots(rows, cols, figsize=(30, figsize_per_row * rows))
+    fig_w = 7.5 * cols
+    fig_h = 4.5 * rows
+
+    fig, axes = plt.subplots(rows, cols, figsize=(fig_w, fig_h), constrained_layout=True)
     axes = axes.flatten()
+
     for i, carrier in enumerate(unique_carriers):
         ax = axes[i]
         carrier_df = df_plot[df_plot["carriers"] == carrier]
+        carrier_df_sorted = carrier_df.sort_values(by=year, ascending=False)
+        routes_in_snippet = carrier_df_sorted["routes"].tolist()
+
+        # Enforce no repeated colors only for snippets with <=20 techs,
+        # and NOT for the Electricity exception
+        if carrier != "Electricity":
+            snippet_color_map = _dedupe_colors_if_snippet_small(routes_in_snippet, route_color_map, max_unique=20)
+        else:
+            snippet_color_map = route_color_map
+
         bottom = 0.0
-        for _, r in carrier_df.iterrows():
+        for _, r in carrier_df_sorted.iterrows():
             route = r["routes"]
             share = float(r[year])
+
             ax.bar(
                 carrier,
                 share,
                 bottom=bottom,
-                color=route_color_map[route],
+                color=snippet_color_map.get(route, route_color_map.get(route, _stable_color(route))),
                 label=route,
                 edgecolor="black",
                 linewidth=0.5,
             )
             bottom += share
+
         ax.set_title(carrier, fontsize=24, fontweight="bold")
         ax.set_ylabel("Share", fontsize=18)
         ax.set_xticks([])
         ax.tick_params(axis="y", labelsize=18)
         ax.set_ylim(0, 1.05)
         ax.grid(axis="y", linestyle=":", linewidth=0.6, alpha=0.6)
-        # -------- Per-snippet legend (upper-right, vertical) --------
+
         handles, labels = ax.get_legend_handles_labels()
-        uniq = dict(zip(labels, handles))  # deduplicate
-        if carrier == 'ElectricityHV':
+        uniq = dict(zip(labels, handles))
+
+        if (not electricity_all_in_one) and carrier == "ElectricityHV":
             legend_fontsize = 11
         else:
             legend_fontsize = 16
+
         leg = ax.legend(
             uniq.values(),
             uniq.keys(),
             loc="upper right",
             bbox_to_anchor=(1.0, 1.0),
-            ncol=1,  # <-- vertical legend
+            ncol=1,
             fontsize=legend_fontsize,
             frameon=True,
             borderaxespad=0.2,
@@ -1378,12 +1730,10 @@ def plot_input_data(
             labelspacing=0.4,
         )
         leg.get_frame().set_alpha(0.70)
-        # -----------------------------------------------------------
-        # -----------------------------------------------------
+
     for j in range(len(unique_carriers), len(axes)):
         axes[j].axis("off")
-    # Leave space at the top of each axes legend; tighten overall
-    plt.tight_layout()
+
     fig.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
 
@@ -2763,12 +3113,12 @@ total_renewables = [
 
 
 plot_input_data(path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_no_2050_2020_final_.csv',
-                save_path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data\input_data_scenario_1.png')
+                save_path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data\input_data_scenario_1_bis.png')
 plot_input_data(path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_no_2050_2020_final_.csv',
-                save_path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data\input_data_to_baseline.png',
+                save_path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data\input_data_to_baseline_bis.png',
                 year="2020")
 plot_input_data(path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\scenario_data\scenario_data_no_2050_2020_plus_hydrogen.csv',
-                save_path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data\input_data_scenario_2.png')
+                save_path=r'C:\Users\mique\Documents\GitHub\calliope_enbios_int\premise_external_scenario\plots\input_data\input_data_scenario_2_bis.png')
 
 
 
